@@ -647,21 +647,40 @@
             return url;
         }
 
+        function extractCleanHandle(input) {
+            if (!input) return '';
+            let val = String(input).trim();
+            // Xử lý link đầy đủ dạng https://www.tiktok.com/@username...
+            if (val.includes('tiktok.com/@')) {
+                val = val.split('tiktok.com/@')[1].split('?')[0].split('#')[0].split('/')[0];
+            } else if (val.includes('tiktok.com/')) {
+                let part = val.split('tiktok.com/')[1].split('?')[0].split('#')[0].split('/')[0];
+                val = part.startsWith('@') ? part.slice(1) : part;
+            }
+            val = val.split('?')[0].split('#')[0].replace(/\/+$/, '').trim();
+            if (val.startsWith('@')) val = val.slice(1);
+            return val ? '@' + val : '';
+        }
+
         async function handleQuickCheck(e) {
             if (e) e.preventDefault();
-            const val = document.getElementById('quickCheckInput').value.trim();
-            if (!val) return;
-            document.getElementById('channelInput').value = val;
-            await runCheckQuery(val);
+            const rawVal = document.getElementById('quickCheckInput').value.trim();
+            if (!rawVal) return;
+            const cleanVal = extractCleanHandle(rawVal);
+            document.getElementById('quickCheckInput').value = cleanVal;
+            document.getElementById('channelInput').value = cleanVal;
+            await runCheckQuery(cleanVal);
         }
 
         async function handleCheck(e) {
             if (e) e.preventDefault();
-            const inputVal = document.getElementById('channelInput').value.trim();
-            if (!inputVal) return;
+            const rawVal = document.getElementById('channelInput').value.trim();
+            if (!rawVal) return;
+            const cleanVal = extractCleanHandle(rawVal);
+            document.getElementById('channelInput').value = cleanVal;
             const qInput = document.getElementById('quickCheckInput');
-            if (qInput) qInput.value = inputVal;
-            await runCheckQuery(inputVal);
+            if (qInput) qInput.value = cleanVal;
+            await runCheckQuery(cleanVal);
         }
 
         async function runCheckQuery(inputVal) {
@@ -1177,6 +1196,24 @@
                 btn.classList.add('opacity-0', 'pointer-events-none');
                 btn.classList.remove('opacity-100');
             }
+        });
+
+        // Tự động lọc sạch link TikTok khi dán vào bất kỳ ô nhập nào
+        document.addEventListener('DOMContentLoaded', () => {
+            ['channelInput', 'quickCheckInput'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('paste', () => {
+                    setTimeout(() => {
+                        const cleaned = extractCleanHandle(el.value);
+                        if (cleaned) el.value = cleaned;
+                    }, 20);
+                });
+                el.addEventListener('change', () => {
+                    const cleaned = extractCleanHandle(el.value);
+                    if (cleaned) el.value = cleaned;
+                });
+            });
         });
     </script>
 

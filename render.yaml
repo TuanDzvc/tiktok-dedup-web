@@ -1,11 +1,9 @@
 services:
   - type: web
     name: checktiktok
-    runtime: python
+    runtime: docker
     region: singapore
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: IS_CLOUD
         value: "true"

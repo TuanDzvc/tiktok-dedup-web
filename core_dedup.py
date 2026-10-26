@@ -146,12 +146,16 @@ def fetch_external_channel_videos_curl(
     max_cursor: int = 0
 ) -> Dict[str, Any]:
     """Sử dụng curl_cffi giả lập Chrome TLS fingerprint để lấy thông tin profile và danh sách video."""
-    query = channel_query.strip()
+    query = str(channel_query or "").strip()
     username = query
     if "tiktok.com/@" in query:
-        username = query.split("tiktok.com/@")[-1].split("?")[0].split("/")[0]
+        username = query.split("tiktok.com/@")[-1].split("?")[0].split("#")[0].split("/")[0]
+    elif "tiktok.com/" in query:
+        p = query.split("tiktok.com/")[-1].split("?")[0].split("#")[0].split("/")[0]
+        username = p[1:] if p.startswith("@") else p
     elif query.startswith("@"):
         username = query[1:]
+    username = username.split("?")[0].split("#")[0].rstrip("/").strip()
 
     channel_info = {
         "uniqueId": username,
@@ -438,12 +442,16 @@ def fetch_channel_info_and_posts(
     - Hỗ trợ lấy dữ liệu Check user (Tên, Handle, Email, SĐT, Quốc gia, UID, Ngày tạo).
     - Hỗ trợ phân trang: mặc định quét 18 video, có thể quét thêm các đợt 18 tiếp theo.
     """
-    query = channel_query.strip()
+    query = str(channel_query or "").strip()
     username = query
     if "tiktok.com/@" in query:
-        username = query.split("tiktok.com/@")[-1].split("?")[0].split("/")[0]
+        username = query.split("tiktok.com/@")[-1].split("?")[0].split("#")[0].split("/")[0]
+    elif "tiktok.com/" in query:
+        p = query.split("tiktok.com/")[-1].split("?")[0].split("#")[0].split("/")[0]
+        username = p[1:] if p.startswith("@") else p
     elif query.startswith("@"):
         username = query[1:]
+    username = username.split("?")[0].split("#")[0].rstrip("/").strip()
 
     channel_info = {
         "uniqueId": username,
