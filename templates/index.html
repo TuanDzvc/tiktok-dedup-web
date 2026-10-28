@@ -675,6 +675,16 @@
 
     <!-- Core App Logic -->
     <script>
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         let currentVideos = [];
         let filteredVideos = [];
         let currentFilter = 'all';
@@ -725,8 +735,11 @@
         }
 
         function getProxiedImage(url) {
-            if (!url) return 'https://ui-avatars.com/api/?name=TikTok&background=0d111a&color=38bdf8';
-            if (url.includes('tiktokcdn.com')) {
+            if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+                return 'https://ui-avatars.com/api/?name=TikTok&background=0d111a&color=38bdf8';
+            }
+            // Tất cả ảnh từ TikTok CDN / Domain cần đi qua proxy backend để tránh bị TikTok chặn 403 / CORS
+            if (url.includes('tiktok') || url.includes('byteoversea') || url.includes('ibytedtos')) {
                 return `/api/proxy/image?url=${encodeURIComponent(url)}`;
             }
             return url;
@@ -1292,8 +1305,8 @@
 
                     <div class="p-2 space-y-1.5 bg-dark-900/90">
                         <div class="flex items-center justify-between gap-1">
-                            <p class="text-[11px] text-white font-semibold truncate leading-tight flex-grow" title="${v.desc}">
-                                ${v.desc_clean || '(không mô tả)'}
+                            <p class="text-[11px] font-semibold truncate leading-tight flex-grow ${(v.desc && v.desc.trim()) ? 'text-white' : 'text-slate-500 italic'}" title="${escapeHtml(v.desc || v.desc_clean || '')}">
+                                ${escapeHtml((v.desc && v.desc.trim()) ? v.desc.trim() : (v.desc_clean && v.desc_clean !== '(không mô tả)' ? v.desc_clean : '(không có mô tả)'))}
                             </p>
                             <a href="${v.share_url}" target="_blank" class="text-cyan-400 hover:text-white flex-shrink-0 p-0.5" title="Mở trên TikTok">
                                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>

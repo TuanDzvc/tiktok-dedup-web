@@ -39,7 +39,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import requests
 
 # Import engine trích xuất
-from core_dedup import fetch_channel_info_and_posts, DEFAULT_UA
+from core_dedup import fetch_channel_info_and_posts, DEFAULT_UA, get_borrowed_cookie
 
 # Cấu hình Google Sheet Webhook lưu vết người dùng
 SHEET_WEBHOOK_URL = os.getenv(
@@ -313,15 +313,21 @@ async def api_check_channel(req: Request):
 def proxy_image(url: str = Query(..., description="TikTok CDN image URL")):
     """
     Proxy tải ảnh đại diện và ảnh bìa từ TikTok CDN tránh lỗi CORS / 403 Forbidden của TikTok.
+    Hỗ trợ kèm Cookie Studio để tải ảnh bìa private / p0-pu-image.
     """
     if not url or not url.startswith("http"):
         raise HTTPException(status_code=400, detail="URL ảnh không hợp lệ.")
 
+    b_cookie, b_ua, _ = get_borrowed_cookie()
+
     headers = {
-        "User-Agent": DEFAULT_UA,
+        "User-Agent": b_ua or DEFAULT_UA,
         "Referer": "https://www.tiktok.com/",
+        "Origin": "https://www.tiktok.com",
         "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
     }
+    if b_cookie:
+        headers["Cookie"] = b_cookie
 
     try:
         r = requests.get(url, headers=headers, timeout=10, stream=True)
@@ -329,6 +335,13 @@ def proxy_image(url: str = Query(..., description="TikTok CDN image URL")):
             content_type = r.headers.get("Content-Type", "image/jpeg")
             return Response(content=r.content, media_type=content_type, headers={"Cache-Control": "public, max-age=86400"})
         else:
+            # Thử lại không kèm cookie nếu cookie bị rejected
+            if b_cookie:
+                headers.pop("Cookie", None)
+                r2 = requests.get(url, headers=headers, timeout=8, stream=True)
+                if r2.status_code == 200:
+                    content_type = r2.headers.get("Content-Type", "image/jpeg")
+                    return Response(content=r2.content, media_type=content_type, headers={"Cache-Control": "public, max-age=86400"})
             raise HTTPException(status_code=r.status_code, detail="Không thể tải ảnh từ máy chủ TikTok")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi kết nối ảnh: {e}")
