@@ -178,6 +178,7 @@ class TikTokPlaywrightWorker:
         self.playwright = None
         self.browser = None
         self._is_ready = False
+        self._init_error = None
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.executor.submit(self._init_browser)
 
@@ -207,6 +208,7 @@ class TikTokPlaywrightWorker:
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--no-sandbox",
+                    "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
                     "--disable-extensions",
@@ -214,9 +216,11 @@ class TikTokPlaywrightWorker:
                 ]
             )
             self._is_ready = True
+            self._init_error = None
             print("[PlaywrightWorker] Khởi động Chromium browser worker siêu tốc thành công.")
         except Exception as e:
             self._is_ready = False
+            self._init_error = f"{type(e).__name__}: {str(e)}"
             print(f"[PlaywrightWorker] Lỗi khởi tạo browser: {e}")
 
     def fetch_channel(

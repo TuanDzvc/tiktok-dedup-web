@@ -333,6 +333,17 @@ def proxy_image(url: str = Query(..., description="TikTok CDN image URL")):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi kết nối ảnh: {e}")
 
+@app.get("/api/debug_worker")
+def debug_worker():
+    from core_dedup import TikTokPlaywrightWorker
+    w = TikTokPlaywrightWorker.get_instance()
+    return {
+        "is_ready": w._is_ready,
+        "has_browser": bool(w.browser),
+        "is_connected": bool(w.browser and w.browser.is_connected()),
+        "error": getattr(w, "_init_error", None)
+    }
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)
