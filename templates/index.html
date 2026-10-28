@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Check Trùng TikTok | Quét Trùng Lặp & Hạn Chế FYP</title>
+    <title>TikFlow Checker | Hệ Thống Quét Trùng Lặp & Án Phạt FYP TikTok</title>
+    <!-- Brand Favicons -->
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/logo.png">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <meta name="theme-color" content="#07090e">
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -105,20 +110,17 @@
     <header class="border-b border-slate-800/80 bg-dark-900/90 backdrop-blur sticky top-0 z-40">
         <div class="max-w-7xl 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-sky-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
-                    <i class="fa-brands fa-tiktok text-xl"></i>
-                </div>
-                <div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-cyan-100 to-cyan-400 bg-clip-text text-transparent">
-                            Hệ Thống Check Trùng TikTok
-                        </span>
-                        <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-400 font-semibold tracking-wider uppercase">
-                            Bản Đồng Bộ Tool
-                        </span>
+                <a href="/" class="flex items-center gap-3 group">
+                    <img src="/static/logo.svg" alt="TikFlow Logo" class="w-11 h-11 rounded-2xl shadow-xl shadow-cyan-500/25 border border-cyan-500/40 group-hover:scale-105 transition-all duration-300" />
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-black text-xl tracking-tight text-white group-hover:text-cyan-300 transition flex items-center">
+                                TIKFLOW <span class="text-cyan-400 ml-1.5 font-extrabold text-xs px-2 py-0.5 rounded-lg bg-cyan-950/90 border border-cyan-700/60 shadow-sm">CHECKER PRO</span>
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 font-medium">Hệ Thống Quét Trùng Lặp & Kiểm Tra Án Phạt FYP TikTok</p>
                     </div>
-                    <p class="text-xs text-slate-400">Kiểm tra trùng lặp & hạn chế FYP / Shadowban video TikTok chuyên sâu</p>
-                </div>
+                </a>
             </div>
             <div class="flex items-center gap-2 text-xs font-semibold text-slate-400">
                 <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -144,35 +146,61 @@
                     Nhập tên người dùng hoặc dán liên kết để quét video, phát hiện vi phạm bản quyền, Group ID trùng lặp và phân tích hạn chế FYP.
                 </p>
 
-                <!-- Input form (Empty by default, no suggestions) -->
-                <form id="checkForm" onsubmit="handleCheck(event)" class="pt-2">
-                    <div class="relative flex flex-col sm:flex-row items-center gap-2 bg-dark-900/90 p-2 rounded-2xl border-2 border-slate-700/80 focus-within:border-cyan-500 transition-all shadow-xl">
-                        <div class="flex items-center flex-grow w-full px-3 gap-3">
-                            <i class="fa-solid fa-magnifying-glass text-slate-400 text-lg"></i>
-                            <input 
-                                type="text" 
-                                id="channelInput" 
-                                placeholder="Nhập @username (VD: @nathan.lynn.walker) hoặc dán link TikTok..."
-                                value=""
-                                autocomplete="off"
-                                class="w-full bg-transparent border-none text-white text-base sm:text-lg focus:outline-none placeholder-slate-500 font-medium"
-                                required
-                            />
-                            <button 
-                                type="button" 
-                                onclick="clearInput()" 
-                                id="btnClearInput"
-                                class="text-slate-500 hover:text-slate-300 p-1 transition"
-                            >
-                                <i class="fa-solid fa-xmark"></i>
-                            </button>
-                        </div>
+                <!-- Input form: 2 Dòng riêng biệt rộng rãi, không bị lẹm placeholder -->
+                <form id="checkForm" action="javascript:void(0);" onsubmit="handleCheck(event); return false;" class="pt-2 space-y-3">
+                    <!-- DÒNG 1: Ô nhập full-width thoải mái hiển thị đầy đủ link/username -->
+                    <div class="relative flex items-center gap-3 bg-dark-900/95 px-4 py-3.5 rounded-2xl border-2 border-slate-700/80 focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-500/20 transition-all shadow-xl">
+                        <i class="fa-solid fa-magnifying-glass text-cyan-400 text-lg flex-shrink-0"></i>
+                        <input 
+                            type="text" 
+                            id="channelInput" 
+                            placeholder="Nhập @username (VD: @nathan.lynn.walker) hoặc dán link TikTok..."
+                            value=""
+                            autocomplete="off"
+                            class="w-full bg-transparent border-none text-white text-base sm:text-lg focus:outline-none placeholder-slate-400 font-medium cursor-text"
+                            onkeydown="if(event.key === 'Enter'){ event.preventDefault(); handleCheck(); }"
+                            onclick="this.select()"
+                            onfocus="this.select()"
+                            required
+                        />
                         <button 
-                            type="submit" 
-                            id="btnSubmit" 
-                            class="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold tracking-wide shadow-lg shadow-cyan-500/25 transition duration-200 flex items-center justify-center gap-2 whitespace-nowrap active:scale-95"
+                            type="button" 
+                            onclick="clearInput()" 
+                            id="btnClearInput"
+                            class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition flex-shrink-0"
+                            title="Xóa nội dung nhập"
                         >
-                            <i class="fa-solid fa-bolt"></i>
+                            <i class="fa-solid fa-xmark text-base"></i>
+                        </button>
+                    </div>
+
+                    <!-- DÒNG 2: Tùy chọn số lượng quét bên trái + Nút Kiểm Tra Ngay bên phải -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+                        <!-- Dropdown số lượng video -->
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <label for="scanLimitSelect" class="text-xs font-semibold text-slate-400 whitespace-nowrap hidden sm:inline-block">Số lượng quét:</label>
+                            <div class="relative w-full sm:w-auto">
+                                <select 
+                                    id="scanLimitSelect" 
+                                    class="w-full sm:w-auto appearance-none bg-slate-900 border border-slate-700/90 text-slate-200 text-xs sm:text-sm font-bold rounded-xl pl-3.5 pr-8 py-2.5 focus:outline-none focus:border-cyan-400 shadow-md cursor-pointer hover:border-slate-500 transition"
+                                    title="Chọn số lượng video muốn quét"
+                                >
+                                    <option value="24" selected>⚡ 24 video gần nhất (Siêu tốc ~3s - Khuyên dùng)</option>
+                                    <option value="50">🚀 50 video gần nhất (~6s)</option>
+                                    <option value="100">📦 100 video gần nhất</option>
+                                </select>
+                                <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                            </div>
+                        </div>
+
+                        <!-- Nút Kiểm Tra Ngay (To, rõ ràng, không bị co ép) -->
+                        <button 
+                            type="button" 
+                            id="btnSubmit" 
+                            onclick="handleCheck()"
+                            class="w-full sm:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-sm tracking-wide shadow-xl shadow-cyan-500/25 transition duration-200 flex items-center justify-center gap-2.5 whitespace-nowrap active:scale-95"
+                        >
+                            <i class="fa-solid fa-bolt text-amber-300"></i>
                             <span>Kiểm Tra Ngay</span>
                         </button>
                     </div>
@@ -232,31 +260,41 @@
                     <div class="glass-panel rounded-3xl p-5 border border-slate-700/80 shadow-2xl relative space-y-3">
                         <!-- Header -->
                         <div class="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                            <div class="flex items-center gap-2.5">
-                                <div class="w-8 h-8 rounded-xl bg-blue-950 border border-blue-600/60 flex items-center justify-center text-blue-400 text-sm shadow">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-8 h-8 rounded-xl bg-blue-950 border border-blue-600/60 flex items-center justify-center text-blue-400 text-sm shadow flex-shrink-0">
                                     <i class="fa-solid fa-fingerprint"></i>
                                 </div>
-                                <div>
+                                <div class="min-w-0">
                                     <h3 class="text-sm font-bold text-white tracking-wide">Check user</h3>
-                                    <p id="cuHeaderHandle" class="text-xs font-mono font-bold text-amber-400">@...</p>
+                                    <p id="cuHeaderHandle" class="text-xs font-mono font-bold text-amber-400 truncate max-w-[150px]">@...</p>
                                 </div>
                             </div>
-                            <span id="cuStatusBadge" class="text-[10px] px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-cyan-300 font-semibold shadow">Tài khoản</span>
+                            <div class="flex flex-col items-center gap-1.5 flex-shrink-0">
+                                <span id="cuStatusBadge" class="text-[10px] px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-cyan-300 font-semibold shadow text-center">Tài khoản</span>
+                                <span id="cuHeaderFollowersBadge" class="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-950/80 border border-purple-500/50 text-purple-200 text-[11px] font-bold shadow-sm whitespace-nowrap">
+                                    <i class="fa-solid fa-user-group text-[10px] text-purple-400"></i>
+                                    <span id="cuHeaderFollowers">0</span> follow
+                                </span>
+                            </div>
                         </div>
 
                         <!-- Ô Check Nhanh: Đổi user trực tiếp mà không cần cuộn lên trên -->
                         <div class="pt-1 pb-1">
-                            <form id="quickCheckForm" onsubmit="handleQuickCheck(event)" class="relative flex items-center gap-1.5 bg-[#172033] p-1.5 rounded-xl border border-cyan-500/50 focus-within:border-cyan-400 shadow-inner">
+                            <form id="quickCheckForm" action="javascript:void(0);" onsubmit="handleQuickCheck(event); return false;" class="relative flex items-center gap-1.5 bg-[#172033] p-1.5 rounded-xl border border-cyan-500/50 focus-within:border-cyan-400 shadow-inner">
                                 <i class="fa-solid fa-magnifying-glass text-cyan-400 text-xs pl-2"></i>
                                 <input 
                                     type="text" 
                                     id="quickCheckInput" 
                                     placeholder="Đổi user khác (@user hoặc link)..." 
-                                    class="w-full bg-transparent border-none text-white text-xs px-1 focus:outline-none placeholder-slate-500 font-medium"
+                                    class="w-full bg-transparent border-none text-white text-xs px-1 focus:outline-none placeholder-slate-500 font-medium cursor-text"
+                                    onkeydown="if(event.key === 'Enter'){ event.preventDefault(); handleQuickCheck(); }"
+                                    onclick="this.select()"
+                                    onfocus="this.select()"
                                     required
                                 />
                                 <button 
-                                    type="submit" 
+                                    type="button" 
+                                    onclick="handleQuickCheck(event)"
                                     id="btnQuickCheck" 
                                     class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs tracking-wide shadow flex items-center gap-1 whitespace-nowrap active:scale-95"
                                     title="Quét kênh này ngay"
@@ -292,17 +330,6 @@
                             </div>
                         </div>
 
-                        <!-- 3. Email -->
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-1.5 text-[11px] font-bold text-sky-400 tracking-wider">
-                                <i class="fa-solid fa-envelope text-xs"></i>
-                                <span>EMAIL</span>
-                            </div>
-                            <div class="flex items-center justify-between bg-[#172033] border border-slate-700/80 rounded-xl px-3.5 py-1.5 text-xs text-slate-300">
-                                <span id="cuEmail" class="select-all">— chưa gắn email</span>
-                                <span id="cuEmailBadge" class="hidden text-[10px] text-emerald-400 font-bold bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">✓ đã xác minh</span>
-                            </div>
-                        </div>
 
                         <!-- 4. Mini Grid (Ngày tạo | SĐT) -->
                         <div class="grid grid-cols-2 gap-2.5">
@@ -321,7 +348,7 @@
                                     <span>SĐT</span>
                                 </div>
                                 <div class="bg-[#172033] border border-slate-700/80 rounded-xl p-2 text-center text-xs font-medium text-slate-300">
-                                    <span id="cuPhone">chưa gắn</span>
+                                    <span id="cuPhone">—</span>
                                 </div>
                             </div>
                         </div>
@@ -426,15 +453,15 @@
                             <div class="glass-card rounded-2xl p-3.5 text-center min-w-[95px]">
                                 <span class="text-slate-400 text-xs font-medium block">Tổng Video</span>
                                 <span id="statTotal" class="text-2xl font-black text-white font-mono">0</span>
-                                <span class="text-[10px] text-slate-500 block mt-0.5">đã tải</span>
+                                <span id="statTotalSub" class="text-[10px] text-slate-400 font-semibold block mt-0.5">đã tải</span>
                             </div>
                             <div class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-rose-900/40 bg-rose-950/20">
-                                <span class="text-rose-300 text-xs font-medium block">Trùng / Mất FYP</span>
+                                <span class="text-rose-300 text-xs font-medium block">Video Trùng</span>
                                 <span id="statDup" class="text-2xl font-black text-rose-400 font-mono">0</span>
                                 <span id="statDupPercent" class="text-[10px] text-rose-300 block mt-0.5">0%</span>
                             </div>
                             <div class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-amber-900/40 bg-amber-950/20">
-                                <span class="text-amber-300 text-xs font-medium block">Mất FYP</span>
+                                <span class="text-amber-300 text-xs font-medium block">Mất FYP / Kẹt View</span>
                                 <span id="statPenalty" class="text-2xl font-black text-amber-400 font-mono">0</span>
                                 <span class="text-[10px] text-amber-300 block mt-0.5">hạn chế</span>
                             </div>
@@ -454,7 +481,7 @@
                                 Tất cả (<span id="countTabAll">0</span>)
                             </button>
                             <button onclick="setFilter('dup')" id="tabDup" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 transition whitespace-nowrap">
-                                🔴 Trùng / Phạt (<span id="countTabDup">0</span>)
+                                🔴 Video Trùng (<span id="countTabDup">0</span>)
                             </button>
                             <button onclick="setFilter('penalty')" id="tabPenalty" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 transition whitespace-nowrap">
                                 🚨 Mất FYP (<span id="countTabPenalty">0</span>)
@@ -522,20 +549,27 @@
                         <!-- Injected by JavaScript -->
                     </div>
 
-                    <!-- Load More Pagination Button (Mặc định quét thêm 18 video) -->
-                    <div id="loadMoreSection" class="pt-4 pb-2 text-center">
-                        <button 
-                            type="button" 
-                            id="btnLoadMore" 
-                            onclick="loadMoreVideos()"
-                            class="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 transition duration-200 inline-flex items-center justify-center gap-2.5 active:scale-95 border border-cyan-400/30"
-                        >
-                            <i id="loadMoreIcon" class="fa-solid fa-arrows-rotate"></i>
-                            <span id="loadMoreText">➕ Quét thêm 18 video</span>
-                        </button>
-                        <p id="loadMoreEndMsg" class="hidden text-[14px] text-white font-bold mt-4 tracking-wide">
-                            🎉 Đã quét toàn bộ video của kênh này.
-                        </p>
+                    <!-- Load More Pagination Section -->
+                    <div id="loadMoreSection" class="pt-5 pb-3 text-center space-y-3">
+                        <div id="scanStatusBanner" class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-xs text-slate-300 shadow">
+                            <i class="fa-solid fa-chart-simple text-cyan-400"></i>
+                            <span id="scanStatusText">Đang hiển thị video đã quét</span>
+                        </div>
+                        <div>
+                            <button 
+                                type="button" 
+                                id="btnLoadMore" 
+                                onclick="loadMoreVideos()"
+                                class="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 transition duration-200 inline-flex items-center justify-center gap-2.5 active:scale-95 border border-cyan-400/30"
+                            >
+                                <i id="loadMoreIcon" class="fa-solid fa-arrows-rotate"></i>
+                                <span id="loadMoreText">➕ Quét thêm 24 video tiếp theo</span>
+                            </button>
+                            <p id="loadMoreEndMsg" class="hidden text-sm text-emerald-400 font-bold mt-2 tracking-wide flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-circle-check"></i>
+                                <span id="loadMoreEndText">🎉 Đã quét toàn bộ video của kênh này.</span>
+                            </p>
+                        </div>
                     </div>
 
                 </div>
@@ -563,6 +597,29 @@
                         <i class="fa-solid fa-play ml-1"></i>
                     </div>
                 </a>
+            </div>
+            <div id="modalPenaltyAlert" class="hidden p-3 rounded-xl bg-rose-950/70 border border-rose-700/80 text-rose-200 text-xs font-semibold flex items-start gap-2 shadow-inner">
+                <i class="fa-solid fa-triangle-exclamation text-rose-400 mt-0.5 text-sm flex-shrink-0"></i>
+                <div class="space-y-0.5">
+                    <p class="font-bold text-rose-300">CẢNH BÁO VI PHẠM / MẤT FYP:</p>
+                    <p id="modalPenaltyText" class="font-normal"></p>
+                </div>
+            </div>
+            <div id="modalOriginBox" class="hidden p-3 rounded-xl bg-sky-950/80 border border-sky-600/70 text-sky-200 text-xs flex flex-col gap-1.5 shadow-inner">
+                <div class="flex items-center justify-between font-bold text-sky-300">
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-link"></i> Link Video Gốc (Phát hiện trùng):</span>
+                    <span id="modalOriginGroupId" class="text-[11px] font-mono text-sky-400"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input id="modalOriginInput" type="text" readonly class="flex-1 bg-black/60 border border-sky-800 rounded-lg px-2.5 py-1 text-[11px] text-sky-100 font-mono truncate" />
+                    <button type="button" onclick="copyText(document.getElementById('modalOriginInput').value)" class="px-2.5 py-1 rounded-lg bg-sky-900 hover:bg-sky-800 text-sky-200 text-xs font-bold border border-sky-700 transition flex items-center gap-1">
+                        <i class="fa-regular fa-copy"></i> Copy
+                    </button>
+                    <a id="modalOriginLink" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition flex items-center gap-1">
+                        <span>Mở gốc</span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                    </a>
+                </div>
             </div>
             <div class="space-y-2">
                 <p id="modalDesc" class="text-sm text-slate-200 line-clamp-3 font-medium"></p>
@@ -600,18 +657,15 @@
         let isLoadingMore = false;
 
         function getCountryFlag(code) {
-            if (!code) return "🌐";
-            const c = code.toUpperCase().trim().replace('_TTP', '');
-            const flags = {
-                "US": "🇺🇸", "VN": "🇻🇳", "ID": "🇮🇩", "DE": "🇩🇪", "GB": "🇬🇧", "UK": "🇬🇧",
-                "FR": "🇫🇷", "JP": "🇯🇵", "KR": "🇰🇷", "IT": "🇮🇹", "ES": "🇪🇸", "NL": "🇳🇱",
-                "PL": "🇵🇱", "SE": "🇸🇪", "NO": "🇳🇴", "DK": "🇩🇰", "FI": "🇫🇮", "CH": "🇨🇭",
-                "AT": "🇦🇹", "BE": "🇧🇪", "PT": "🇵🇹", "CZ": "🇨🇿", "RO": "🇷🇴", "GR": "🇬🇷",
-                "NZ": "🇳🇿", "AR": "🇦🇷", "CL": "🇨🇱", "CO": "🇨🇴", "ZA": "🇿🇦", "AE": "🇦🇪",
-                "SA": "🇸🇦", "TH": "🇹🇭", "PH": "🇵🇭", "MY": "🇲🇾", "SG": "🇸🇬", "TW": "🇹🇼",
-                "HK": "🇭🇰", "AU": "🇦🇺", "CA": "🇨🇦", "BR": "🇧🇷", "MX": "🇲🇽", "EU": "🇪🇺"
-            };
-            return flags[c] || "🌐";
+            if (!code) return `<span class="text-base select-none">🌐</span>`;
+            let c = code.toUpperCase().trim().replace('_TTP', '');
+            if (c === 'UK') c = 'GB';
+            if (c === 'EU') {
+                return `<img src="https://flagcdn.com/24x18/eu.png" class="inline-block w-5 h-3.5 object-cover rounded shadow-sm border border-slate-700/60 align-middle" alt="EU" onerror="this.outerHTML='🌐'" />`;
+            }
+            if (c.length !== 2) return `<span class="text-base select-none">🌐</span>`;
+            const lower = c.toLowerCase();
+            return `<img src="https://flagcdn.com/24x18/${lower}.png" class="inline-block w-5 h-3.5 object-cover rounded shadow-sm border border-slate-700/60 align-middle" alt="${c}" onerror="this.outerHTML='🌐'" />`;
         }
 
         function copyText(str) {
@@ -663,21 +717,32 @@
         }
 
         async function handleQuickCheck(e) {
-            if (e) e.preventDefault();
-            const rawVal = document.getElementById('quickCheckInput').value.trim();
-            if (!rawVal) return;
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            const inputEl = document.getElementById('quickCheckInput');
+            if (!inputEl) return;
+            const rawVal = inputEl.value.trim();
+            if (!rawVal) {
+                inputEl.focus();
+                return;
+            }
             const cleanVal = extractCleanHandle(rawVal);
-            document.getElementById('quickCheckInput').value = cleanVal;
-            document.getElementById('channelInput').value = cleanVal;
+            inputEl.value = cleanVal;
+            const mInput = document.getElementById('channelInput');
+            if (mInput) mInput.value = cleanVal;
             await runCheckQuery(cleanVal);
         }
 
         async function handleCheck(e) {
-            if (e) e.preventDefault();
-            const rawVal = document.getElementById('channelInput').value.trim();
-            if (!rawVal) return;
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            const inputEl = document.getElementById('channelInput');
+            if (!inputEl) return;
+            const rawVal = inputEl.value.trim();
+            if (!rawVal) {
+                inputEl.focus();
+                return;
+            }
             const cleanVal = extractCleanHandle(rawVal);
-            document.getElementById('channelInput').value = cleanVal;
+            inputEl.value = cleanVal;
             const qInput = document.getElementById('quickCheckInput');
             if (qInput) qInput.value = cleanVal;
             await runCheckQuery(cleanVal);
@@ -697,11 +762,13 @@
             const qBtn = document.getElementById('btnQuickCheck');
             if (qBtn) { qBtn.disabled = true; qBtn.classList.add('opacity-70'); }
 
+            const limit = parseInt(document.getElementById('scanLimitSelect')?.value || 24);
+
             try {
                 const response = await fetch('/api/check', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: inputVal, max_cursor: 0, max_videos: 18 })
+                    body: JSON.stringify({ query: inputVal, max_cursor: 0, max_videos: limit })
                 });
 
                 const data = await response.json();
@@ -713,7 +780,7 @@
                 channelData = data.channel || {};
                 userInfoData = data.user_info || {};
                 currentVideos = data.list || [];
-                currentMaxCursor = data.maxCursor || 18;
+                currentMaxCursor = data.maxCursor || (data.list ? data.list.length : limit);
                 hasMoreVideos = Boolean(data.hasMore);
 
                 renderResults(data);
@@ -738,7 +805,7 @@
 
             btn.disabled = true;
             icon.className = "fa-solid fa-spinner animate-spin";
-            text.innerText = "Đang quét thêm 18 video...";
+            text.innerText = "Đang quét thêm 24 video tiếp theo...";
 
             try {
                 const response = await fetch('/api/check', {
@@ -747,7 +814,7 @@
                     body: JSON.stringify({
                         query: currentQuery,
                         max_cursor: currentMaxCursor,
-                        max_videos: 18
+                        max_videos: 24
                     })
                 });
 
@@ -769,7 +836,7 @@
                 isLoadingMore = false;
                 btn.disabled = false;
                 icon.className = "fa-solid fa-arrows-rotate";
-                text.innerText = "➕ Quét thêm 18 video";
+                text.innerText = "➕ Quét thêm 24 video tiếp theo";
                 updateLoadMoreButtonState();
             }
         }
@@ -777,10 +844,38 @@
         function updateLoadMoreButtonState() {
             const btn = document.getElementById('btnLoadMore');
             const endMsg = document.getElementById('loadMoreEndMsg');
+            const endText = document.getElementById('loadMoreEndText');
+            const statusText = document.getElementById('scanStatusText');
 
-            if (!hasMoreVideos) {
+            const totalScanned = currentVideos.length;
+            const channelTotal = (channelData && channelData.videoCount) ? parseInt(channelData.videoCount) : 0;
+
+            if (statusText) {
+                if (channelTotal > 0) {
+                    if (totalScanned >= channelTotal) {
+                        statusText.innerHTML = `Đã quét <b class="text-white">${totalScanned}</b> / <b class="text-white">${channelTotal}</b> video (Đạt 100% video của kênh)`;
+                    } else {
+                        statusText.innerHTML = `Đang hiển thị <b class="text-white">${totalScanned}</b> / <b class="text-cyan-400 font-bold">${channelTotal}</b> video gần nhất của kênh`;
+                    }
+                } else {
+                    statusText.innerHTML = `Đang hiển thị <b class="text-white">${totalScanned}</b> video đã tải`;
+                }
+            }
+
+            const isAllReached = Boolean(channelTotal > 0 && totalScanned >= channelTotal);
+
+            if (!hasMoreVideos || isAllReached) {
                 btn.classList.add('hidden');
                 endMsg.classList.remove('hidden');
+                if (endText) {
+                    if (isAllReached) {
+                        endText.innerText = `🎉 Đã quét toàn bộ ${totalScanned} / ${channelTotal} video của kênh này.`;
+                    } else if (channelTotal > 0 && totalScanned < channelTotal) {
+                        endText.innerText = `Đã dừng ở ${totalScanned} / ${channelTotal} video (TikTok giới hạn xem công khai).`;
+                    } else {
+                        endText.innerText = `🎉 Đã quét toàn bộ video tìm thấy (${totalScanned} video).`;
+                    }
+                }
             } else {
                 btn.classList.remove('hidden');
                 endMsg.classList.add('hidden');
@@ -794,14 +889,24 @@
 
         function updateSummaryStats() {
             const total = currentVideos.length;
-            // Video vi phạm: trùng lặp HOẶC mất FYP HOẶC shadowban
-            const badVideos = currentVideos.filter(v => v.is_dup || v.is_fyp_restricted || v.shadow || v.has_penalty);
-            const dupCount = badVideos.length;
-            const penCount = currentVideos.filter(v => v.is_fyp_restricted || v.shadow || v.has_penalty).length;
-            // Video sạch: Hoàn toàn không dính trùng lặp hay án phạt
+            const channelTotal = (channelData && channelData.videoCount) ? parseInt(channelData.videoCount) : 0;
+            // 1. Video trùng lặp thực sự (is_dup hoặc có group_id khác aweme_id)
+            const dupVideos = currentVideos.filter(v => Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id))));
+            const dupCount = dupVideos.length;
+
+            // 2. Video kẹt phân phối / mất FYP / shadowban
+            const penVideos = currentVideos.filter(v => Boolean(v.is_fyp_restricted || v.shadow || v.has_penalty));
+            const penCount = penVideos.length;
+
+            // 3. Video sạch hoàn toàn: Không trùng và không bị phạt
             const cleanCount = Math.max(0, total - dupCount);
 
             document.getElementById('statTotal').innerText = total;
+            const sub = document.getElementById('statTotalSub');
+            if (sub) {
+                sub.innerText = channelTotal > 0 ? `trên ${channelTotal} video` : 'đã tải';
+            }
+
             document.getElementById('statDup').innerText = dupCount;
             document.getElementById('statDupPercent').innerText = `${total > 0 ? ((dupCount / total) * 100).toFixed(0) : 0}%`;
             document.getElementById('statPenalty').innerText = penCount;
@@ -823,26 +928,24 @@
             document.getElementById('chAvatar').src = getProxiedImage(ch.avatar);
             document.getElementById('chProfileLink').href = `https://www.tiktok.com/@${ch.uniqueId}`;
             document.getElementById('chCreateDate').innerText = ch.createDate || '—';
-            document.getElementById('chCountryText').innerText = ch.region_display || ch.region || 'US';
-            document.getElementById('chRegionBadge').innerText = (ch.region || 'US').replace('_TTP', '');
+            const regCode = (ch.region || 'US').replace('_TTP', '');
+            document.getElementById('chCountryText').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${ch.region_display || regCode}</span></span>`;
+            document.getElementById('chRegionBadge').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${regCode}</span></span>`;
             document.getElementById('chFollowers').innerText = ch.followers_fmt || (ch.followers ? ch.followers.toLocaleString() : '0');
 
             // 2. Check user Panel (Right - Image 3)
             document.getElementById('cuHeaderHandle').innerText = `@${ch.uniqueId || ''}`;
+            const folFmt = ch.followers_fmt || (ch.followers ? ch.followers.toLocaleString() : '0');
+            const cuHeaderFol = document.getElementById('cuHeaderFollowers');
+            if (cuHeaderFol) cuHeaderFol.innerText = folFmt;
+
             document.getElementById('cuScreenName').innerText = ui.screen_name || ch.nickname || '—';
             document.getElementById('cuUsername').innerText = ui.username || `@${ch.uniqueId || ''}`;
-            document.getElementById('cuEmail').innerText = ui.email || '— chưa gắn email';
-
-            const emailBadge = document.getElementById('cuEmailBadge');
-            if (ui.is_email_verified) {
-                emailBadge.classList.remove('hidden');
-            } else {
-                emailBadge.classList.add('hidden');
-            }
 
             document.getElementById('cuCreateDate').innerText = ui.create_date || ch.createDate || '—';
-            document.getElementById('cuPhone').innerText = ui.mobile || 'chưa gắn';
-            document.getElementById('cuCountry').innerText = ui.country || ch.region_display || 'United States';
+            document.getElementById('cuPhone').innerText = (ui.mobile && ui.mobile !== 'chưa gắn') ? ui.mobile : '—';
+            const cleanCountry = (ui.country || ch.region_display || 'Mỹ (US)').replace(/[\uD83C][\uDDE6-\uDDFF]{2}/g, '').trim();
+            document.getElementById('cuCountry').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${cleanCountry}</span></span>`;
             document.getElementById('cuUid').innerText = ui.uid || '---';
             document.getElementById('cuLastNickChange').innerText = ui.last_nickname_change || '—';
             document.getElementById('cuStatusBadge').innerText = ui.is_self ? '⭐ Nick trong Tool' : '🌐 Kênh công khai';
@@ -887,12 +990,13 @@
             const query = (document.getElementById('searchDescInput').value || '').toLowerCase().trim();
 
             filteredVideos = currentVideos.filter(v => {
-                const isBad = Boolean(v.is_dup || v.is_fyp_restricted || v.shadow || v.has_penalty);
+                const isDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id)));
                 const isFyp = Boolean(v.is_fyp_restricted || v.shadow || v.has_penalty);
+                const isClean = !isDup && !isFyp;
 
-                if (currentFilter === 'dup' && !isBad) return false;
+                if (currentFilter === 'dup' && !isDup) return false;
                 if (currentFilter === 'penalty' && !isFyp) return false;
-                if (currentFilter === 'clean' && isBad) return false;
+                if (currentFilter === 'clean' && !isClean) return false;
 
                 if (query) {
                     const desc = (v.desc || '').toLowerCase();
@@ -950,20 +1054,69 @@
                 tr.className = `hover:bg-slate-800/40 transition duration-150 ${v.is_dup ? 'bg-rose-950/15' : ''}`;
 
                 // Status badges matching tool
+                const penTitle = (v.penalty_details || v.shadowReason || '').replace(/"/g, '&quot;');
+                const origLink = v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : '');
+                let origBtn = '';
+                if (origLink) {
+                    origBtn = `
+                        <div class="mt-1 flex items-center justify-center gap-1">
+                            <a href="${origLink}" target="_blank" rel="noopener noreferrer" 
+                               title="Mở video gốc trên TikTok:\n${origLink}"
+                               class="px-2 py-0.5 rounded-md bg-sky-950/90 hover:bg-sky-900 border border-sky-500/70 text-sky-300 hover:text-white text-[10px] font-bold inline-flex items-center gap-1 transition shadow-sm">
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> gốc ↗
+                            </a>
+                            <button onclick="copyText('${origLink}')" title="Sao chép link video gốc" 
+                               class="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-300 transition text-[10px]">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+                    `;
+                }
+
+                const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id)));
                 let dupBadge = '';
-                if (v.is_fyp_restricted) {
-                    dupBadge = `<span class="px-2.5 py-1 rounded-lg bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center gap-1">🚨 Mất FYP</span>`;
-                } else if (v.is_dup) {
-                    dupBadge = `<span class="px-2.5 py-1 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center gap-1"><i class="fa-solid fa-circle-exclamation"></i> Trùng</span>`;
+                if (v.is_fyp_restricted && isThisDup) {
+                    dupBadge = `
+                        <div class="relative inline-flex items-center justify-center h-7">
+                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
+                            ${origBtn ? `<div class="absolute top-full left-1/2 -translate-x-1/2 pt-1 z-10 whitespace-nowrap">${origBtn}</div>` : ''}
+                        </div>
+                    `;
+                } else if (isThisDup) {
+                    dupBadge = `
+                        <div class="relative inline-flex items-center justify-center h-7">
+                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}"><i class="fa-solid fa-repeat"></i> Trùng</span>
+                            ${origBtn ? `<div class="absolute top-full left-1/2 -translate-x-1/2 pt-1 z-10 whitespace-nowrap">${origBtn}</div>` : ''}
+                        </div>
+                    `;
+                } else if (v.is_fyp_restricted) {
+                    dupBadge = `
+                        <div class="relative inline-flex items-center justify-center h-7">
+                            <span class="h-7 px-2.5 rounded-lg bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}">🚨 Mất FYP</span>
+                            <span class="absolute top-full left-1/2 -translate-x-1/2 pt-1 text-[9px] text-amber-400/90 font-medium whitespace-nowrap pointer-events-none">Kẹt trần view</span>
+                        </div>
+                    `;
                 } else {
-                    dupBadge = `<span class="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center gap-1"><i class="fa-solid fa-check"></i> Sạch</span>`;
+                    dupBadge = `
+                        <div class="relative inline-flex items-center justify-center h-7">
+                            <span class="h-7 px-2.5 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 leading-normal"><i class="fa-solid fa-check"></i> Sạch</span>
+                        </div>
+                    `;
                 }
 
                 let sbBadge = '';
                 if (v.is_fyp_restricted || v.shadow) {
-                    sbBadge = `<span class="px-2.5 py-1 rounded-lg bg-red-950/90 text-red-400 border border-red-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center gap-1">⛔ Có</span>`;
+                    sbBadge = `
+                        <div class="relative inline-flex items-center justify-center h-7">
+                            <span class="h-7 px-2.5 rounded-lg bg-red-950/90 text-red-400 border border-red-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}">⛔ Có</span>
+                        </div>
+                    `;
                 } else {
-                    sbBadge = `<span class="px-2.5 py-1 rounded-lg bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center gap-1">✅ Không</span>`;
+                    sbBadge = `
+                        <div class="relative inline-flex items-center justify-center h-7">
+                            <span class="h-7 px-2.5 rounded-lg bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 leading-normal">✅ Không</span>
+                        </div>
+                    `;
                 }
 
                 const coverProxied = getProxiedImage(v.cover_url);
@@ -1019,15 +1172,15 @@
                         </div>
                     </td>
                     <td class="p-2.5 text-center">
-                        <div class="flex flex-col items-center justify-center leading-tight" title="Quốc gia: ${v.region_display || v.region}">
-                            <span class="text-base leading-none select-none">${getCountryFlag(v.region)}</span>
-                            <span class="text-[11px] font-bold text-slate-200 mt-1">${v.region || 'US'}</span>
+                        <div class="flex flex-col items-center justify-center leading-tight gap-1" title="Quốc gia: ${v.region_display || v.region}">
+                            ${getCountryFlag(v.region)}
+                            <span class="text-[11px] font-bold text-slate-200 mt-0.5">${(v.region || 'US').replace('_TTP', '')}</span>
                         </div>
                     </td>
-                    <td class="p-3 text-center whitespace-nowrap">
+                    <td class="p-3 text-center align-middle whitespace-nowrap">
                         ${sbBadge}
                     </td>
-                    <td class="p-3 text-center whitespace-nowrap">
+                    <td class="p-3 text-center align-middle whitespace-nowrap">
                         ${dupBadge}
                     </td>
                     <td class="p-3 text-center font-mono whitespace-nowrap">
@@ -1074,7 +1227,9 @@
 
                 // Yêu cầu: "các trạng thái như sạch, mất fyp làm to lên cho ra giữa thumb"
                 let centerBadge = '';
-                if (isFyp) {
+                if (isFyp && isDup) {
+                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md animate-pulse">🔴 TRÙNG / MẤT FYP</span>`;
+                } else if (isFyp) {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-amber-500/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-amber-200 drop-shadow flex items-center gap-1 backdrop-blur-md animate-pulse">🚨 MẤT FYP</span>`;
                 } else if (isDup) {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🔴 TRÙNG</span>`;
@@ -1086,6 +1241,11 @@
                     <div class="relative aspect-[3/4] bg-black overflow-hidden cursor-pointer" onclick="openModal('${v.aweme_id}')">
                         <img src="${coverProxied}" alt="Cover" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="this.src='https://placehold.co/300x400/111726/38bdf8?text=TikTok'" />
                         
+                        <!-- Top-left Region Flag Badge -->
+                        <span class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded bg-black/80 flex items-center gap-1 text-[10px] text-white font-bold backdrop-blur-sm border border-slate-700/60 shadow">
+                            ${getCountryFlag(v.region)} <span>${(v.region || 'US').replace('_TTP', '')}</span>
+                        </span>
+
                         <!-- Center Big Status Badge (Ra giữa thumbnail và to lên theo yêu cầu) -->
                         <div class="absolute inset-0 flex items-center justify-center pointer-events-none p-1 z-10">
                             ${centerBadge}
@@ -1124,6 +1284,24 @@
                                 <i class="fa-solid fa-bookmark text-amber-400 text-[11px]"></i>${v.collect_count_fmt}
                             </span>
                         </div>
+
+                        ${isDup ? `
+                        <div class="pt-1.5 border-t border-slate-800 flex items-center justify-between text-[10px]">
+                            <span class="text-rose-400 font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Trùng
+                            </span>
+                            ${(v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id))) ? `
+                            <div class="flex items-center gap-1">
+                                <button onclick="event.stopPropagation(); copyText('${v.origin_url || `https://www.tiktok.com/@tiktok/video/${v.group_id}`}')" title="Copy link video gốc" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                                <a href="${v.origin_url || `https://www.tiktok.com/@tiktok/video/${v.group_id}`}" target="_blank" onclick="event.stopPropagation()" rel="noopener noreferrer" title="Mở video gốc trên TikTok" class="px-2 py-0.5 rounded bg-sky-950 hover:bg-sky-900 border border-sky-600/70 text-sky-300 hover:text-white font-bold flex items-center gap-1 transition shadow-sm">
+                                    <span>Gốc</span> <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                                </a>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ` : ''}
                     </div>
                 `;
 
@@ -1140,6 +1318,32 @@
             document.getElementById('modalDate').innerText = `🕒 Đăng ngày: ${video.date_local || video.date_utc || '—'}`;
             document.getElementById('modalExternalLink').href = video.share_url;
             document.getElementById('modalDirectPlay').href = video.share_url;
+
+            const penAlert = document.getElementById('modalPenaltyAlert');
+            const penText = document.getElementById('modalPenaltyText');
+            if (penAlert && penText) {
+                const reason = video.penalty_details || video.shadowReason || '';
+                if (reason) {
+                    penText.innerText = reason;
+                    penAlert.classList.remove('hidden');
+                } else {
+                    penAlert.classList.add('hidden');
+                }
+            }
+
+            const origBox = document.getElementById('modalOriginBox');
+            const origInput = document.getElementById('modalOriginInput');
+            const origLink = document.getElementById('modalOriginLink');
+            const origGid = document.getElementById('modalOriginGroupId');
+            const origUrl = video.origin_url || (video.group_id && String(video.group_id) !== String(video.aweme_id) ? `https://www.tiktok.com/@tiktok/video/${video.group_id}` : '');
+            if (origBox && origUrl) {
+                origInput.value = origUrl;
+                origLink.href = origUrl;
+                if (origGid) origGid.innerText = video.group_id ? `Group: ${video.group_id}` : '';
+                origBox.classList.remove('hidden');
+            } else if (origBox) {
+                origBox.classList.add('hidden');
+            }
 
             document.getElementById('videoModal').classList.remove('hidden');
         }
@@ -1158,7 +1362,7 @@
                 return;
             }
 
-            const headers = ["STT", "Aweme_ID", "Lượt_Xem", "Trạng_Thái_Trùng", "Mất_FYP", "Thời_Gian", "Quốc_Gia", "Mô_Tả", "Link_TikTok"];
+            const headers = ["STT", "Aweme_ID", "Lượt_Xem", "Trạng_Thái_Trùng", "Mất_FYP", "Thời_Gian", "Quốc_Gia", "Mô_Tả", "Link_TikTok", "Link_Video_Goc"];
             const rows = filteredVideos.map((v, i) => [
                 i + 1,
                 v.aweme_id,
@@ -1168,7 +1372,8 @@
                 v.date_local || v.date_utc,
                 v.region,
                 `"${(v.desc || '').replace(/"/g, '""')}"`,
-                v.share_url
+                v.share_url,
+                v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : "")
             ]);
 
             const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
@@ -1198,11 +1403,17 @@
             }
         });
 
-        // Tự động lọc sạch link TikTok khi dán vào bất kỳ ô nhập nào
+        // Tự động lọc sạch link TikTok và bôi đen toàn bộ khi click vào ô nhập
         document.addEventListener('DOMContentLoaded', () => {
             ['channelInput', 'quickCheckInput'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
+                el.addEventListener('focus', function () {
+                    setTimeout(() => { try { this.select(); } catch(e){} }, 20);
+                });
+                el.addEventListener('click', function () {
+                    try { this.select(); } catch(e){}
+                });
                 el.addEventListener('paste', () => {
                     setTimeout(() => {
                         const cleaned = extractCleanHandle(el.value);

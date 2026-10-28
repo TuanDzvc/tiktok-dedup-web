@@ -7,6 +7,15 @@ Tự động kích hoạt Cloudflare Tunnel để tạo tên miền công khai m
 
 import os
 import sys
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+LOG_FILE = BASE_DIR / "server.log"
+
+if sys.stdout is None or not hasattr(sys.stdout, "write"):
+    sys.stdout = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
+if sys.stderr is None or not hasattr(sys.stderr, "write"):
+    sys.stderr = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -83,6 +92,19 @@ def start_cloudflare_tunnel(port: int = 8000):
                 f.write(custom_url)
         except Exception:
             pass
+
+        # Kiểm tra nếu Cloudflared Windows Service đã chạy rồi thì không spawn thêm để tránh xung đột tunnel
+        is_service_running = False
+        try:
+            chk = subprocess.run(["sc.exe", "query", "Cloudflared"], capture_output=True, text=True)
+            if "RUNNING" in chk.stdout:
+                is_service_running = True
+                print("[Tunnel] Cloudflared Windows Service đang chạy nền 24/24 kết nối checktiktok.site.")
+        except Exception:
+            pass
+
+        if is_service_running:
+            return
 
         cmd = [
             str(CLOUDFLARED_PATH),
@@ -169,6 +191,13 @@ def on_startup():
     if not os.getenv("RENDER") and not os.getenv("IS_CLOUD"):
         t = threading.Thread(target=start_cloudflare_tunnel, args=(int(os.getenv("PORT", 8000)),), daemon=True)
         t.start()
+
+@app.get("/favicon.ico", include_in_schema=False)
+def serve_favicon():
+    fav = STATIC_DIR / "favicon.ico"
+    if fav.exists():
+        return FileResponse(fav, media_type="image/x-icon")
+    return Response(status_code=404)
 
 @app.get("/", response_class=HTMLResponse)
 def serve_index():
