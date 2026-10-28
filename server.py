@@ -41,6 +41,68 @@ import requests
 # Import engine trích xuất
 from core_dedup import fetch_channel_info_and_posts, DEFAULT_UA
 
+# Cấu hình Google Sheet Webhook lưu vết người dùng
+SHEET_WEBHOOK_URL = os.getenv(
+    "SHEET_WEBHOOK_URL",
+    "https://script.google.com/macros/s/AKfycbxiWmfPCblnMTi5PBl_Q39TjWb9Lj3Pv5UaJJ8SUTDCZvnk3yRfwhbIIaqvT6mMyLmmWQ/exec"
+)
+
+# Bộ nhớ tạm để tránh spam webhook liên tục từ cùng 1 IP + user trong thời gian ngắn
+_recent_logged_checks = {}
+
+def get_client_ip(req: Request) -> str:
+    """Lấy địa chỉ IP thật của khách truy cập (hỗ trợ qua Cloudflare / Reverse Proxy)."""
+    cf_ip = req.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    xff = req.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    if req.client and req.client.host:
+        return req.client.host
+    return "Unknown"
+
+def extract_clean_username(query: str) -> str:
+    """Trích xuất username TikTok chuẩn từ query hoặc link."""
+    q = str(query or "").strip()
+    if "tiktok.com/@" in q:
+        u = q.split("tiktok.com/@")[-1].split("?")[0].split("#")[0].split("/")[0]
+    elif "tiktok.com/" in q:
+        p = q.split("tiktok.com/")[-1].split("?")[0].split("#")[0].split("/")[0]
+        u = p[1:] if p.startswith("@") else p
+    elif q.startswith("@"):
+        u = q[1:]
+    else:
+        u = q
+    return u.split("?")[0].split("#")[0].rstrip("/").strip().lower()
+
+def record_user_check_async(user: str, ip: str):
+    """Gửi dữ liệu kiểm tra ngầm về Google Sheet không làm chậm trải nghiệm của khách."""
+    if not user or not SHEET_WEBHOOK_URL:
+        return
+
+    now = time.time()
+    cache_key = f"{ip}:{user}"
+    last_time = _recent_logged_checks.get(cache_key, 0)
+    if now - last_time < 60:
+        return
+    _recent_logged_checks[cache_key] = now
+
+    def _worker():
+        try:
+            import datetime
+            vn_time = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime("%d/%m/%Y %H:%M:%S")
+            payload = {
+                "user": user,
+                "ip": ip,
+                "time": vn_time
+            }
+            requests.post(SHEET_WEBHOOK_URL, json=payload, timeout=8)
+        except Exception as e:
+            print(f"[Sheet Tracker] Lỗi gửi log: {e}")
+
+    threading.Thread(target=_worker, daemon=True).start()
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -234,6 +296,13 @@ async def api_check_channel(req: Request):
 
     max_cursor = int(body.get("max_cursor") or 0)
     max_videos = int(body.get("max_videos") or 18)
+
+    # Ghi nhận người dùng kiểm tra ngầm về Google Sheet (chỉ ghi nhận ở lần quét đầu tiên max_cursor == 0)
+    if max_cursor == 0:
+        clean_user = extract_clean_username(query)
+        client_ip = get_client_ip(req)
+        if clean_user:
+            record_user_check_async(clean_user, client_ip)
 
     # Chạy phân tích trong thread riêng tránh xung đột Playwright sync với asyncio loop
     import asyncio
