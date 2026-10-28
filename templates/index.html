@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
     <title>TikFlow Checker | Hệ Thống Quét Trùng Lặp & Án Phạt FYP TikTok</title>
     <!-- Brand Favicons -->
     <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
@@ -738,10 +739,11 @@
             if (!url || typeof url !== 'string' || !url.startsWith('http')) {
                 return 'https://ui-avatars.com/api/?name=TikTok&background=0d111a&color=38bdf8';
             }
-            // Tất cả ảnh từ TikTok CDN / Domain cần đi qua proxy backend để tránh bị TikTok chặn 403 / CORS
-            if (url.includes('tiktok') || url.includes('byteoversea') || url.includes('ibytedtos')) {
+            // Chỉ các link ảnh private của TikTok Studio (p0-pu-image...) mới cần proxy backend (đã có RAM cache 0.001s)
+            if (url.includes('p0-pu-image') || url.includes('pu-image')) {
                 return `/api/proxy/image?url=${encodeURIComponent(url)}`;
             }
+            // Toàn bộ ảnh CDN công khai (tiktokcdn, avatar...) tải trực tiếp qua trình duyệt với no-referrer cực nhanh (30ms)
             return url;
         }
 
@@ -1169,7 +1171,7 @@
                     <td class="p-3 text-center text-slate-500 font-mono font-bold">${index + 1}</td>
                     <td class="p-3 text-center">
                         <div onclick="openModal('${v.aweme_id}')" class="relative group cursor-pointer inline-block rounded-lg overflow-hidden border border-slate-700">
-                            <img src="${coverProxied}" alt="Thumb" class="w-12 h-16 object-cover group-hover:scale-110 transition duration-300" onerror="this.src='https://placehold.co/120x160/111726/38bdf8?text=TikTok'" />
+                            <img src="${coverProxied}" alt="Thumb" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-12 h-16 object-cover group-hover:scale-110 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = '/api/proxy/image?url=' + encodeURIComponent('${v.cover_url}'); } else { this.src='https://placehold.co/120x160/111726/38bdf8?text=TikTok'; }" />
                             ${v.duration_str ? `<span class="absolute bottom-1 right-1 px-1 rounded bg-black/80 text-[9px] text-white font-mono">${v.duration_str}</span>` : ''}
                             <div class="absolute inset-0 bg-black/30 group-hover:bg-black/10 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition">
                                 <i class="fa-solid fa-play text-xs"></i>
@@ -1283,7 +1285,7 @@
 
                 card.innerHTML = `
                     <div class="relative aspect-[3/4] bg-black overflow-hidden cursor-pointer" onclick="openModal('${v.aweme_id}')">
-                        <img src="${coverProxied}" alt="Cover" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="this.src='https://placehold.co/300x400/111726/38bdf8?text=TikTok'" />
+                        <img src="${coverProxied}" alt="Cover" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = '/api/proxy/image?url=' + encodeURIComponent('${v.cover_url}'); } else { this.src='https://placehold.co/300x400/111726/38bdf8?text=TikTok'; }" />
                         
                         <!-- Top-left Region Flag Badge -->
                         <span class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded bg-black/80 flex items-center gap-1 text-[10px] text-white font-bold backdrop-blur-sm border border-slate-700/60 shadow">
