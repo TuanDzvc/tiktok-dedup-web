@@ -212,7 +212,6 @@ class TikTokPlaywrightWorker:
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
                     "--disable-extensions",
-                    "--blink-settings=imagesEnabled=false",
                 ]
             )
             self._is_ready = True
@@ -291,17 +290,24 @@ class TikTokPlaywrightWorker:
 
             page = ctx.new_page()
 
+            try:
+                page.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                    window.chrome = { runtime: {} };
+                """)
+            except Exception:
+                pass
+
             def block_unneeded(route):
                 try:
                     rt = route.request.resource_type
-                    u = route.request.url.lower()
-                    if rt in ["image", "media", "font"] or any(x in u for x in ["byteoversea.com", "analytics", "mon.snssdk", "mcs-va", "sentry"]):
+                    if rt in ["media"]:
                         route.abort()
                     else:
                         route.continue_()
                 except Exception:
                     try:
-                        route.abort()
+                        route.continue_()
                     except Exception:
                         pass
 
