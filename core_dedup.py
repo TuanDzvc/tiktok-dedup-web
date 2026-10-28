@@ -10,12 +10,15 @@ import re
 import time
 import json
 import random
+import string
+import urllib.parse
 import datetime
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 import requests
+from pathlib import Path
 
 # Cố gắng import các hàm trích xuất chuyên sâu & bảo mật từ tiktok_info_checker_gui.py của tool
 ConfigStore = None
@@ -438,35 +441,145 @@ def fetch_external_channel_videos_playwright(
         channel_info=channel_info,
     )
 
+
+def fetch_external_channel_videos_creator_api(
+    sec_uid: str,
+    cookie_str: str,
+    ua_str: str = "",
+    proxy_str: str = "",
+    max_videos: int = 18,
+    max_cursor: int = 0
+) -> List[Dict[str, Any]]:
+    """Quét video siêu tốc qua API creator/item_list (0.5s - 1.5s, không tốn RAM Playwright)."""
+    if not sec_uid or not cookie_str:
+        return []
+    
+    all_items = []
+    cursor = str(max_cursor or 0)
+    user_agent = ua_str or DEFAULT_UA
+    
+    proxies = {}
+    if proxy_str:
+        p_c = proxy_str.strip()
+        if not p_c.startswith(("http://", "https://", "socks5://")):
+            p_c = f"http://{p_c}"
+        proxies = {"http": p_c, "https": p_c}
+
+    s = requests.Session()
+    if proxies:
+        s.proxies.update(proxies)
+
+    max_loops = max(1, (max_videos // 15) + 1)
+    for _ in range(max_loops):
+        vfp = "verify_" + "".join(random.choices(string.hexdigits, k=7))
+        query_params = {
+            "aid": "1988",
+            "app_language": "en",
+            "app_name": "tiktok_web",
+            "browser_language": "en-US",
+            "browser_name": "Mozilla",
+            "browser_online": "true",
+            "browser_platform": "Win32",
+            "browser_version": "5.0 (Windows)",
+            "channel": "tiktok_web",
+            "cookie_enabled": "true",
+            "count": "15",
+            "cursor": str(cursor),
+            "device_id": str(random.randint(10**18, 10**19)),
+            "device_platform": "web_pc",
+            "focus_state": "true",
+            "from_page": "user",
+            "history_len": "2",
+            "is_fullscreen": "false",
+            "is_page_visible": "true",
+            "language": "en",
+            "os": "windows",
+            "priority_region": "",
+            "referer": "",
+            "region": "US",
+            "screen_height": "1080",
+            "screen_width": "1920",
+            "secUid": sec_uid,
+            "type": "1",
+            "tz_name": "UTC",
+            "verifyFp": vfp,
+            "webcast_language": "en",
+        }
+        api_url = f"https://www.tiktok.com/api/creator/item_list/?{urllib.parse.urlencode(query_params)}"
+        headers = {
+            "User-Agent": user_agent,
+            "Cookie": cookie_str,
+            "Referer": "https://www.tiktok.com/"
+        }
+        try:
+            r = s.get(api_url, headers=headers, timeout=8)
+            if r.status_code == 200:
+                data = r.json()
+                items = data.get("itemList") or []
+                if not items:
+                    break
+                for it in items:
+                    iid = str(it.get("id") or "")
+                    if iid and not any(str(x.get("id")) == iid for x in all_items):
+                        all_items.append(it)
+                if len(all_items) >= max_videos:
+                    break
+                last_ts = items[-1].get("createTime")
+                if last_ts:
+                    cursor = str(int(last_ts) * 1000)
+                else:
+                    break
+            else:
+                break
+        except Exception:
+            break
+
+    return all_items
+
 def get_borrowed_cookie() -> Tuple[str, str, str]:
     """
-    Tự động chọn 1 cookie hợp lệ trong kho ConfigStore của Tool để bypass WAF TikTok.
+    Tự động chọn 1 cookie hợp lệ trong kho ConfigStore hoặc cookie_pool.json để bypass WAF TikTok.
     Trả về (cookie_str, user_agent, proxy_str)
     """
     try:
-        if not ConfigStore:
-            return "", "", ""
-        store = ConfigStore()
-        _, accs = store.load()
-        candidates = []
-        for a in accs:
-            c = getattr(a, "tiktok_cookie", "")
-            if c:
-                if c.startswith("dpapi:") and unprotect_secret:
-                    try:
-                        c = unprotect_secret(c)
-                    except Exception:
-                        continue
-                if len(c) > 30 and ("sessionid=" in c or "sessionid_ss=" in c):
-                    candidates.append((
-                        c,
-                        getattr(a, "user_agent", "") or DEFAULT_UA,
-                        ""
-                    ))
-        if candidates:
-            return random.choice(candidates)
+        if ConfigStore:
+            store = ConfigStore()
+            _, accs = store.load()
+            candidates = []
+            for a in accs:
+                c = getattr(a, "tiktok_cookie", "")
+                if c:
+                    if c.startswith("dpapi:") and unprotect_secret:
+                        try:
+                            c = unprotect_secret(c)
+                        except Exception:
+                            continue
+                    if len(c) > 30 and ("sessionid=" in c or "sessionid_ss=" in c):
+                        candidates.append((
+                            c,
+                            getattr(a, "user_agent", "") or DEFAULT_UA,
+                            ""
+                        ))
+            if candidates:
+                return random.choice(candidates)
     except Exception as e:
-        print(f"[BorrowCookie] Lỗi mượn cookie: {e}")
+        print(f"[BorrowCookie] Lỗi mượn cookie từ tool: {e}")
+
+    try:
+        pool_file = Path(__file__).resolve().parent / "cookie_pool.json"
+        if pool_file.exists():
+            data = json.loads(pool_file.read_text(encoding="utf-8"))
+            c = data.get("cookie", "")
+            ua = data.get("user_agent", DEFAULT_UA)
+            if c:
+                return c, ua, ""
+    except Exception as e:
+        print(f"[BorrowCookie] Lỗi đọc cookie_pool.json: {e}")
+
+    env_c = os.getenv("TIKTOK_COOKIE", "")
+    if env_c:
+        return env_c, DEFAULT_UA, ""
+
     return "", "", ""
 
 def fetch_channel_info_and_posts(
@@ -636,9 +749,7 @@ def fetch_channel_info_and_posts(
                     p_c = f"http://{p_c}"
                 s.proxies.update({"http": p_c, "https": p_c})
 
-            cookie_header = ""
-            if effective_cookie and is_self_account:
-                cookie_header = effective_cookie
+            cookie_header = effective_cookie if effective_cookie else ""
 
             req_headers = {}
             if cookie_header:
@@ -769,7 +880,28 @@ def fetch_channel_info_and_posts(
         except Exception as e_studio:
             print(f"[CheckDupWeb] Lỗi api_get_post_list: {e_studio}")
 
-    # Trường hợp B: Kênh ngoài hoặc Studio chưa lấy được -> Quét trực tiếp qua Playwright Worker siêu tốc (2-3s)
+    # Trường hợp B1: Thử quét siêu tốc qua Creator API (chỉ mất ~1s, không tốn RAM)
+    if not raw_items and sec_uid and effective_cookie:
+        api_items = fetch_external_channel_videos_creator_api(
+            sec_uid=sec_uid,
+            cookie_str=effective_cookie,
+            ua_str=matched_acc_ua,
+            proxy_str=matched_acc_proxy or proxy_str,
+            max_videos=max_videos + max_cursor,
+            max_cursor=max_cursor
+        )
+        if api_items:
+            offset = int(max_cursor) if max_cursor > 0 else 0
+            raw_items = api_items[offset:offset + max_videos]
+            next_cursor = offset + len(raw_items)
+            total_vids = int(channel_info.get("videoCount") or 0)
+            if total_vids > 0:
+                has_more = next_cursor < total_vids
+            else:
+                has_more = len(api_items) > next_cursor or len(raw_items) >= max_videos
+            print(f"[CheckDupWeb] Quét siêu tốc qua Creator API thành công: {len(raw_items)} video cho @{username}")
+
+    # Trường hợp B2: Kênh ngoài hoặc chưa lấy được -> Quét dự phòng qua Playwright Worker siêu tốc
     if not raw_items and username:
         channel_url = f"https://www.tiktok.com/@{username}"
         pw_cookie = effective_cookie if is_self_account else ""
