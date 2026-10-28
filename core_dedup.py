@@ -120,9 +120,12 @@ def format_count_compact(num: Any) -> str:
         return "0"
 
 def clean_desc_text(text: str) -> str:
-    clean = re.sub(r"#[^\s#]+", "", text or "")
+    raw = (text or "").strip()
+    if not raw:
+        return "(không mô tả)"
+    clean = re.sub(r"#[^\s#]+", "", raw).strip()
     clean = re.sub(r"\s+", " ", clean).strip()
-    return clean or "(không mô tả)"
+    return clean if clean else raw
 
 def decode_snowflake_timestamp(uid: Union[str, int]) -> Optional[str]:
     """Giải mã UID 64-bit TikTok để lấy ngày tạo chính xác (32 bit cao là timestamp)."""

@@ -1164,8 +1164,8 @@
                         </div>
                     </td>
                     <td class="p-3 max-w-xs">
-                        <p class="text-white font-semibold truncate hover:text-clip hover:whitespace-normal transition leading-snug" title="${v.desc || ''}">
-                            ${v.desc_clean || '(không có mô tả)'}
+                        <p class="font-semibold truncate hover:text-clip hover:whitespace-normal transition leading-snug ${(v.desc && v.desc.trim()) ? 'text-white' : 'text-slate-500 italic'}" title="${escapeHtml(v.desc || v.desc_clean || '')}">
+                            ${escapeHtml((v.desc && v.desc.trim()) ? v.desc.trim() : (v.desc_clean && v.desc_clean !== '(không mô tả)' ? v.desc_clean : '(không có mô tả)'))}
                         </p>
                         <div class="flex items-center gap-2 mt-1 text-[11px] text-sky-400 font-mono">
                             <i class="fa-regular fa-clock"></i>
