@@ -1333,6 +1333,11 @@ def fetch_channel_info_and_posts(
 
         age_hours = (time.time() - c_time) / 3600 if c_time > 0 else 0
 
+        # Phân biệt rõ:
+        # 1. Trùng lặp (is_dup): video bị cờ duplicate / unoriginal / group_id
+        # 2. Án phạt (has_pen): vi phạm tiêu chuẩn cộng đồng, moderation penalty
+        # 3. Mất FYP (is_fyp): video không đủ điều kiện vào For You feed
+        # 4. Shadowban (is_shadow): hiện tượng thuật toán bóp ngầm phân phối (view kẹt 0 - 300 view)
         is_fyp = bool(
             is_dup
             or (can_repost is False)
@@ -1341,11 +1346,11 @@ def fetch_channel_info_and_posts(
             or it.get("is_fyp_restricted", False)
             or cached_meta.get("is_fyp_restricted", False)
         )
-        is_shadow = is_fyp
 
+        is_shadow = False
         shadow_reason = ""
         if can_repost is False:
-            shadow_reason = "Hạn chế phân phối Bảng tin Cho bạn (Shadowban / Chặn chia sẻ lại)"
+            shadow_reason = "Hạn chế phân phối Bảng tin Cho bạn (Chặn chia sẻ lại)"
         elif is_prohibited:
             shadow_reason = "Nội dung vi phạm tiêu chuẩn cộng đồng TikTok (Bị cấm phân phối)"
         elif has_pen:
@@ -1353,10 +1358,11 @@ def fetch_channel_info_and_posts(
         elif is_dup:
             shadow_reason = dup_reason or "Nội dung trùng lặp (Không đủ điều kiện FYP)"
 
-        if not is_fyp and ch_followers >= 500 and age_hours >= 12 and 0 < play_cnt <= 300 and share_cnt == 0 and digg_cnt <= 5:
-            is_fyp = True
+        # Chỉ coi là Shadowban nếu video bị bóp nghẹt ngầm bất thường (0 - 300 view sau > 12 tiếng trên kênh có follower)
+        if play_cnt <= 300 and ch_followers >= 500 and age_hours >= 12 and share_cnt == 0 and digg_cnt <= 5:
             is_shadow = True
-            shadow_reason = f"Kẹt trần phân phối {play_cnt} view (Nghi vấn mất FYP / Shadowban)"
+            is_fyp = True
+            shadow_reason = f"Kẹt trần phân phối {play_cnt} view (Nghi vấn Shadowban ngầm)"
 
         pen_details_str = str(it.get("penalty_details") or "")
         if not pen_details_str:
