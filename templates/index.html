@@ -937,7 +937,7 @@
             const total = currentVideos.length;
             const channelTotal = (channelData && channelData.videoCount) ? parseInt(channelData.videoCount) : 0;
             // 1. Video trùng lặp thực sự (is_dup hoặc có group_id khác aweme_id)
-            const dupVideos = currentVideos.filter(v => Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id))));
+            const dupVideos = currentVideos.filter(v => Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null')));
             const dupCount = dupVideos.length;
 
             // 2. Video kẹt phân phối / mất FYP / shadowban
@@ -1036,7 +1036,7 @@
             const query = (document.getElementById('searchDescInput').value || '').toLowerCase().trim();
 
             filteredVideos = currentVideos.filter(v => {
-                const isDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id)));
+                const isDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
                 const isFyp = Boolean(v.is_fyp_restricted || v.shadow || v.has_penalty);
                 const isClean = !isDup && !isFyp;
 
@@ -1101,7 +1101,7 @@
 
                 // Status badges matching tool
                 const penTitle = (v.penalty_details || v.shadowReason || '').replace(/"/g, '&quot;');
-                const origLink = v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : '');
+                const origLink = v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : '');
                 let origBtn = '';
                 if (origLink) {
                     origBtn = `
@@ -1119,7 +1119,7 @@
                     `;
                 }
 
-                const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id)));
+                const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
                 let dupBadge = '';
                 if (v.is_fyp_restricted && isThisDup) {
                     dupBadge = `
@@ -1336,7 +1336,7 @@
                             <span class="text-rose-400 font-bold flex items-center gap-1">
                                 <i class="fa-solid fa-triangle-exclamation"></i> Trùng
                             </span>
-                            ${(v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id))) ? `
+                            ${(v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null')) ? `
                             <div class="flex items-center gap-1">
                                 <button onclick="event.stopPropagation(); copyText('${v.origin_url || `https://www.tiktok.com/@tiktok/video/${v.group_id}`}')" title="Copy link video gốc" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition">
                                     <i class="fa-regular fa-copy"></i>
@@ -1381,7 +1381,7 @@
             const origInput = document.getElementById('modalOriginInput');
             const origLink = document.getElementById('modalOriginLink');
             const origGid = document.getElementById('modalOriginGroupId');
-            const origUrl = video.origin_url || (video.group_id && String(video.group_id) !== String(video.aweme_id) ? `https://www.tiktok.com/@tiktok/video/${video.group_id}` : '');
+            const origUrl = video.origin_url || (video.group_id && String(video.group_id) !== String(video.aweme_id) && String(video.group_id) !== '0' && String(video.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${video.group_id}` : '');
             if (origBox && origUrl) {
                 origInput.value = origUrl;
                 origLink.href = origUrl;
@@ -1419,7 +1419,7 @@
                 v.region,
                 `"${(v.desc || '').replace(/"/g, '""')}"`,
                 v.share_url,
-                v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : "")
+                v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : "")
             ]);
 
             const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");

@@ -1253,8 +1253,6 @@ def fetch_channel_info_and_posts(
 
     # 5. Định dạng và kiểm tra trùng lặp cho từng video
     video_list = []
-    seen_group_ids = {}
-    seen_content_keys = {}
     tkm_cache = _load_tiktokmanager_cache()
     ch_followers = int(channel_info.get("followers") or 0)
 
@@ -1310,8 +1308,9 @@ def fetch_channel_info_and_posts(
             or is_prohibited
         )
 
+        has_real_group_dup = bool(group_id and group_id != aweme_id and group_id not in ("0", "None", "null"))
         is_dup = bool(
-            (group_id and group_id != aweme_id)
+            has_real_group_dup
             or cached_meta.get("is_dup", False)
             or it.get("is_dup", False)
             or it.get("isDup", False)
@@ -1321,29 +1320,16 @@ def fetch_channel_info_and_posts(
 
         dup_reason = ""
         dup_origin_vid = ""
-        if group_id and group_id != aweme_id:
+        if has_real_group_dup:
             dup_reason = f"Trùng lặp Group ID (Group: {group_id})"
+            dup_origin_vid = group_id
         elif cached_meta.get("is_dup"):
             dup_reason = "Trùng lặp nội dung (Khớp cache TikTok Manager)"
+            c_gid = str(cached_meta.get("group_id") or "").strip()
+            if c_gid and c_gid != aweme_id and c_gid not in ("0", "None", "null"):
+                dup_origin_vid = c_gid
         elif display_penalty_type != 0 or display_policy != 0:
             dup_reason = "Vi phạm chính sách trùng lặp / Bản quyền nội dung"
-
-        if group_id:
-            if group_id in seen_group_ids and seen_group_ids[group_id] != aweme_id:
-                is_dup = True
-                dup_origin_vid = seen_group_ids[group_id]
-                dup_reason = f"Trùng Group ID với video {seen_group_ids[group_id]} trên kênh"
-            seen_group_ids[group_id] = aweme_id
-
-        desc_clean = clean_desc_text(desc).lower()
-        if not is_dup and dur_sec > 0 and len(desc_clean) > 8 and desc_clean != "(không mô tả)":
-            content_key = (dur_sec, desc_clean)
-            if content_key in seen_content_keys:
-                is_dup = True
-                dup_origin_vid = seen_content_keys[content_key]
-                dup_reason = f"Trùng thời lượng ({duration_str}) & mô tả với video {seen_content_keys[content_key]}"
-            else:
-                seen_content_keys[content_key] = aweme_id
 
         age_hours = (time.time() - c_time) / 3600 if c_time > 0 else 0
 
@@ -1424,10 +1410,9 @@ def fetch_channel_info_and_posts(
                 pass
 
         origin_url = ""
-        if group_id and group_id != aweme_id:
-            origin_url = f"https://www.tiktok.com/@tiktok/video/{group_id}"
-        elif is_dup and dup_origin_vid:
-            origin_url = f"https://www.tiktok.com/@{clean_u}/video/{dup_origin_vid}" if clean_u else f"https://www.tiktok.com/video/{dup_origin_vid}"
+        target_orig_id = dup_origin_vid or (group_id if has_real_group_dup else "")
+        if target_orig_id and target_orig_id != aweme_id and target_orig_id not in ("0", "None", "null"):
+            origin_url = f"https://www.tiktok.com/@tiktok/video/{target_orig_id}"
 
         post_data = {
             "id": aweme_id,
