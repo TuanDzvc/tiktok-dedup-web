@@ -1270,10 +1270,7 @@ def fetch_channel_info_and_posts(
         device_plat = str(it.get("device_platform") or "").lower()
 
 
-        is_phone = device_plat in ("iphone", "android") or it.get("shoot_tab") or "app" in str(it.get("source", "")).lower()
-
-
-        device = "phone" if is_phone else "web"
+        source_raw = str(it.get("source") or "").lower()
 
 
         c2pa = it.get("c2pa_info") if isinstance(it.get("c2pa_info"), dict) else {}
@@ -1288,6 +1285,21 @@ def fetch_channel_info_and_posts(
         shoot_tab = it.get("shoot_tab")
 
 
+        is_explicit_web = (
+
+
+            device_plat in ("web_pc", "pc", "web")
+
+
+            or source_raw in ("web", "web_pc")
+
+
+            or "web_upload" in str(it).lower()
+
+
+        )
+
+
         if is_capcut:
 
 
@@ -1297,19 +1309,25 @@ def fetch_channel_info_and_posts(
             source_icon = "fa-scissors"
 
 
-        elif is_phone:
+            device = "phone"
 
 
-            if shoot_tab in (0, "0", None):
+        elif is_explicit_web:
 
 
-                source_lbl = "Phone (Gallery)"
+            source_lbl = "Web (PC)"
 
 
-                source_icon = "fa-mobile-screen"
+            source_icon = "fa-desktop"
 
 
-            else:
+            device = "web"
+
+
+        else:
+
+
+            if shoot_tab and str(shoot_tab) not in ("0", "None"):
 
 
                 source_lbl = "Mobile (Camera)"
@@ -1318,13 +1336,16 @@ def fetch_channel_info_and_posts(
                 source_icon = "fa-camera"
 
 
-        else:
+            else:
 
 
-            source_lbl = "Web (PC)"
+                source_lbl = "Phone (Gallery)"
 
 
-            source_icon = "fa-desktop"
+                source_icon = "fa-mobile-screen"
+
+
+            device = "phone"
 
 
         music_obj = it.get("music") if isinstance(it.get("music"), dict) else {}
