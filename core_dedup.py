@@ -1349,20 +1349,21 @@ def fetch_channel_info_and_posts(
 
         is_shadow = False
         shadow_reason = ""
+        # Shadowban & FYP restriction: Chỉ xác định khi có tín hiệu thực sự từ TikTok (item_control, penaltyContext, isProhibited)
+        # Tuyệt đối không tự ý đoán mò dựa trên lượt xem thấp (ít view không đồng nghĩa với Mất FYP hay Shadowban)
         if can_repost is False:
             shadow_reason = "Hạn chế phân phối Bảng tin Cho bạn (Chặn chia sẻ lại)"
+            is_fyp = True
         elif is_prohibited:
             shadow_reason = "Nội dung vi phạm tiêu chuẩn cộng đồng TikTok (Bị cấm phân phối)"
+            is_fyp = True
+            is_shadow = True
         elif has_pen:
             shadow_reason = "Án phạt kiểm duyệt nội dung TikTok"
+            is_fyp = True
         elif is_dup:
             shadow_reason = dup_reason or "Nội dung trùng lặp (Không đủ điều kiện FYP)"
-
-        # Chỉ coi là Shadowban nếu video bị bóp nghẹt ngầm bất thường (0 - 300 view sau > 12 tiếng trên kênh có follower)
-        if play_cnt <= 300 and ch_followers >= 500 and age_hours >= 12 and share_cnt == 0 and digg_cnt <= 5:
-            is_shadow = True
             is_fyp = True
-            shadow_reason = f"Kẹt trần phân phối {play_cnt} view (Nghi vấn Shadowban ngầm)"
 
         pen_details_str = str(it.get("penalty_details") or "")
         if not pen_details_str:
