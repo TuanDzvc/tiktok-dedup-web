@@ -1268,8 +1268,81 @@ def fetch_channel_info_and_posts(
         c_time = int(it.get("createTime") or it.get("create_time") or it.get("post_time") or 0)
 
         device_plat = str(it.get("device_platform") or "").lower()
-        is_phone = device_plat in ("iphone", "android") or it.get("shoot_tab") or it.get("source") == "📱 App" or "App" in str(it.get("source", ""))
+
+
+        is_phone = device_plat in ("iphone", "android") or it.get("shoot_tab") or "app" in str(it.get("source", "")).lower()
+
+
         device = "phone" if is_phone else "web"
+
+
+        c2pa = it.get("c2pa_info") if isinstance(it.get("c2pa_info"), dict) else {}
+
+
+        anchors = str(it.get("anchors") or "").lower()
+
+
+        is_capcut = bool(it.get("is_capcut") or c2pa.get("is_capcut") or "capcut" in anchors)
+
+
+        shoot_tab = it.get("shoot_tab")
+
+
+        if is_capcut:
+
+
+            source_lbl = "CapCut"
+
+
+            source_icon = "fa-scissors"
+
+
+        elif is_phone:
+
+
+            if shoot_tab in (0, "0", None):
+
+
+                source_lbl = "Phone (Gallery)"
+
+
+                source_icon = "fa-mobile-screen"
+
+
+            else:
+
+
+                source_lbl = "Mobile (Camera)"
+
+
+                source_icon = "fa-camera"
+
+
+        else:
+
+
+            source_lbl = "Web (PC)"
+
+
+            source_icon = "fa-desktop"
+
+
+        music_obj = it.get("music") if isinstance(it.get("music"), dict) else {}
+
+
+        is_muted = bool(it.get("is_muted") or music_obj.get("mute_share") or music_obj.get("mute") or music_obj.get("status") == 2)
+
+
+        video_obj = it.get("video") if isinstance(it.get("video"), dict) else {}
+
+
+        v_h = int(video_obj.get("height") or 0)
+
+
+        v_w = int(video_obj.get("width") or 0)
+
+
+        quality_str = "1080p" if v_h >= 1080 else ("720p" if v_h >= 720 else ("480p" if v_h >= 480 else (f"{v_w}x{v_h}" if v_h > 0 else "Chuẩn")))
 
         ch_reg = str(channel_info.get("region") or "US").upper()
         region = str(it.get("region") or it.get("locationCreated") or it.get("country_code") or it.get("geo") or cached_meta.get("region") or ch_reg).upper()
@@ -1437,7 +1510,11 @@ def fetch_channel_info_and_posts(
             "date_local": date_local,
             "date_utc": date_utc,
             "device": device,
-            "source": "📱 App" if is_phone else "🌐 Web",
+            "source": source_lbl,
+            "source_icon": source_icon,
+            "is_muted": is_muted,
+            "is_prohibited": is_prohibited,
+            "quality": quality_str,
             "region": region,
             "region_display": format_full_country_display(region),
             "shadow": is_shadow,

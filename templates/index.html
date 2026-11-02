@@ -1185,6 +1185,27 @@
                             <i class="fa-regular fa-clock"></i>
                             <span>${v.date_local || v.date_utc || '—'}</span>
                         </div>
+                        <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
+                            <span class="px-1.5 py-0.5 rounded font-medium bg-slate-800/90 text-slate-200 border border-slate-700/80 flex items-center gap-1" title="Thiết bị đăng">
+                                <i class="fa-solid ${v.source_icon || 'fa-mobile-screen'} text-cyan-400 text-[10px]"></i>
+                                <span>${v.source || 'Mobile'}</span>
+                            </span>
+                            ${v.quality ? `<span class="px-1.5 py-0.5 rounded font-mono font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-700/70" title="Độ phân giải">${v.quality}</span>` : ''}
+                            ${v.is_muted ? `
+                                <span class="px-1.5 py-0.5 rounded font-medium bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1" title="Âm thanh bị tắt do bản quyền nhạc">
+                                    <i class="fa-solid fa-volume-xmark text-rose-400"></i> Tắt âm: Có
+                                </span>
+                            ` : `
+                                <span class="px-1.5 py-0.5 rounded font-medium bg-emerald-950/70 text-emerald-400 border border-emerald-800/60 flex items-center gap-1" title="Âm thanh bình thường">
+                                    <i class="fa-solid fa-volume-high text-emerald-400"></i> Tắt âm: Không
+                                </span>
+                            `}
+                            ${v.is_prohibited ? `
+                                <span class="px-1.5 py-0.5 rounded font-medium bg-red-950 text-red-300 border border-red-700 flex items-center gap-1" title="Video bị ẩn hoặc cấm hiển thị">
+                                    <i class="fa-solid fa-ban text-red-400"></i> Cấm hiển thị: Có
+                                </span>
+                            ` : ''}
+                        </div>
                     </td>
                     <td class="p-2.5 text-center font-mono">
                         <div class="flex flex-col items-center justify-center leading-tight" title="Lượt xem: ${v.play_count.toLocaleString()}">
