@@ -531,6 +531,12 @@ async def api_studio_item_delete(req: Request):
     res = studio_engine.delete_studio_post(cookie_str, item_id, proxy=proxy)
     return JSONResponse(content=res)
 
+@app.post("/api/studio/browser/login")
+def api_studio_browser_login():
+    """Mở cửa sổ trình duyệt Chromium trực tiếp trên màn hình máy tính để đăng nhập."""
+    res = studio_engine.run_interactive_browser_login()
+    return JSONResponse(content=res)
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)

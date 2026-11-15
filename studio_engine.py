@@ -75,11 +75,19 @@ def _pw_qr_worker(session_id: str):
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox"
+                ]
+            )
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
                 viewport={"width": 1280, "height": 800}
             )
+            context.add_init_script("delete Object.getPrototypeOf(navigator).webdriver")
             page = context.new_page()
             page.goto("https://www.tiktok.com/login", timeout=25000)
             page.wait_for_timeout(2000)
@@ -540,3 +548,55 @@ def delete_studio_post(cookie_str: str, item_id: str, proxy: str = "") -> Dict[s
             return {"success": False, "error": f"Lỗi kết nối máy chủ TikTok: HTTP {r.status_code}"}
     except Exception as e:
         return {"success": False, "error": f"Lỗi xóa video: {str(e)}"}
+
+
+def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
+    """Mở cửa sổ trình duyệt Chromium trực tiếp trên màn hình máy tính để đăng nhập 100% thành công."""
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=False,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox"
+                ]
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                viewport={"width": 1000, "height": 720}
+            )
+            context.add_init_script("delete Object.getPrototypeOf(navigator).webdriver")
+            page = context.new_page()
+            page.goto("https://www.tiktok.com/login", timeout=30000)
+            page.wait_for_timeout(1500)
+            try:
+                page.locator("text=QR").first.click(timeout=3000)
+            except Exception:
+                pass
+
+            start_ts = time.time()
+            while time.time() - start_ts < timeout_sec:
+                try:
+                    cookies = context.cookies()
+                except Exception:
+                    return {"success": False, "error": "Bạn đã đóng cửa sổ trình duyệt."}
+
+                sid = next((c['value'] for c in cookies if c['name'] == 'sessionid'), None)
+                if sid:
+                    cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies if c.get('name') and c.get('value'))
+                    acc_info = get_account_info(cookie_str)
+                    browser.close()
+                    return {
+                        "success": True,
+                        "account": acc_info,
+                        "cookie": cookie_str
+                    }
+                time.sleep(1)
+
+            browser.close()
+            return {"success": False, "error": "Đã hết thời gian chờ đăng nhập (5 phút)."}
+    except Exception as e:
+        return {"success": False, "error": f"Lỗi mở trình duyệt: {str(e)}"}
+

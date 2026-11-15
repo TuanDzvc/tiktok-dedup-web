@@ -705,6 +705,29 @@
                 </button>
             </div>
 
+            <!-- Nút Mở Trình Duyệt Đăng Nhập Trực Tiếp (Y hệt Tool chính) -->
+            <div class="relative z-10 p-3 rounded-2xl bg-cyan-950/60 border border-cyan-500/40 text-center space-y-2">
+                <button 
+                    type="button" 
+                    id="btnBrowserLogin"
+                    onclick="handleBrowserLogin()" 
+                    class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-extrabold text-sm transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2.5 active:scale-98"
+                >
+                    <i class="fa-solid fa-window-maximize text-amber-300"></i>
+                    <span>Mở Cửa Sổ Trình Duyệt Đăng Nhập (1-Click Ăn Ngay)</span>
+                </button>
+                <p class="text-[11px] text-slate-400">
+                    💡 Mở trực tiếp cửa sổ Chrome để bạn đăng nhập bằng QR / Google / Mật khẩu. Đăng nhập xong tự đóng cửa sổ và vào Check Post!
+                </p>
+            </div>
+
+            <!-- Hoặc chọn phương thức bên dưới -->
+            <div class="relative z-10 flex items-center justify-center gap-2 text-[11px] text-slate-500 font-bold uppercase tracking-wider">
+                <span class="h-px bg-slate-800 flex-1"></span>
+                <span>Hoặc chọn bên dưới</span>
+                <span class="h-px bg-slate-800 flex-1"></span>
+            </div>
+
             <!-- Tabs Switcher -->
             <div class="grid grid-cols-2 gap-2 p-1 bg-slate-950/80 rounded-2xl border border-slate-800 relative z-10">
                 <button 
@@ -2041,6 +2064,38 @@
                 }
             } catch (e) {
                 console.error("Poll QR error:", e);
+            }
+        }
+
+        async function handleBrowserLogin() {
+            const btn = document.getElementById('btnBrowserLogin');
+            const origHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Đang mở cửa sổ trình duyệt đăng nhập...</span>`;
+            showToast("Đang mở trình duyệt... Hãy đăng nhập trên cửa sổ vừa hiện lên!");
+
+            try {
+                const res = await fetch('/api/studio/browser/login', { method: 'POST' });
+                const data = await res.json();
+                if (data.success && data.account) {
+                    activeStudioSession = {
+                        account: data.account,
+                        cookie: data.cookie,
+                        saved_at: Date.now()
+                    };
+                    localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
+                    renderAuthNav();
+                    closeAuthModal();
+                    showToast("Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
+                    openCheckPostModal();
+                } else {
+                    alert(data.error || "Đăng nhập không thành công.");
+                }
+            } catch (e) {
+                alert("Lỗi kết nối: " + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
             }
         }
 
