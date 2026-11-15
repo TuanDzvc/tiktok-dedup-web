@@ -91,18 +91,29 @@ def _pw_qr_worker(session_id: str):
             except Exception:
                 pass
 
-            el = page.locator("canvas, img[src*='qrcode'], div[data-e2e='qr-code']").first
-            if el.is_visible():
-                img_b = el.screenshot()
-                b64_str = f"data:image/png;base64,{base64.b64encode(img_b).decode('ascii')}"
+            # Trích xuất trực tiếp mã QR độ nét cao từ thẻ canvas (chuẩn 100%, không bị viền đen thu nhỏ)
+            canvas = page.locator("canvas").first
+            if canvas.is_visible():
+                try:
+                    b64_str = canvas.evaluate("c => c.toDataURL('image/png')")
+                except Exception:
+                    img_b = canvas.screenshot()
+                    b64_str = f"data:image/png;base64,{base64.b64encode(img_b).decode('ascii')}"
                 sess["qr_image"] = b64_str
                 sess["ready"] = True
             else:
-                sess["ready"] = True
-                sess["status"] = "error"
-                sess["error"] = "Không thể tải mã QR từ TikTok."
-                browser.close()
-                return
+                el = page.locator("img[src*='qrcode'], div[data-e2e='qr-code']").first
+                if el.is_visible():
+                    img_b = el.screenshot()
+                    b64_str = f"data:image/png;base64,{base64.b64encode(img_b).decode('ascii')}"
+                    sess["qr_image"] = b64_str
+                    sess["ready"] = True
+                else:
+                    sess["ready"] = True
+                    sess["status"] = "error"
+                    sess["error"] = "Không thể tải mã QR từ TikTok."
+                    browser.close()
+                    return
 
             # Chờ người dùng quét mã và bấm xác nhận trên điện thoại (tối đa 180s)
             start_ts = time.time()
@@ -147,6 +158,11 @@ def _pw_qr_worker(session_id: str):
 
 def create_qr_session() -> Dict[str, Any]:
     """Tạo phiên đăng nhập QR chính quy từ TikTok qua Playwright Headless Engine."""
+    # Hủy các phiên QR cũ đang chờ để dọn dẹp tiến trình trình duyệt
+    for sid, old_sess in list(QR_SESSIONS.items()):
+        if old_sess.get("status") in ("waiting", "scanned"):
+            old_sess["cancelled"] = True
+
     session_id = str(uuid.uuid4())
     QR_SESSIONS[session_id] = {
         "ready": False,
