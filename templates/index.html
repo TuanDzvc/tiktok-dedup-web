@@ -154,9 +154,23 @@
                     </div>
                 </a>
             </div>
-            <div class="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Hệ thống sẵn sàng</span>
+            <div class="flex items-center gap-3">
+                <div class="hidden md:flex items-center gap-2 text-xs font-semibold text-slate-400">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Hệ thống sẵn sàng</span>
+                </div>
+                <div id="authNavContainer" class="flex items-center">
+                    <button 
+                        type="button"
+                        onclick="openAuthModal()" 
+                        class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/25 border border-cyan-400/40 hover:scale-105 active:scale-95 transition-all duration-200"
+                        title="Đăng nhập để xem toàn bộ video kênh (kể cả video riêng tư) và thao tác Ẩn/Bạn bè/Xóa"
+                    >
+                        <i class="fa-solid fa-qrcode text-amber-300"></i>
+                        <span>Studio / Check Post</span>
+                        <span class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-cyan-950 text-cyan-300 rounded font-black border border-cyan-700/60">Mới</span>
+                    </button>
+                </div>
             </div>
         </div>
     </header>
@@ -662,6 +676,364 @@
                         <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                     </a>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================================== -->
+    <!-- MODAL ĐĂNG NHẬP STUDIO (QUÉT MÃ QR & DÁN COOKIE) -->
+    <!-- ============================================================================== -->
+    <div id="authModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-300 hidden">
+        <div class="relative max-w-lg w-full bg-dark-900 border border-slate-700/80 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6 overflow-hidden">
+            <!-- Glow background -->
+            <div class="absolute -top-16 -right-16 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-16 -left-16 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <!-- Header -->
+            <div class="flex items-start justify-between gap-4 border-b border-slate-800 pb-4 relative z-10">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400 text-lg shadow-inner">
+                        <i class="fa-solid fa-key"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-extrabold text-white">Đăng Nhập Quản Lý Kênh</h3>
+                        <p class="text-xs text-slate-400">Xem video riêng tư & thao tác Ẩn/Bạn bè/Xóa trực tiếp</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeAuthModal()" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800/80 transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Tabs Switcher -->
+            <div class="grid grid-cols-2 gap-2 p-1 bg-slate-950/80 rounded-2xl border border-slate-800 relative z-10">
+                <button 
+                    type="button" 
+                    id="authTabBtnQr" 
+                    onclick="switchAuthTab('qr')" 
+                    class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md"
+                >
+                    <i class="fa-solid fa-qrcode text-amber-300"></i>
+                    <span>Quét mã QR</span>
+                </button>
+                <button 
+                    type="button" 
+                    id="authTabBtnCookie" 
+                    onclick="switchAuthTab('cookie')" 
+                    class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white hover:bg-slate-900"
+                >
+                    <i class="fa-solid fa-paste"></i>
+                    <span>Dán Cookie</span>
+                </button>
+            </div>
+
+            <!-- Tab 1: QR Code Scanner -->
+            <div id="authContentQr" class="space-y-5 relative z-10">
+                <!-- QR Frame -->
+                <div class="relative w-56 h-56 mx-auto bg-slate-950 p-3 rounded-2xl border-2 border-cyan-500/40 shadow-2xl flex items-center justify-center group overflow-hidden">
+                    <img id="qrCodeImg" src="" alt="TikTok QR Code" class="w-full h-full object-contain rounded-xl" />
+                    
+                    <!-- Loading state -->
+                    <div id="qrLoadingOverlay" class="absolute inset-0 bg-dark-950/90 backdrop-blur-sm flex flex-col items-center justify-center gap-2 text-cyan-400">
+                        <i class="fa-solid fa-spinner animate-spin text-3xl"></i>
+                        <span class="text-xs font-semibold text-slate-300">Đang tạo mã QR...</span>
+                    </div>
+
+                    <!-- Expired state -->
+                    <div id="qrExpiredOverlay" class="absolute inset-0 bg-dark-950/95 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-4 text-center hidden">
+                        <i class="fa-solid fa-clock-rotate-left text-rose-400 text-3xl"></i>
+                        <span class="text-xs text-rose-300 font-bold">Mã QR đã hết hạn!</span>
+                        <button type="button" onclick="startQrLogin()" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-cyan-600/30">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            <span>Làm mới mã</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status indicator -->
+                <div id="qrStatusPill" class="text-center py-2 px-3 rounded-xl bg-slate-950/70 border border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="qrStatusText">Đang chờ bạn mở TikTok quét mã...</span>
+                </div>
+
+                <!-- Step guide -->
+                <div class="p-3.5 rounded-2xl bg-slate-950/50 border border-slate-800/80 space-y-2 text-xs text-slate-400">
+                    <div class="font-bold text-slate-200 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                        <i class="fa-solid fa-mobile-screen-button text-cyan-400"></i> Hướng dẫn quét mã:
+                    </div>
+                    <ol class="list-decimal list-inside space-y-1 text-slate-300 text-[11px] leading-relaxed">
+                        <li>Mở app <b class="text-white">TikTok</b> trên điện thoại của bạn.</li>
+                        <li>Vào <b class="text-white">Hồ sơ</b> &rarr; Menu <b>☰</b> &rarr; <b class="text-white">Mã QR của tôi</b> &rarr; Chọn biểu tượng <b class="text-cyan-400">Quét mã [ -|- ]</b>.</li>
+                        <li>Hướng máy ảnh vào mã QR trên và nhấn <b class="text-emerald-400">Ủy quyền / Xác nhận</b>.</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Tab 2: Dán Cookie (Dự phòng) -->
+            <div id="authContentCookie" class="space-y-4 relative z-10 hidden">
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-slate-300">
+                        Chuỗi Cookie tài khoản TikTok: <span class="text-rose-400">*</span>
+                    </label>
+                    <textarea 
+                        id="cookieInput" 
+                        rows="4" 
+                        placeholder="Dán chuỗi Cookie từ trình duyệt hoặc Cookie-Editor (chứa sessionid=...; tt_csrf_token=...)" 
+                        class="w-full bg-slate-950 border border-slate-700/80 rounded-2xl p-3 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500/20 placeholder-slate-500 resize-none"
+                    ></textarea>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-medium text-slate-400">
+                        Proxy HTTP (Tùy chọn nếu kênh dùng proxy cố định):
+                    </label>
+                    <input 
+                        type="text" 
+                        id="cookieProxyInput" 
+                        placeholder="http://user:pass@ip:port (hoặc để trống nếu dùng mạng thường)" 
+                        class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-600"
+                    />
+                </div>
+
+                <button 
+                    type="button" 
+                    id="btnImportCookie" 
+                    onclick="handleCookieImport()" 
+                    class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-sm transition shadow-xl shadow-cyan-600/25 flex items-center justify-center gap-2 active:scale-98"
+                >
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Xác Thực Cookie & Mở Check Post</span>
+                </button>
+
+                <p class="text-[11px] text-slate-500 text-center">
+                    💡 Hỗ trợ cookie xuất từ Cookie-Editor, DevTools F12 (Header Cookie) hoặc chuỗi JSON.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================================== -->
+    <!-- MODAL CREATOR STUDIO / CHECK POST TOÀN NĂNG -->
+    <!-- ============================================================================== -->
+    <div id="checkPostModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 transition-all duration-300 hidden">
+        <div class="relative max-w-6xl w-full max-h-[94vh] bg-dark-900 border border-slate-700/80 rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+            <!-- Header: Kênh Profile & Nút điều khiển -->
+            <div class="p-4 sm:p-5 border-b border-slate-800 bg-dark-950/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <img id="studioAvatar" src="https://ui-avatars.com/api/?name=User" class="w-12 h-12 rounded-2xl object-cover border-2 border-cyan-500/50 shadow-md flex-shrink-0" alt="Avatar" onerror="this.src='https://ui-avatars.com/api/?name=User'" />
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="studioNickname" class="font-extrabold text-base text-white">Channel Name</span>
+                            <span id="studioCountryFlag" class="inline-block"></span>
+                            <span class="px-2 py-0.5 rounded-md bg-cyan-950 text-cyan-400 border border-cyan-800/60 text-[10px] font-black uppercase">STUDIO</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5 flex-wrap">
+                            <span id="studioUsername" class="text-cyan-400 font-semibold font-mono">@username</span>
+                            <span>•</span>
+                            <span id="studioUid" class="font-mono text-[11px] text-slate-500">UID: -</span>
+                            <span>•</span>
+                            <span id="studioCreatedDate" class="text-[11px] text-slate-500">Tạo: -</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                    <button 
+                        type="button" 
+                        onclick="loadStudioPosts(true)" 
+                        id="btnStudioRefresh"
+                        title="Làm mới danh sách video từ TikTok" 
+                        class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center gap-1.5 border border-slate-700"
+                    >
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Làm mới</span>
+                    </button>
+                    <button 
+                        type="button" 
+                        onclick="logoutStudioSession()" 
+                        title="Đăng xuất / Đổi tài khoản khác" 
+                        class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 text-xs font-bold transition flex items-center gap-1.5 border border-slate-700 hover:border-rose-800"
+                    >
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        <span>Đổi nick</span>
+                    </button>
+                    <button 
+                        type="button" 
+                        onclick="closeCheckPostModal()" 
+                        class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition border border-slate-700"
+                    >
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 p-3 sm:p-4 bg-slate-950/60 border-b border-slate-800 flex-shrink-0 text-center">
+                <div class="p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                    <div class="text-[11px] text-slate-400 font-medium">Tổng Video</div>
+                    <div id="statStudioTotal" class="text-base font-extrabold text-white">0</div>
+                </div>
+                <div class="p-2 rounded-xl bg-emerald-950/40 border border-emerald-900/50">
+                    <div class="text-[11px] text-emerald-400 font-medium">🌐 Công Khai</div>
+                    <div id="statStudioPublic" class="text-base font-extrabold text-emerald-300">0</div>
+                </div>
+                <div class="p-2 rounded-xl bg-rose-950/40 border border-rose-900/50">
+                    <div class="text-[11px] text-rose-400 font-medium">🔒 Riêng Tư (Ẩn)</div>
+                    <div id="statStudioPrivate" class="text-base font-extrabold text-rose-300">0</div>
+                </div>
+                <div class="p-2 rounded-xl bg-amber-950/40 border border-amber-900/50">
+                    <div class="text-[11px] text-amber-400 font-medium">👥 Bạn Bè</div>
+                    <div id="statStudioFriends" class="text-base font-extrabold text-amber-300">0</div>
+                </div>
+                <div class="p-2 rounded-xl bg-purple-950/40 border border-purple-900/50 col-span-2 sm:col-span-1">
+                    <div class="text-[11px] text-purple-400 font-medium">⚠️ Trùng & Phạt</div>
+                    <div id="statStudioDup" class="text-base font-extrabold text-purple-300">0</div>
+                </div>
+            </div>
+
+            <!-- Filter & Search Controls Bar -->
+            <div class="p-3 sm:p-4 bg-dark-900 border-b border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 flex-shrink-0">
+                <!-- Filter Tabs -->
+                <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+                    <button type="button" onclick="setStudioFilter('all')" id="sFilterAll" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-cyan-600 text-white shadow-sm whitespace-nowrap">
+                        Tất cả
+                    </button>
+                    <button type="button" onclick="setStudioFilter('public')" id="sFilterPublic" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap">
+                        🌐 Công khai
+                    </button>
+                    <button type="button" onclick="setStudioFilter('private')" id="sFilterPrivate" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap">
+                        🔒 Riêng tư
+                    </button>
+                    <button type="button" onclick="setStudioFilter('friends')" id="sFilterFriends" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap">
+                        👥 Bạn bè
+                    </button>
+                    <button type="button" onclick="setStudioFilter('dup')" id="sFilterDup" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap">
+                        ⚠️ Trùng / Phạt
+                    </button>
+                </div>
+
+                <!-- Search Input -->
+                <div class="flex items-center gap-2">
+                    <div class="relative flex-1 sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                        <input 
+                            type="text" 
+                            id="studioSearchInput" 
+                            placeholder="Lọc tiêu đề hoặc ID..." 
+                            oninput="handleStudioSearch(this.value)"
+                            class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 placeholder-slate-500 font-medium"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch Action Bar (Appears when checkboxes are selected) -->
+            <div id="studioBatchBar" class="p-2.5 px-4 bg-cyan-950/90 border-b border-cyan-800/80 flex items-center justify-between gap-3 text-xs flex-shrink-0 hidden">
+                <div class="flex items-center gap-2 text-cyan-200 font-bold">
+                    <i class="fa-solid fa-check-double text-cyan-400"></i>
+                    <span>Đã chọn: <span id="batchSelectedCount" class="text-white font-extrabold">0</span> video</span>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button type="button" onclick="handleBatchVisibility(2)" class="px-2.5 py-1 rounded-lg bg-rose-900 hover:bg-rose-800 text-rose-200 font-bold transition flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-lock"></i> Ẩn tất cả
+                    </button>
+                    <button type="button" onclick="handleBatchVisibility(3)" class="px-2.5 py-1 rounded-lg bg-amber-900 hover:bg-amber-800 text-amber-200 font-bold transition flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-user-group"></i> Chuyển bạn bè
+                    </button>
+                    <button type="button" onclick="handleBatchVisibility(1)" class="px-2.5 py-1 rounded-lg bg-emerald-900 hover:bg-emerald-800 text-emerald-200 font-bold transition flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-earth-americas"></i> Công khai tất cả
+                    </button>
+                    <button type="button" onclick="confirmBatchDelete()" class="px-2.5 py-1 rounded-lg bg-red-700 hover:bg-red-600 text-white font-bold transition flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-trash-can"></i> Xóa tất cả
+                    </button>
+                    <button type="button" onclick="clearStudioSelection()" class="text-slate-400 hover:text-white px-2 py-1 text-[11px] underline">
+                        Bỏ chọn
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Body (Scrollable) -->
+            <div class="flex-1 overflow-y-auto overflow-x-auto min-h-[300px] relative">
+                <!-- Loading Skeleton -->
+                <div id="studioLoadingState" class="absolute inset-0 bg-dark-900/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-20 hidden">
+                    <i class="fa-solid fa-spinner animate-spin text-3xl text-cyan-400"></i>
+                    <span class="text-xs font-semibold text-slate-300">Đang tải danh sách video Studio...</span>
+                </div>
+
+                <!-- Empty State -->
+                <div id="studioEmptyState" class="p-12 text-center space-y-3 text-slate-400 hidden">
+                    <i class="fa-solid fa-film text-4xl text-slate-600"></i>
+                    <p class="text-sm font-semibold text-slate-300">Không có video nào phù hợp với bộ lọc.</p>
+                </div>
+
+                <!-- Video Table -->
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-slate-950/90 sticky top-0 z-10 border-b border-slate-800 text-slate-400 font-bold text-[11px] uppercase tracking-wider">
+                        <tr>
+                            <th class="py-3 px-3 w-10 text-center">
+                                <input type="checkbox" id="studioSelectAll" onchange="toggleSelectAllStudio(this.checked)" class="rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer" />
+                            </th>
+                            <th class="py-3 px-3 w-12 text-center">#</th>
+                            <th class="py-3 px-3 w-28 sm:w-32">Ảnh bìa</th>
+                            <th class="py-3 px-4 min-w-[220px]">Mô tả & Thời gian</th>
+                            <th class="py-3 px-3 text-center w-28">Lượt xem</th>
+                            <th class="py-3 px-3 text-center w-36">Tương tác</th>
+                            <th class="py-3 px-3 text-center w-32">Trạng thái</th>
+                            <th class="py-3 px-4 text-center w-48">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studioTableBody" class="divide-y divide-slate-800/80 text-slate-200 font-medium">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Footer / Load more bar -->
+            <div class="p-3 sm:p-4 border-t border-slate-800 bg-dark-950 flex items-center justify-between gap-3 flex-shrink-0 text-xs text-slate-400">
+                <div>
+                    Hiển thị <span id="studioShownCount" class="font-bold text-white">0</span> / <span id="studioTotalFetched" class="font-bold text-white">0</span> video
+                </div>
+                <div id="studioLoadMoreContainer">
+                    <button 
+                        type="button" 
+                        id="btnStudioLoadMore" 
+                        onclick="loadStudioPosts(false)" 
+                        class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition flex items-center gap-2 border border-slate-700"
+                    >
+                        <i class="fa-solid fa-arrow-down"></i>
+                        <span>Tải thêm video</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================================== -->
+    <!-- MODAL XÁC NHẬN XÓA VIDEO -->
+    <!-- ============================================================================== -->
+    <div id="confirmDeleteModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-300 hidden">
+        <div class="relative max-w-md w-full bg-dark-900 border border-rose-700/60 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div class="w-12 h-12 rounded-2xl bg-rose-950 border border-rose-600/50 text-rose-400 flex items-center justify-center text-xl mx-auto shadow-inner">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="text-center space-y-1.5">
+                <h3 class="text-lg font-extrabold text-white">Xác Nhận Xóa Vĩnh Viễn</h3>
+                <p class="text-xs text-slate-400 leading-relaxed" id="confirmDeleteMsg">
+                    Bạn có chắc chắn muốn xóa video này trên TikTok không? Thao tác này sẽ xóa video khỏi máy chủ và <b class="text-rose-400">không thể khôi phục</b>!
+                </p>
+            </div>
+            <div id="confirmDeletePreview" class="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-3">
+                <img id="delThumb" src="" class="w-12 h-16 object-cover rounded-lg flex-shrink-0 border border-slate-700" onerror="this.src='https://ui-avatars.com/api/?name=Video'" />
+                <p id="delDesc" class="text-xs text-slate-300 line-clamp-2 font-medium"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 pt-2">
+                <button type="button" onclick="closeConfirmDeleteModal()" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition">
+                    Hủy bỏ
+                </button>
+                <button type="button" id="btnExecuteDelete" onclick="executeDeletePost()" class="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>Xóa Vĩnh Viễn</span>
+                </button>
             </div>
         </div>
     </div>
@@ -1491,7 +1863,800 @@
                     if (cleaned) el.value = cleaned;
                 });
             });
+
+            // Khởi tạo Creator Studio Session từ localStorage nếu có
+            initStudioSession();
         });
+        // ==============================================================================
+        // TIKTOK CREATOR STUDIO & CHECK POST LOGIC
+        // ==============================================================================
+        let activeStudioSession = null;
+        let studioPosts = [];
+        let filteredStudioPosts = [];
+        let studioCursor = 0;
+        let studioHasMore = false;
+        let isStudioLoading = false;
+        let studioFilter = 'all';
+        let studioSearchQuery = '';
+        let qrPollInterval = null;
+        let selectedStudioItemIds = new Set();
+        let pendingDeleteItem = null;
+
+        function initStudioSession() {
+            try {
+                const saved = localStorage.getItem('tikflow_studio_session');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && parsed.cookie && parsed.account) {
+                        activeStudioSession = parsed;
+                    }
+                }
+            } catch (e) {
+                console.error("Lỗi đọc session:", e);
+            }
+            renderAuthNav();
+        }
+
+        function renderAuthNav() {
+            const container = document.getElementById('authNavContainer');
+            if (!container) return;
+
+            if (activeStudioSession && activeStudioSession.account) {
+                const acc = activeStudioSession.account;
+                const avatar = getProxiedImage(acc.avatar);
+                const flag = getCountryFlag(acc.country);
+                container.innerHTML = `
+                    <div class="flex items-center gap-2 bg-dark-900/95 border border-cyan-500/40 rounded-2xl p-1.5 pl-2.5 pr-2 shadow-lg shadow-cyan-950/40">
+                        <img src="${avatar}" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl object-cover border border-cyan-400/50 flex-shrink-0" onerror="this.src='https://ui-avatars.com/api/?name=User'" />
+                        <div class="hidden sm:block text-left pr-1">
+                            <div class="text-xs font-bold text-white flex items-center gap-1.5 leading-tight">
+                                <span class="truncate max-w-[100px]">${escapeHtml(acc.nickname || 'User')}</span>
+                                ${flag}
+                            </div>
+                            <div class="text-[10px] text-cyan-400 font-mono leading-tight">${escapeHtml(acc.username || '')}</div>
+                        </div>
+                        <button type="button" onclick="openCheckPostModal()" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95" title="Mở Studio Check Post">
+                            <i class="fa-solid fa-layer-group text-amber-300"></i>
+                            <span>Check Post</span>
+                        </button>
+                        <button type="button" onclick="logoutStudioSession()" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition" title="Đăng xuất / Đổi nick">
+                            <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <button 
+                        type="button"
+                        onclick="openAuthModal()" 
+                        class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/25 border border-cyan-400/40 hover:scale-105 active:scale-95 transition-all duration-200"
+                        title="Đăng nhập để xem toàn bộ video kênh (kể cả video riêng tư) và thao tác Ẩn/Bạn bè/Xóa"
+                    >
+                        <i class="fa-solid fa-qrcode text-amber-300"></i>
+                        <span>Studio / Check Post</span>
+                        <span class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-cyan-950 text-cyan-300 rounded font-black border border-cyan-700/60">Mới</span>
+                    </button>
+                `;
+            }
+        }
+
+        function openAuthModal(tab = 'qr') {
+            document.getElementById('authModal').classList.remove('hidden');
+            switchAuthTab(tab);
+        }
+
+        function closeAuthModal() {
+            document.getElementById('authModal').classList.add('hidden');
+            stopQrPolling();
+        }
+
+        function switchAuthTab(tab) {
+            const btnQr = document.getElementById('authTabBtnQr');
+            const btnCookie = document.getElementById('authTabBtnCookie');
+            const contentQr = document.getElementById('authContentQr');
+            const contentCookie = document.getElementById('authContentCookie');
+
+            if (tab === 'qr') {
+                btnQr.className = "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md";
+                btnCookie.className = "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white hover:bg-slate-900";
+                contentQr.classList.remove('hidden');
+                contentCookie.classList.add('hidden');
+                startQrLogin();
+            } else {
+                btnCookie.className = "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md";
+                btnQr.className = "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white hover:bg-slate-900";
+                contentCookie.classList.remove('hidden');
+                contentQr.classList.add('hidden');
+                stopQrPolling();
+            }
+        }
+
+        async function startQrLogin() {
+            stopQrPolling();
+            const qrImg = document.getElementById('qrCodeImg');
+            const loading = document.getElementById('qrLoadingOverlay');
+            const expired = document.getElementById('qrExpiredOverlay');
+            const statusText = document.getElementById('qrStatusText');
+
+            loading.classList.remove('hidden');
+            expired.classList.add('hidden');
+            statusText.innerText = "Đang kết nối TikTok Passport tạo mã QR...";
+
+            try {
+                const res = await fetch('/api/studio/qr/start', { method: 'POST' });
+                const data = await res.json();
+                if (data.success && data.qr_image) {
+                    qrImg.src = data.qr_image;
+                    loading.classList.add('hidden');
+                    statusText.innerText = "Đang chờ bạn mở TikTok quét mã...";
+                    
+                    // Bắt đầu polling trạng thái phiên mỗi 2 giây
+                    const sid = data.session_id;
+                    qrPollInterval = setInterval(() => pollQrStatus(sid), 2000);
+                } else {
+                    loading.classList.add('hidden');
+                    statusText.innerText = "Lỗi: " + (data.error || "Không thể tạo mã QR");
+                }
+            } catch (err) {
+                loading.classList.add('hidden');
+                statusText.innerText = "Lỗi kết nối máy chủ: " + err.message;
+            }
+        }
+
+        function stopQrPolling() {
+            if (qrPollInterval) {
+                clearInterval(qrPollInterval);
+                qrPollInterval = null;
+            }
+        }
+
+        async function pollQrStatus(sessionId) {
+            try {
+                const res = await fetch(`/api/studio/qr/status?session_id=${encodeURIComponent(sessionId)}`);
+                const data = await res.json();
+                const statusText = document.getElementById('qrStatusText');
+                const expiredOverlay = document.getElementById('qrExpiredOverlay');
+
+                if (data.status === 'confirmed' && data.cookie) {
+                    stopQrPolling();
+                    activeStudioSession = {
+                        account: data.account,
+                        cookie: data.cookie,
+                        saved_at: Date.now()
+                    };
+                    localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
+                    statusText.innerText = "Đăng nhập thành công! Đang mở Studio...";
+                    showToast("Đăng nhập TikTok thành công!");
+                    setTimeout(() => {
+                        closeAuthModal();
+                        renderAuthNav();
+                        openCheckPostModal();
+                    }, 800);
+                } else if (data.status === 'scanned') {
+                    statusText.innerHTML = `<span class="text-sky-400 font-bold">Đã quét mã! Nhấn [Xác nhận] trên app TikTok...</span>`;
+                } else if (data.status === 'expired') {
+                    stopQrPolling();
+                    expiredOverlay.classList.remove('hidden');
+                    statusText.innerText = "Mã QR đã hết hạn. Vui lòng bấm làm mới.";
+                }
+            } catch (e) {
+                console.error("Poll QR error:", e);
+            }
+        }
+
+        async function handleCookieImport() {
+            const rawCookie = document.getElementById('cookieInput').value.trim();
+            const proxy = document.getElementById('cookieProxyInput').value.trim();
+            const btn = document.getElementById('btnImportCookie');
+
+            if (!rawCookie) {
+                alert("Vui lòng dán chuỗi Cookie tài khoản TikTok!");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Đang xác thực Cookie...</span>`;
+
+            try {
+                const res = await fetch('/api/studio/cookie/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cookie: rawCookie, proxy: proxy })
+                });
+                const data = await res.json();
+
+                if (data.success && data.account) {
+                    activeStudioSession = {
+                        account: data.account,
+                        cookie: data.cookie,
+                        proxy: proxy,
+                        saved_at: Date.now()
+                    };
+                    localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
+                    renderAuthNav();
+                    closeAuthModal();
+                    showToast("Nạp Cookie thành công! Kênh: " + (data.account.nickname || data.account.username));
+                    openCheckPostModal();
+                } else {
+                    alert("Xác thực thất bại: " + (data.error || "Cookie không hợp lệ"));
+                }
+            } catch (err) {
+                alert("Lỗi kết nối máy chủ: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span>Xác Thực Cookie & Mở Check Post</span>`;
+            }
+        }
+
+        function openCheckPostModal() {
+            if (!activeStudioSession || !activeStudioSession.cookie) {
+                openAuthModal('qr');
+                return;
+            }
+
+            const acc = activeStudioSession.account || {};
+            document.getElementById('studioAvatar').src = getProxiedImage(acc.avatar);
+            document.getElementById('studioNickname').innerText = acc.nickname || acc.username || 'User';
+            document.getElementById('studioUsername').innerText = acc.username || '@user';
+            document.getElementById('studioCountryFlag').innerHTML = getCountryFlag(acc.country);
+            document.getElementById('studioUid').innerText = `UID: ${acc.uid || '-'}`;
+            document.getElementById('studioCreatedDate').innerText = `Tạo: ${acc.create_date || '-'}`;
+
+            document.getElementById('checkPostModal').classList.remove('hidden');
+
+            if (studioPosts.length === 0) {
+                loadStudioPosts(true);
+            } else {
+                filterStudioPosts();
+            }
+        }
+
+        function closeCheckPostModal() {
+            document.getElementById('checkPostModal').classList.add('hidden');
+        }
+
+        function logoutStudioSession() {
+            if (confirm("Bạn có chắc chắn muốn đăng xuất tài khoản Studio này không?")) {
+                localStorage.removeItem('tikflow_studio_session');
+                activeStudioSession = null;
+                studioPosts = [];
+                filteredStudioPosts = [];
+                studioCursor = 0;
+                selectedStudioItemIds.clear();
+                renderAuthNav();
+                closeCheckPostModal();
+                showToast("Đã đăng xuất tài khoản Studio.");
+            }
+        }
+
+        async function loadStudioPosts(reset = false) {
+            if (isStudioLoading) return;
+            if (!activeStudioSession || !activeStudioSession.cookie) return;
+
+            if (reset) {
+                studioPosts = [];
+                studioCursor = 0;
+                selectedStudioItemIds.clear();
+                updateBatchBar();
+                document.getElementById('studioLoadingState').classList.remove('hidden');
+            }
+
+            isStudioLoading = true;
+            const btnRefresh = document.getElementById('btnStudioRefresh');
+            if (btnRefresh) btnRefresh.classList.add('opacity-70');
+
+            try {
+                const res = await fetch('/api/studio/posts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cookie: activeStudioSession.cookie,
+                        proxy: activeStudioSession.proxy || '',
+                        count: 50,
+                        max_cursor: studioCursor
+                    })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const newItems = data.items || [];
+                    if (reset) {
+                        studioPosts = newItems;
+                    } else {
+                        studioPosts.push(...newItems);
+                    }
+                    studioCursor = data.cursor || (studioCursor + newItems.length);
+                    studioHasMore = Boolean(data.has_more);
+
+                    updateStudioStats();
+                    filterStudioPosts();
+                    if (!reset && newItems.length > 0) {
+                        showToast(`Đã tải thêm ${newItems.length} video Studio!`);
+                    }
+                } else {
+                    showToast("Lỗi: " + (data.error || "Không thể lấy video Studio."));
+                }
+            } catch (err) {
+                showToast("Lỗi tải video Studio: " + err.message);
+            } finally {
+                isStudioLoading = false;
+                document.getElementById('studioLoadingState').classList.add('hidden');
+                if (btnRefresh) btnRefresh.classList.remove('opacity-70');
+            }
+        }
+
+        function updateStudioStats() {
+            const total = studioPosts.length;
+            const pub = studioPosts.filter(v => v.visibility_code === 1).length;
+            const priv = studioPosts.filter(v => v.visibility_code === 2).length;
+            const frd = studioPosts.filter(v => v.visibility_code === 3).length;
+            const dup = studioPosts.filter(v => v.is_dup || v.has_penalty).length;
+
+            document.getElementById('statStudioTotal').innerText = total.toLocaleString();
+            document.getElementById('statStudioPublic').innerText = pub.toLocaleString();
+            document.getElementById('statStudioPrivate').innerText = priv.toLocaleString();
+            document.getElementById('statStudioFriends').innerText = frd.toLocaleString();
+            document.getElementById('statStudioDup').innerText = dup.toLocaleString();
+
+            document.getElementById('studioTotalFetched').innerText = total.toLocaleString();
+
+            const loadMoreBtn = document.getElementById('btnStudioLoadMore');
+            if (loadMoreBtn) {
+                if (studioHasMore) {
+                    loadMoreBtn.classList.remove('hidden');
+                } else {
+                    loadMoreBtn.classList.add('hidden');
+                }
+            }
+        }
+
+        function setStudioFilter(mode) {
+            studioFilter = mode;
+            ['all', 'public', 'private', 'friends', 'dup'].forEach(m => {
+                const btn = document.getElementById('sFilter' + m.charAt(0).toUpperCase() + m.slice(1));
+                if (btn) {
+                    if (m === mode) {
+                        btn.className = "px-3 py-1.5 rounded-xl text-xs font-bold transition bg-cyan-600 text-white shadow-sm whitespace-nowrap";
+                    } else {
+                        btn.className = "px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap";
+                    }
+                }
+            });
+            filterStudioPosts();
+        }
+
+        function handleStudioSearch(query) {
+            studioSearchQuery = (query || '').toLowerCase().trim();
+            filterStudioPosts();
+        }
+
+        function filterStudioPosts() {
+            filteredStudioPosts = studioPosts.filter(v => {
+                // Filter tab
+                if (studioFilter === 'public' && v.visibility_code !== 1) return false;
+                if (studioFilter === 'private' && v.visibility_code !== 2) return false;
+                if (studioFilter === 'friends' && v.visibility_code !== 3) return false;
+                if (studioFilter === 'dup' && !v.is_dup && !v.has_penalty) return false;
+
+                // Search query
+                if (studioSearchQuery) {
+                    const desc = (v.desc || '').toLowerCase();
+                    const id = String(v.item_id || '');
+                    if (!desc.includes(studioSearchQuery) && !id.includes(studioSearchQuery)) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            renderStudioTable();
+        }
+
+        function renderStudioTable() {
+            const tbody = document.getElementById('studioTableBody');
+            const emptyState = document.getElementById('studioEmptyState');
+            const shownCount = document.getElementById('studioShownCount');
+
+            shownCount.innerText = filteredStudioPosts.length.toLocaleString();
+
+            if (filteredStudioPosts.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            tbody.innerHTML = filteredStudioPosts.map((item, idx) => {
+                const isSelected = selectedStudioItemIds.has(item.item_id);
+                const cover = getProxiedImage(item.cover_url);
+                const isPriv = item.visibility_code === 2;
+                const isFrd = item.visibility_code === 3;
+                const isPub = item.visibility_code === 1;
+
+                return `
+                    <tr class="hover:bg-slate-800/40 transition duration-150 ${isSelected ? 'bg-cyan-950/20' : ''}" id="studioRow_${item.item_id}">
+                        <!-- Checkbox -->
+                        <td class="py-3 px-3 text-center">
+                            <input 
+                                type="checkbox" 
+                                ${isSelected ? 'checked' : ''} 
+                                onchange="toggleSelectStudioItem('${item.item_id}', this.checked)" 
+                                class="rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer"
+                            />
+                        </td>
+
+                        <!-- STT -->
+                        <td class="py-3 px-3 text-center text-slate-500 font-mono text-[11px]">
+                            ${idx + 1}
+                        </td>
+
+                        <!-- Ảnh bìa -->
+                        <td class="py-3 px-3">
+                            <div class="relative w-16 h-22 sm:w-20 sm:h-26 rounded-xl overflow-hidden bg-slate-950 border border-slate-700/80 group flex-shrink-0 cursor-pointer shadow-md" onclick="window.open('${item.share_url}', '_blank')">
+                                <img src="${cover}" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" onerror="this.src='https://ui-avatars.com/api/?name=Video'" />
+                                ${item.duration_str ? `
+                                    <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-md bg-black/85 text-[10px] font-bold text-white font-mono backdrop-blur-sm">
+                                        ${item.duration_str}
+                                    </span>
+                                ` : ''}
+                                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition">
+                                    <i class="fa-solid fa-play text-xs"></i>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- Mô tả & Thời gian -->
+                        <td class="py-3 px-4">
+                            <div class="space-y-1.5 max-w-md">
+                                <p class="text-xs text-slate-100 font-medium line-clamp-2 leading-relaxed" title="${escapeHtml(item.desc)}">
+                                    ${escapeHtml(item.desc)}
+                                </p>
+                                <div class="flex items-center gap-2 text-[11px] text-slate-400">
+                                    <span class="flex items-center gap-1">
+                                        <i class="fa-regular fa-clock text-slate-500"></i> ${item.date_str}
+                                    </span>
+                                    <span>•</span>
+                                    <span class="font-mono text-[10px] text-slate-500 flex items-center gap-1">
+                                        ID: ${item.item_id}
+                                        <button type="button" onclick="copyText('${item.item_id}')" class="hover:text-cyan-400 transition" title="Copy ID">
+                                            <i class="fa-regular fa-copy text-[10px]"></i>
+                                        </button>
+                                    </span>
+                                </div>
+                                ${item.is_dup ? `
+                                    <div class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-rose-950/80 border border-rose-800 text-rose-300 font-bold">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                        <span>Trùng video gốc</span>
+                                        ${item.origin_url ? `
+                                            <a href="${item.origin_url}" target="_blank" class="underline ml-1 hover:text-white">Xem</a>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </td>
+
+                        <!-- Lượt xem -->
+                        <td class="py-3 px-3 text-center font-mono font-bold text-slate-200 text-xs">
+                            ${item.play_count.toLocaleString()}
+                        </td>
+
+                        <!-- Tương tác -->
+                        <td class="py-3 px-3 text-center">
+                            <div class="flex items-center justify-center gap-3 text-[11px] text-slate-400 font-mono">
+                                <span title="Thả tim" class="flex items-center gap-1">
+                                    <i class="fa-solid fa-heart text-rose-500 text-[10px]"></i> ${item.digg_count.toLocaleString()}
+                                </span>
+                                <span title="Bình luận" class="flex items-center gap-1">
+                                    <i class="fa-solid fa-comment text-sky-400 text-[10px]"></i> ${item.comment_count.toLocaleString()}
+                                </span>
+                            </div>
+                        </td>
+
+                        <!-- Trạng thái -->
+                        <td class="py-3 px-3 text-center">
+                            <span id="visBadge_${item.item_id}" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold border ${item.visibility_badge}">
+                                ${isPriv ? '<i class="fa-solid fa-lock"></i>' : (isFrd ? '<i class="fa-solid fa-user-group"></i>' : '<i class="fa-solid fa-earth-americas"></i>')}
+                                <span>${item.visibility_label}</span>
+                            </span>
+                        </td>
+
+                        <!-- Thao tác trực tiếp -->
+                        <td class="py-3 px-4 text-center">
+                            <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                                <!-- Nút Ẩn / Riêng tư -->
+                                <button 
+                                    type="button" 
+                                    id="btnVisPriv_${item.item_id}"
+                                    onclick="handleVisibilityChange('${item.item_id}', 2)"
+                                    title="Chuyển sang Riêng tư (Ẩn)"
+                                    ${isPriv ? 'disabled' : ''}
+                                    class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 border shadow-sm ${isPriv ? 'bg-rose-950/40 text-rose-400 border-rose-900/40 opacity-40 cursor-not-allowed' : 'bg-slate-800 hover:bg-rose-950 text-slate-300 hover:text-rose-200 border-slate-700 hover:border-rose-800 active:scale-95'}"
+                                >
+                                    <i class="fa-solid fa-lock text-[11px]"></i>
+                                    <span>Ẩn</span>
+                                </button>
+
+                                <!-- Nút Bạn bè -->
+                                <button 
+                                    type="button" 
+                                    id="btnVisFrd_${item.item_id}"
+                                    onclick="handleVisibilityChange('${item.item_id}', 3)"
+                                    title="Chuyển sang Bạn bè"
+                                    ${isFrd ? 'disabled' : ''}
+                                    class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 border shadow-sm ${isFrd ? 'bg-amber-950/40 text-amber-400 border-amber-900/40 opacity-40 cursor-not-allowed' : 'bg-slate-800 hover:bg-amber-950 text-slate-300 hover:text-amber-200 border-slate-700 hover:border-amber-800 active:scale-95'}"
+                                >
+                                    <i class="fa-solid fa-user-group text-[11px]"></i>
+                                    <span>Bạn bè</span>
+                                </button>
+
+                                <!-- Nút Công khai -->
+                                <button 
+                                    type="button" 
+                                    id="btnVisPub_${item.item_id}"
+                                    onclick="handleVisibilityChange('${item.item_id}', 1)"
+                                    title="Chuyển sang Công khai"
+                                    ${isPub ? 'disabled' : ''}
+                                    class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 border shadow-sm ${isPub ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/40 opacity-40 cursor-not-allowed' : 'bg-slate-800 hover:bg-emerald-950 text-slate-300 hover:text-emerald-200 border-slate-700 hover:border-emerald-800 active:scale-95'}"
+                                >
+                                    <i class="fa-solid fa-earth-americas text-[11px]"></i>
+                                    <span>Công khai</span>
+                                </button>
+
+                                <!-- Nút Xóa vĩnh viễn -->
+                                <button 
+                                    type="button" 
+                                    onclick="promptDeletePost('${item.item_id}')"
+                                    title="Xóa vĩnh viễn video"
+                                    class="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800 transition shadow-sm active:scale-95"
+                                >
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function handleVisibilityChange(itemId, newVis) {
+            if (!activeStudioSession || !activeStudioSession.cookie) return;
+
+            const item = studioPosts.find(v => String(v.item_id) === String(itemId));
+            if (!item) return;
+
+            const btnId = newVis === 1 ? `btnVisPub_${itemId}` : (newVis === 2 ? `btnVisPriv_${itemId}` : `btnVisFrd_${itemId}`);
+            const btn = document.getElementById(btnId);
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-[10px]"></i>`;
+            }
+
+            try {
+                const res = await fetch('/api/studio/item/visibility', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cookie: activeStudioSession.cookie,
+                        item_id: itemId,
+                        visibility: newVis,
+                        proxy: activeStudioSession.proxy || ''
+                    })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    item.visibility_code = newVis;
+                    if (newVis === 2) {
+                        item.visibility_label = "Riêng tư (Ẩn)";
+                        item.visibility_badge = "bg-rose-950 text-rose-300 border-rose-800";
+                    } else if (newVis === 3) {
+                        item.visibility_label = "Bạn bè";
+                        item.visibility_badge = "bg-amber-950 text-amber-300 border-amber-800";
+                    } else {
+                        item.visibility_label = "Công khai";
+                        item.visibility_badge = "bg-emerald-950 text-emerald-300 border-emerald-800";
+                    }
+
+                    updateStudioStats();
+                    renderStudioTable();
+                    showToast(data.message || `Đã chuyển sang ${item.visibility_label}!`);
+                } else {
+                    showToast("Lỗi: " + (data.error || "Không thể đổi trạng thái."));
+                    if (btn) btn.innerHTML = origHtml;
+                }
+            } catch (err) {
+                showToast("Lỗi kết nối: " + err.message);
+                if (btn) btn.innerHTML = origHtml;
+            }
+        }
+
+        function promptDeletePost(itemId) {
+            const item = studioPosts.find(v => String(v.item_id) === String(itemId));
+            if (!item) return;
+
+            pendingDeleteItem = item;
+            document.getElementById('delThumb').src = getProxiedImage(item.cover_url);
+            document.getElementById('delDesc').innerText = item.desc || '(không có mô tả)';
+            document.getElementById('confirmDeleteMsg').innerHTML = `Bạn có chắc chắn muốn xóa vĩnh viễn video ID <b class="text-cyan-400 font-mono">${item.item_id}</b> không? Thao tác này sẽ xóa video khỏi TikTok và <b class="text-rose-400">không thể khôi phục</b>!`;
+            document.getElementById('confirmDeleteModal').classList.remove('hidden');
+        }
+
+        function closeConfirmDeleteModal() {
+            document.getElementById('confirmDeleteModal').classList.add('hidden');
+            pendingDeleteItem = null;
+        }
+
+        async function executeDeletePost() {
+            if (!pendingDeleteItem || !activeStudioSession || !activeStudioSession.cookie) return;
+
+            const btn = document.getElementById('btnExecuteDelete');
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Đang xóa...</span>`;
+
+            try {
+                const res = await fetch('/api/studio/item/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cookie: activeStudioSession.cookie,
+                        item_id: pendingDeleteItem.item_id,
+                        proxy: activeStudioSession.proxy || ''
+                    })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const deletedId = pendingDeleteItem.item_id;
+                    studioPosts = studioPosts.filter(v => String(v.item_id) !== String(deletedId));
+                    selectedStudioItemIds.delete(deletedId);
+                    updateStudioStats();
+                    filterStudioPosts();
+                    closeConfirmDeleteModal();
+                    showToast("Đã xóa vĩnh viễn video thành công khỏi kênh TikTok!");
+                } else {
+                    alert("Lỗi xóa video: " + (data.error || "TikTok từ chối"));
+                }
+            } catch (err) {
+                alert("Lỗi kết nối máy chủ: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> <span>Xóa Vĩnh Viễn</span>`;
+            }
+        }
+
+        // ==================== BATCH OPERATIONS ====================
+        function toggleSelectAllStudio(checked) {
+            if (checked) {
+                filteredStudioPosts.forEach(v => selectedStudioItemIds.add(v.item_id));
+            } else {
+                selectedStudioItemIds.clear();
+            }
+            updateBatchBar();
+            renderStudioTable();
+        }
+
+        function toggleSelectStudioItem(itemId, checked) {
+            if (checked) {
+                selectedStudioItemIds.add(itemId);
+            } else {
+                selectedStudioItemIds.delete(itemId);
+            }
+            updateBatchBar();
+            const row = document.getElementById('studioRow_' + itemId);
+            if (row) {
+                if (checked) row.classList.add('bg-cyan-950/20');
+                else row.classList.remove('bg-cyan-950/20');
+            }
+        }
+
+        function clearStudioSelection() {
+            selectedStudioItemIds.clear();
+            const selectAll = document.getElementById('studioSelectAll');
+            if (selectAll) selectAll.checked = false;
+            updateBatchBar();
+            renderStudioTable();
+        }
+
+        function updateBatchBar() {
+            const bar = document.getElementById('studioBatchBar');
+            const cnt = document.getElementById('batchSelectedCount');
+            const selectAll = document.getElementById('studioSelectAll');
+
+            if (cnt) cnt.innerText = selectedStudioItemIds.size;
+
+            if (selectedStudioItemIds.size > 0) {
+                if (bar) bar.classList.remove('hidden');
+                if (selectAll) selectAll.checked = (selectedStudioItemIds.size === filteredStudioPosts.length && filteredStudioPosts.length > 0);
+            } else {
+                if (bar) bar.classList.add('hidden');
+                if (selectAll) selectAll.checked = false;
+            }
+        }
+
+        async function handleBatchVisibility(newVis) {
+            if (selectedStudioItemIds.size === 0) return;
+            const label = newVis === 1 ? "Công khai" : (newVis === 2 ? "Riêng tư (Ẩn)" : "Bạn bè");
+            if (!confirm(`Bạn có chắc muốn đổi ${selectedStudioItemIds.size} video sang chế độ [${label}] không?`)) {
+                return;
+            }
+
+            const itemIds = Array.from(selectedStudioItemIds);
+            let successCount = 0;
+            showToast(`Đang chuyển ${itemIds.length} video sang ${label}...`);
+
+            for (const id of itemIds) {
+                try {
+                    const res = await fetch('/api/studio/item/visibility', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            cookie: activeStudioSession.cookie,
+                            item_id: id,
+                            visibility: newVis,
+                            proxy: activeStudioSession.proxy || ''
+                        })
+                    });
+                    const d = await res.json();
+                    if (d.success) {
+                        successCount++;
+                        const it = studioPosts.find(v => String(v.item_id) === String(id));
+                        if (it) {
+                            it.visibility_code = newVis;
+                            it.visibility_label = label;
+                            it.visibility_badge = newVis === 2 ? "bg-rose-950 text-rose-300 border-rose-800" : (newVis === 3 ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-emerald-950 text-emerald-300 border-emerald-800");
+                        }
+                    }
+                } catch (e) {
+                    console.error("Batch vis error:", e);
+                }
+            }
+
+            clearStudioSelection();
+            updateStudioStats();
+            renderStudioTable();
+            showToast(`Đã chuyển thành công ${successCount}/${itemIds.length} video sang ${label}!`);
+        }
+
+        async function confirmBatchDelete() {
+            if (selectedStudioItemIds.size === 0) return;
+            const count = selectedStudioItemIds.size;
+            if (!confirm(`⚠️ CẢNH BÁO NGUY HIỂM: Bạn có chắc chắn muốn XÓA VĨNH VIỄN ${count} video đã chọn không?
+Thao tác này KHÔNG THỂ KHÔI PHỤC!`)) {
+                return;
+            }
+
+            const itemIds = Array.from(selectedStudioItemIds);
+            let successCount = 0;
+            showToast(`Đang xóa ${count} video khỏi kênh...`);
+
+            for (const id of itemIds) {
+                try {
+                    const res = await fetch('/api/studio/item/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            cookie: activeStudioSession.cookie,
+                            item_id: id,
+                            proxy: activeStudioSession.proxy || ''
+                        })
+                    });
+                    const d = await res.json();
+                    if (d.success) {
+                        successCount++;
+                        studioPosts = studioPosts.filter(v => String(v.item_id) !== String(id));
+                    }
+                } catch (e) {
+                    console.error("Batch delete error:", e);
+                }
+            }
+
+            clearStudioSelection();
+            updateStudioStats();
+            filterStudioPosts();
+            showToast(`Đã xóa vĩnh viễn thành công ${successCount}/${count} video khỏi kênh!`);
+        }
+
     </script>
 
     <!-- Nút cuộn lên đầu trang (Back to top) bên phải màn hình -->

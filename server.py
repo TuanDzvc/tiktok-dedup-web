@@ -434,6 +434,103 @@ def debug_worker():
         "error": getattr(w, "_init_error", None)
     }
 
+
+# ==============================================================================
+# TIKTOK CREATOR STUDIO & CHECK POST API
+# ==============================================================================
+import studio_engine
+
+@app.post("/api/studio/qr/start")
+def api_studio_qr_start():
+    """Khởi tạo phiên đăng nhập QR từ TikTok Passport."""
+    res = studio_engine.create_qr_session()
+    return JSONResponse(content=res)
+
+@app.get("/api/studio/qr/status")
+def api_studio_qr_status(session_id: str = Query(..., description="ID phiên QR")):
+    """Kiểm tra trạng thái quét mã QR của người dùng."""
+    res = studio_engine.check_qr_session_status(session_id)
+    return JSONResponse(content=res)
+
+@app.post("/api/studio/cookie/import")
+async def api_studio_cookie_import(req: Request):
+    """Xác thực và nạp chuỗi Cookie tài khoản TikTok."""
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Dữ liệu JSON không hợp lệ.")
+    
+    cookie_str = str(body.get("cookie") or "").strip()
+    proxy = str(body.get("proxy") or "").strip()
+    if not cookie_str:
+        raise HTTPException(status_code=400, detail="Vui lòng dán chuỗi Cookie!")
+    
+    acc_info = studio_engine.get_account_info(cookie_str, proxy=proxy)
+    if not acc_info.get("valid"):
+        return JSONResponse(content={"success": False, "error": acc_info.get("error", "Cookie không hợp lệ hoặc đã hết hạn.")})
+    
+    return JSONResponse(content={
+        "success": True,
+        "account": acc_info,
+        "cookie": cookie_str
+    })
+
+@app.post("/api/studio/posts")
+async def api_studio_posts(req: Request):
+    """Lấy danh sách video Creator Studio (Công khai / Riêng tư / Bạn bè)."""
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Dữ liệu JSON không hợp lệ.")
+    
+    cookie_str = str(body.get("cookie") or "").strip()
+    if not cookie_str:
+        raise HTTPException(status_code=400, detail="Chưa có Cookie đăng nhập.")
+    
+    count = int(body.get("count") or 50)
+    max_cursor = int(body.get("max_cursor") or 0)
+    proxy = str(body.get("proxy") or "").strip()
+    
+    res = studio_engine.get_studio_post_list(cookie_str, proxy=proxy, count=count, max_cursor=max_cursor)
+    return JSONResponse(content=res)
+
+@app.post("/api/studio/item/visibility")
+async def api_studio_item_visibility(req: Request):
+    """Đổi chế độ hiển thị video: 1 (Công khai), 2 (Riêng tư), 3 (Bạn bè)."""
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Dữ liệu JSON không hợp lệ.")
+    
+    cookie_str = str(body.get("cookie") or "").strip()
+    item_id = str(body.get("item_id") or "").strip()
+    visibility = int(body.get("visibility") or 1)
+    proxy = str(body.get("proxy") or "").strip()
+    
+    if not cookie_str or not item_id:
+        raise HTTPException(status_code=400, detail="Thiếu Cookie hoặc ID video.")
+    
+    res = studio_engine.set_post_visibility(cookie_str, item_id, visibility, proxy=proxy)
+    return JSONResponse(content=res)
+
+@app.post("/api/studio/item/delete")
+async def api_studio_item_delete(req: Request):
+    """Xóa vĩnh viễn video khỏi kênh TikTok."""
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Dữ liệu JSON không hợp lệ.")
+    
+    cookie_str = str(body.get("cookie") or "").strip()
+    item_id = str(body.get("item_id") or "").strip()
+    proxy = str(body.get("proxy") or "").strip()
+    
+    if not cookie_str or not item_id:
+        raise HTTPException(status_code=400, detail="Thiếu Cookie hoặc ID video.")
+    
+    res = studio_engine.delete_studio_post(cookie_str, item_id, proxy=proxy)
+    return JSONResponse(content=res)
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)
