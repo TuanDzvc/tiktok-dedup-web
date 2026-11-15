@@ -13,7 +13,9 @@ import re
 import time
 import json
 import uuid
+import base64
 import datetime
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 import requests
 
@@ -66,140 +68,141 @@ def cookie_to_header_str(cookie_val: Any) -> str:
     return "; ".join(f"{k}={v}" for k, v in cdict.items() if k and v)
 
 
-def create_qr_session() -> Dict[str, Any]:
-    """Tạo phiên đăng nhập QR từ máy chủ TikTok Passport."""
-    session_id = str(uuid.uuid4())
-    s = requests.Session()
-    headers = {
-        "User-Agent": DEFAULT_UA,
-        "Referer": "https://www.tiktok.com/login",
-        "Accept": "application/json, text/plain, */*"
-    }
-    params = {
-        "aid": "1459",
-        "service": "https://www.tiktok.com",
-        "device_platform": "web_pc",
-        "language": "vi",
-        "next": "https://www.tiktok.com"
-    }
+def _pw_qr_worker(session_id: str):
+    sess = QR_SESSIONS.get(session_id)
+    if not sess:
+        return
     try:
-        r = s.get("https://www.tiktok.com/passport/web/get_qrcode/", headers=headers, params=params, timeout=12)
-        if r.status_code == 200:
-            res_json = r.json()
-            data = res_json.get("data") or {}
-            token = data.get("token") or ""
-            raw_b64 = data.get("qrcode") or ""
-            if not raw_b64.startswith("data:"):
-                qr_img_src = f"data:image/png;base64,{raw_b64}"
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 800}
+            )
+            page = context.new_page()
+            page.goto("https://www.tiktok.com/login", timeout=25000)
+            page.wait_for_timeout(2000)
+
+            # Bấm vào tùy chọn đăng nhập bằng mã QR
+            try:
+                page.locator("text=QR").first.click(timeout=5000)
+                page.wait_for_timeout(2000)
+            except Exception:
+                pass
+
+            el = page.locator("canvas, img[src*='qrcode'], div[data-e2e='qr-code']").first
+            if el.is_visible():
+                img_b = el.screenshot()
+                b64_str = f"data:image/png;base64,{base64.b64encode(img_b).decode('ascii')}"
+                sess["qr_image"] = b64_str
+                sess["ready"] = True
             else:
-                qr_img_src = raw_b64
+                sess["ready"] = True
+                sess["status"] = "error"
+                sess["error"] = "Không thể tải mã QR từ TikTok."
+                browser.close()
+                return
 
-            expire_time = int(data.get("expire_time") or (time.time() + 180))
-            scan_url = data.get("qrcode_index_url") or ""
+            # Chờ người dùng quét mã và bấm xác nhận trên điện thoại (tối đa 180s)
+            start_ts = time.time()
+            while time.time() - start_ts < 180:
+                if sess.get("cancelled"):
+                    break
+                cookies = context.cookies()
+                sid = next((c['value'] for c in cookies if c['name'] == 'sessionid'), None)
+                if sid:
+                    cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies if c.get('name') and c.get('value'))
+                    acc_info = get_account_info(cookie_str)
+                    sess["status"] = "confirmed"
+                    sess["account"] = acc_info
+                    sess["cookie_str"] = cookie_str
+                    u_key = acc_info.get("username", "").lstrip("@").lower()
+                    if u_key:
+                        ACTIVE_STUDIO_ACCOUNTS[u_key] = {
+                            "account": acc_info,
+                            "cookie": cookie_str,
+                            "updated_at": time.time()
+                        }
+                    break
 
-            # Lưu lại trạng thái phiên để frontend polling
-            QR_SESSIONS[session_id] = {
-                "token": token,
-                "session": s,
-                "created_at": time.time(),
-                "expire_time": expire_time,
-                "status": "waiting",
-                "cookie_str": "",
-                "account": None
-            }
+                try:
+                    scanned_el = page.locator("text=Scanned, text=Đã quét, div:has-text('Đã quét')").first
+                    if scanned_el.is_visible():
+                        sess["status"] = "scanned"
+                except Exception:
+                    pass
 
-            return {
-                "success": True,
-                "session_id": session_id,
-                "qr_image": qr_img_src,
-                "expire_time": expire_time,
-                "scan_url": scan_url
-            }
-        else:
-            return {"success": False, "error": f"Lỗi máy chủ TikTok: HTTP {r.status_code}"}
+                time.sleep(1.2)
+
+            if sess.get("status") != "confirmed":
+                sess["status"] = "expired"
+
+            browser.close()
     except Exception as e:
-        return {"success": False, "error": f"Không thể tạo mã QR: {str(e)}"}
+        sess["ready"] = True
+        sess["status"] = "error"
+        sess["error"] = str(e)
+
+
+def create_qr_session() -> Dict[str, Any]:
+    """Tạo phiên đăng nhập QR chính quy từ TikTok qua Playwright Headless Engine."""
+    session_id = str(uuid.uuid4())
+    QR_SESSIONS[session_id] = {
+        "ready": False,
+        "status": "waiting",
+        "qr_image": "",
+        "created_at": time.time(),
+        "expire_time": time.time() + 180,
+        "cookie_str": "",
+        "account": None,
+        "cancelled": False
+    }
+
+    t = threading.Thread(target=_pw_qr_worker, args=(session_id,), daemon=True)
+    t.start()
+
+    # Đợi tối đa 10s cho Playwright tải xong trang và trích xuất ảnh mã QR
+    for _ in range(25):
+        sess = QR_SESSIONS.get(session_id, {})
+        if sess.get("ready"):
+            break
+        time.sleep(0.4)
+
+    sess = QR_SESSIONS.get(session_id, {})
+    if sess.get("qr_image"):
+        return {
+            "success": True,
+            "session_id": session_id,
+            "qr_image": sess["qr_image"],
+            "expire_time": sess["expire_time"]
+        }
+    else:
+        return {"success": False, "error": sess.get("error", "Không thể khởi tạo mã QR từ TikTok.")}
 
 
 def check_qr_session_status(session_id: str) -> Dict[str, Any]:
     """Kiểm tra tiến trình quét mã QR của người dùng."""
     sess_info = QR_SESSIONS.get(session_id)
     if not sess_info:
-        return {"success": False, "status": "expired", "message": "Phiên đăng nhập không tồn tại hoặc đã hết hạn."}
+        return {"success": False, "status": "expired", "message": "Phiên không tồn tại hoặc đã hết hạn."}
 
-    if time.time() > sess_info.get("expire_time", 0):
-        sess_info["status"] = "expired"
-        return {"success": True, "status": "expired", "message": "Mã QR đã hết hạn. Vui lòng làm mới mã."}
-
-    # Nếu đã xác thực trước đó
-    if sess_info.get("status") == "confirmed" and sess_info.get("account"):
+    st = sess_info.get("status", "waiting")
+    if st == "confirmed" and sess_info.get("account"):
         return {
             "success": True,
             "status": "confirmed",
             "account": sess_info["account"],
             "cookie": sess_info["cookie_str"]
         }
-
-    token = sess_info.get("token")
-    s: requests.Session = sess_info.get("session")
-    if not token or not s:
-        return {"success": False, "status": "expired", "message": "Phiên không hợp lệ."}
-
-    headers = {
-        "User-Agent": DEFAULT_UA,
-        "Referer": "https://www.tiktok.com/login",
-        "Accept": "application/json, text/plain, */*"
-    }
-    check_params = {
-        "token": token,
-        "aid": "1459",
-        "service": "https://www.tiktok.com",
-        "device_platform": "web_pc",
-        "language": "vi"
-    }
-
-    try:
-        r = s.get("https://www.tiktok.com/passport/web/check_qrconnect/", headers=headers, params=check_params, timeout=8)
-        if r.status_code == 200:
-            res_data = r.json()
-            data = res_data.get("data") or {}
-            status_val = str(data.get("status") or "").lower()
-
-            if "confirmed" in status_val or "success" in status_val or "sessionid" in s.cookies:
-                # Trích xuất toàn bộ cookie từ session
-                cookie_str = cookie_to_header_str(dict(s.cookies))
-                acc_info = get_account_info(cookie_str)
-                if acc_info.get("valid"):
-                    sess_info["status"] = "confirmed"
-                    sess_info["cookie_str"] = cookie_str
-                    sess_info["account"] = acc_info
-                    # Lưu vào danh sách tài khoản active
-                    u_key = acc_info["username"].lstrip("@").lower()
-                    ACTIVE_STUDIO_ACCOUNTS[u_key] = {
-                        "account": acc_info,
-                        "cookie": cookie_str,
-                        "updated_at": time.time()
-                    }
-                    return {
-                        "success": True,
-                        "status": "confirmed",
-                        "account": acc_info,
-                        "cookie": cookie_str
-                    }
-                else:
-                    return {"success": True, "status": "confirmed_no_auth", "message": "Đã xác nhận nhưng chưa lấy được quyền truy cập."}
-            elif "scanned" in status_val:
-                sess_info["status"] = "scanned"
-                return {"success": True, "status": "scanned", "message": "Đã quét mã! Vui lòng nhấn Xác nhận trên điện thoại."}
-            elif "expired" in status_val:
-                sess_info["status"] = "expired"
-                return {"success": True, "status": "expired", "message": "Mã QR đã hết hạn."}
-            else:
-                return {"success": True, "status": "waiting", "message": "Đang chờ quét mã..."}
-        else:
-            return {"success": True, "status": "waiting", "message": "Đang chờ quét..."}
-    except Exception as e:
-        return {"success": True, "status": "waiting", "message": f"Đang kết nối: {e}"}
+    elif st == "scanned":
+        return {"success": True, "status": "scanned", "message": "Đã quét mã! Vui lòng nhấn [Xác nhận] trên điện thoại."}
+    elif st == "expired":
+        return {"success": True, "status": "expired", "message": "Mã QR đã hết hạn."}
+    elif st == "error":
+        return {"success": False, "status": "error", "message": sess_info.get("error", "Lỗi phiên đăng nhập.")}
+    else:
+        return {"success": True, "status": "waiting", "message": "Đang chờ quét mã..."}
 
 
 def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
