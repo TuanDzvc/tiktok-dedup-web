@@ -2201,6 +2201,7 @@
             if (btnRefresh) btnRefresh.classList.add('opacity-70');
 
             try {
+                const secUid = (activeStudioSession && activeStudioSession.account && activeStudioSession.account.sec_uid) || '';
                 const res = await fetch('/api/studio/posts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2208,7 +2209,8 @@
                         cookie: activeStudioSession.cookie,
                         proxy: activeStudioSession.proxy || '',
                         count: 50,
-                        max_cursor: studioCursor
+                        max_cursor: studioCursor,
+                        sec_uid: secUid
                     })
                 });
                 const data = await res.json();

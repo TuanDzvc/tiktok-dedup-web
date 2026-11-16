@@ -265,6 +265,7 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
                 country = (data.get("store_country") or data.get("country") or data.get("region") or "US").upper()
                 c_ts = int(data.get("create_time") or 0)
                 c_date = datetime.datetime.fromtimestamp(c_ts).strftime("%d/%m/%Y") if c_ts > 0 else "-"
+                sec_uid = str(data.get("sec_user_id") or data.get("sec_uid") or "")
 
                 return {
                     "valid": True,
@@ -275,6 +276,7 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
                     "avatar": avatar,
                     "country": country,
                     "create_date": c_date,
+                    "sec_uid": sec_uid,
                     "email": data.get("email", ""),
                     "mobile": data.get("mobile", "") or ("Đã gán" if data.get("phone_collected") else "-")
                 }
@@ -289,7 +291,7 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
         return {"valid": False, "error": f"Lỗi kết nối máy chủ TikTok: {str(e)}"}
 
 
-def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_cursor: int = 0) -> Dict[str, Any]:
+def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_cursor: int = 0, sec_uid: str = "") -> Dict[str, Any]:
     """
     Lấy danh sách video Creator Studio đầy đủ 100%:
     Video Công khai, Video Riêng tư, Video Bạn bè và trạng thái vi phạm.
@@ -301,10 +303,11 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
     csrf_token = cdict.get("tt_csrf_token", "")
     cookie_header = cookie_to_header_str(cdict)
 
+    # URL chuẩn của TikTok Creator Studio Item List
     url_studio = (
         "https://www.tiktok.com/tiktok/creator/manage/item_list/v1/?"
-        f"locale=vi&aid=1988&priority_region=US&region=US&"
-        f"app_name=tiktok_creator_center&channel=tiktok_web&device_platform=web_pc"
+        "locale=en&aid=1988&priority_region=GB&region=US&"
+        "app_name=tiktok_creator_center&channel=tiktok_web&device_platform=web_pc"
     )
     headers = {
         "User-Agent": DEFAULT_UA,
@@ -323,10 +326,13 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
         headers["X-Csrf-Token"] = csrf_token
 
     payload = {
-        "count": count,
         "cursor": int(max_cursor),
-        "post_status": 0,  # 0 = Tất cả video
-        "type": 0
+        "size": count if count >= 20 else 50,
+        "query": {
+            "sort_orders": [{"field_name": "post_time", "order": 2}],
+            "conditions": [],
+            "is_recent_posts": False
+        }
     }
     proxies = {}
     if proxy:
@@ -335,6 +341,10 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
             px = f"http://{px}"
         proxies = {"http": px, "https": px}
 
+    raw_items = []
+    has_more = False
+    next_cursor = int(max_cursor)
+
     try:
         r = requests.post(url_studio, headers=headers, json=payload, proxies=proxies if proxies else None, timeout=15)
         if r.status_code == 200:
@@ -342,105 +352,156 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
             code = res_data.get("code", 0)
             status_code = res_data.get("status_code", 0)
 
-            if code == 8 or status_code == 8 or "login expired" in str(res_data).lower():
-                return {"success": False, "error": "Phiên đăng nhập đã hết hạn. Vui lòng nạp lại Cookie hoặc quét QR mới.", "items": []}
+            # Lấy danh sách item từ phản hồi TikTok Studio
+            raw_items = res_data.get("item_list") or res_data.get("data", {}).get("item_list") or res_data.get("items") or []
+            has_more = bool(res_data.get("has_more") or res_data.get("data", {}).get("has_more", False))
+            next_cursor = int(res_data.get("cursor") or (max_cursor + len(raw_items)))
 
-            data = res_data.get("data") or {}
-            raw_items = data.get("item_list") or data.get("items") or res_data.get("item_list") or []
-            has_more = bool(data.get("has_more") or res_data.get("has_more", False))
-            next_cursor = int(data.get("cursor") or (max_cursor + len(raw_items)))
+            # Nếu item_list/v1 báo lỗi hoặc rỗng
+            if not raw_items and (code == 8 or status_code == 8 or "login expired" in str(res_data).lower()):
+                # Xác thực chéo lại cookie xem có thực sự hết hạn không hay do lỗi query
+                acc_chk = get_account_info(cookie_str, proxy=proxy)
+                if not acc_chk.get("valid"):
+                    return {"success": False, "error": "Phiên đăng nhập đã hết hạn. Vui lòng nạp lại Cookie hoặc quét QR mới.", "items": []}
 
-            parsed_list = []
-            for it in raw_items:
-                aid = str(it.get("id") or it.get("item_id") or it.get("aweme_id") or "")
-                if not aid:
-                    continue
-
-                desc = it.get("desc") or it.get("title") or "(không có mô tả)"
-                stats = it.get("stats") or it.get("statistics") or {}
-                play_cnt = int(it.get("play_count") or stats.get("play_count") or stats.get("playCount") or 0)
-                digg_cnt = int(it.get("digg_count") or it.get("like_count") or stats.get("digg_count") or stats.get("diggCount") or 0)
-                cmt_cnt = int(it.get("comment_count") or stats.get("comment_count") or stats.get("commentCount") or 0)
-                share_cnt = int(it.get("share_count") or stats.get("share_count") or stats.get("shareCount") or 0)
-
-                # Thumbnail
-                cover_url = ""
-                video_obj = it.get("video") if isinstance(it.get("video"), dict) else {}
-                if video_obj.get("cover") and isinstance(video_obj["cover"], dict):
-                    ul = video_obj["cover"].get("url_list") or []
-                    if ul:
-                        cover_url = ul[0]
-                if not cover_url:
-                    cover_url = it.get("cover_url") or it.get("cover") or ""
-
-                # Thời gian tạo
-                c_ts = int(it.get("create_time") or it.get("post_time") or 0)
-                date_str = datetime.datetime.fromtimestamp(c_ts).strftime("%d/%m/%Y %H:%M") if c_ts > 0 else "-"
-
-                # Thời lượng
-                dur_ms = int(it.get("duration") or video_obj.get("duration") or 0)
-                dur_sec = dur_ms // 1000 if dur_ms > 1000 else dur_ms
-                dur_str = f"{dur_sec // 60}:{dur_sec % 60:02d}" if dur_sec > 0 else ""
-
-                # Quyền riêng tư (Visibility)
-                status_dict = it.get("status") if isinstance(it.get("status"), dict) else {}
-                vis_type = status_dict.get("video_visibility") or it.get("visibility") or 1
-                is_priv = bool(status_dict.get("is_private") or it.get("is_private") or vis_type == 2)
-                is_frd = bool(status_dict.get("is_friend") or it.get("is_friend") or vis_type in (3, 4, 5))
-
-                if is_priv:
-                    visibility_code = 2
-                    visibility_label = "Riêng tư (Ẩn)"
-                    visibility_badge = "bg-rose-950 text-rose-300 border-rose-800"
-                elif is_frd:
-                    visibility_code = 3
-                    visibility_label = "Bạn bè"
-                    visibility_badge = "bg-amber-950 text-amber-300 border-amber-800"
-                else:
-                    visibility_code = 1
-                    visibility_label = "Công khai"
-                    visibility_badge = "bg-emerald-950 text-emerald-300 border-emerald-800"
-
-                # Trùng lặp & Án phạt
-                group_id = str(it.get("group_id") or it.get("groupId") or "")
-                is_dup = bool(group_id and group_id != aid and group_id not in ("0", "None", "null"))
-                penalty_ctx = it.get("penaltyContext") if isinstance(it.get("penaltyContext"), dict) else {}
-                has_penalty = bool(
-                    int(penalty_ctx.get("display_penalty_type") or 0) != 0
-                    or int(penalty_ctx.get("display_policy") or 0) != 0
-                    or bool(it.get("isProhibited"))
+        # Fallback 1: Web API post/item_list nếu API Studio rỗng và có sec_uid
+        if not raw_items and sec_uid:
+            try:
+                url_web = (
+                    f"https://www.tiktok.com/api/post/item_list/?aid=1988&app_language=vi-VN&"
+                    f"app_name=tiktok_web&channel=tiktok_web&device_platform=web_pc&"
+                    f"secUid={sec_uid}&count={count}&cursor={max_cursor}"
                 )
+                rw = requests.get(url_web, headers={"User-Agent": DEFAULT_UA, "Cookie": cookie_header, "Referer": "https://www.tiktok.com/"}, proxies=proxies if proxies else None, timeout=12)
+                if rw.status_code == 200:
+                    dw = rw.json()
+                    raw_items = dw.get("itemList") or dw.get("items") or []
+                    has_more = bool(dw.get("hasMore", False))
+                    next_cursor = int(dw.get("cursor") or (max_cursor + len(raw_items)))
+            except Exception:
+                pass
 
-                parsed_list.append({
-                    "item_id": aid,
-                    "aweme_id": aid,
-                    "desc": desc,
-                    "cover_url": cover_url,
-                    "duration_str": dur_str,
-                    "date_str": date_str,
-                    "play_count": play_cnt,
-                    "digg_count": digg_cnt,
-                    "comment_count": cmt_cnt,
-                    "share_count": share_cnt,
-                    "visibility_code": visibility_code,
-                    "visibility_label": visibility_label,
-                    "visibility_badge": visibility_badge,
-                    "is_dup": is_dup,
-                    "group_id": group_id,
-                    "origin_url": f"https://www.tiktok.com/@tiktok/video/{group_id}" if is_dup else "",
-                    "has_penalty": has_penalty,
-                    "share_url": f"https://www.tiktok.com/video/{aid}"
-                })
+        # Fallback 2: Aweme Post API
+        if not raw_items and sec_uid:
+            aweme_hosts = ["api16-core-useast8.tiktokv.us", "api19-core-c-useast8.tiktokv.us"]
+            for host in aweme_hosts:
+                if raw_items:
+                    break
+                try:
+                    url_aw = f"https://{host}/aweme/v1/aweme/post/?sec_user_id={sec_uid}&count={count}&max_cursor={max_cursor}"
+                    ra = requests.get(url_aw, headers={"User-Agent": DEFAULT_UA, "Cookie": cookie_header}, proxies=proxies if proxies else None, timeout=10)
+                    if ra.status_code == 200:
+                        da = ra.json()
+                        raw_items = da.get("aweme_list") or []
+                        has_more = bool(da.get("has_more", False))
+                        next_cursor = int(da.get("max_cursor") or (max_cursor + len(raw_items)))
+                except Exception:
+                    pass
 
-            return {
-                "success": True,
-                "items": parsed_list,
-                "has_more": has_more,
-                "cursor": next_cursor,
-                "total_count": len(parsed_list)
-            }
-        else:
-            return {"success": False, "error": f"HTTP {r.status_code} từ TikTok Studio API.", "items": []}
+        # Parse chuẩn hóa toàn bộ dữ liệu video
+        parsed_list = []
+        for it in raw_items:
+            aid = str(it.get("item_id") or it.get("id") or it.get("aweme_id") or "")
+            if not aid:
+                continue
+
+            desc = it.get("desc") or it.get("title") or "(không có mô tả)"
+            stats = it.get("stats") or it.get("statistics") or {}
+            play_cnt = int(it.get("play_count") or stats.get("play_count") or stats.get("playCount") or 0)
+            digg_cnt = int(it.get("like_count") or it.get("digg_count") or stats.get("digg_count") or stats.get("diggCount") or 0)
+            cmt_cnt = int(it.get("comment_count") or stats.get("comment_count") or stats.get("commentCount") or 0)
+            share_cnt = int(it.get("share_count") or stats.get("share_count") or stats.get("shareCount") or 0)
+
+            # Thumbnail an toàn hỗ trợ list/dict/string
+            cover_url = ""
+            cu = it.get("cover_url") or it.get("cover")
+            if isinstance(cu, list) and cu:
+                cover_url = cu[0]
+            elif isinstance(cu, str):
+                cover_url = cu
+            elif isinstance(cu, dict):
+                ul = cu.get("url_list") or []
+                if ul:
+                    cover_url = ul[0]
+            if not cover_url:
+                vid_obj = it.get("video") if isinstance(it.get("video"), dict) else {}
+                c_sub = vid_obj.get("cover") if isinstance(vid_obj, dict) else {}
+                if isinstance(c_sub, dict) and c_sub.get("url_list"):
+                    cover_url = c_sub["url_list"][0]
+
+            # Thời gian tạo
+            c_ts = int(it.get("post_time") or it.get("create_time") or 0)
+            date_str = datetime.datetime.fromtimestamp(c_ts).strftime("%d/%m/%Y %H:%M") if c_ts > 0 else "-"
+
+            # Thời lượng
+            dur_ms = int(it.get("duration") or (it.get("video", {}).get("duration") if isinstance(it.get("video"), dict) else 0) or 0)
+            dur_sec = dur_ms // 1000 if dur_ms > 1000 else dur_ms
+            dur_str = f"{dur_sec // 60}:{dur_sec % 60:02d}" if dur_sec > 0 else ""
+
+            # Quyền riêng tư (Visibility)
+            status_dict = it.get("status") if isinstance(it.get("status"), dict) else {}
+            vis_val = it.get("visibility")
+            if vis_val is None:
+                vis_val = status_dict.get("video_visibility") or status_dict.get("private_status") or 1
+            vis_type = int(vis_val or 1)
+
+            is_priv = bool(vis_type == 2 or status_dict.get("is_private") or it.get("is_private"))
+            is_frd = bool(vis_type in (3, 4, 5) or status_dict.get("is_friend") or it.get("is_friend"))
+
+            if is_priv:
+                visibility_code = 2
+                visibility_label = "Riêng tư (Ẩn)"
+                visibility_badge = "bg-rose-950 text-rose-300 border-rose-800"
+            elif is_frd:
+                visibility_code = 3
+                visibility_label = "Bạn bè"
+                visibility_badge = "bg-amber-950 text-amber-300 border-amber-800"
+            else:
+                visibility_code = 1
+                visibility_label = "Công khai"
+                visibility_badge = "bg-emerald-950 text-emerald-300 border-emerald-800"
+
+            # Trùng lặp & Án phạt
+            group_id = str(it.get("group_id") or it.get("groupId") or "")
+            is_dup = bool(group_id and group_id != aid and group_id not in ("0", "None", "null"))
+            in_rev = bool(it.get("in_review"))
+            penalty_ctx = it.get("penaltyContext") if isinstance(it.get("penaltyContext"), dict) else {}
+            has_penalty = bool(
+                int(penalty_ctx.get("display_penalty_type") or 0) != 0
+                or int(penalty_ctx.get("display_policy") or 0) != 0
+                or bool(it.get("isProhibited"))
+                or in_rev
+                or is_dup
+            )
+
+            parsed_list.append({
+                "item_id": aid,
+                "aweme_id": aid,
+                "desc": desc,
+                "cover_url": cover_url,
+                "duration_str": dur_str,
+                "date_str": date_str,
+                "play_count": play_cnt,
+                "digg_count": digg_cnt,
+                "comment_count": cmt_cnt,
+                "share_count": share_cnt,
+                "visibility_code": visibility_code,
+                "visibility_label": visibility_label,
+                "visibility_badge": visibility_badge,
+                "is_dup": is_dup,
+                "group_id": group_id,
+                "origin_url": f"https://www.tiktok.com/@tiktok/video/{group_id}" if is_dup else "",
+                "has_penalty": has_penalty,
+                "share_url": f"https://www.tiktok.com/video/{aid}"
+            })
+
+        return {
+            "success": True,
+            "items": parsed_list,
+            "has_more": has_more,
+            "cursor": next_cursor,
+            "total_count": len(parsed_list)
+        }
     except Exception as e:
         return {"success": False, "error": f"Lỗi gọi Studio API: {str(e)}", "items": []}
 

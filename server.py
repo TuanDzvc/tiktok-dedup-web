@@ -331,7 +331,14 @@ def serve_index():
     if not index_file.exists():
         return HTMLResponse("<h1>File templates/index.html chưa được tạo.</h1>", status_code=404)
     with open(index_file, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+        return HTMLResponse(
+            content=f.read(),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
 
 @app.get("/api/tunnel")
 def get_tunnel_info():
@@ -490,8 +497,9 @@ async def api_studio_posts(req: Request):
     count = int(body.get("count") or 50)
     max_cursor = int(body.get("max_cursor") or 0)
     proxy = str(body.get("proxy") or "").strip()
+    sec_uid = str(body.get("sec_uid") or "").strip()
     
-    res = studio_engine.get_studio_post_list(cookie_str, proxy=proxy, count=count, max_cursor=max_cursor)
+    res = studio_engine.get_studio_post_list(cookie_str, proxy=proxy, count=count, max_cursor=max_cursor, sec_uid=sec_uid)
     return JSONResponse(content=res)
 
 @app.post("/api/studio/item/visibility")
