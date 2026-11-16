@@ -219,19 +219,6 @@ def start_cloudflare_tunnel(port: int = 8000):
         except Exception:
             pass
 
-        # Kiểm tra nếu Cloudflared Windows Service đã chạy rồi thì không spawn thêm để tránh xung đột tunnel
-        is_service_running = False
-        try:
-            chk = subprocess.run(["sc.exe", "query", "Cloudflared"], capture_output=True, text=True)
-            if "RUNNING" in chk.stdout:
-                is_service_running = True
-                print("[Tunnel] Cloudflared Windows Service đang chạy nền 24/24 kết nối checktiktok.site.")
-        except Exception:
-            pass
-
-        if is_service_running:
-            return
-
         cmd = [
             str(CLOUDFLARED_PATH),
             "tunnel",
