@@ -867,76 +867,77 @@
                 </div>
             </div>
 
-            <!-- 5 Clickable Stat Cards with distinct vibrant colors -->
-            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-3 sm:p-4 bg-slate-950/70 border-b border-slate-800 flex-shrink-0 select-none">
-                <!-- Card 1: Tổng Video -->
-                <div id="statCardAll" onclick="setStudioFilter('all')" class="p-2.5 rounded-xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-700/80 hover:border-cyan-400/80 cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-md text-center group ring-2 ring-cyan-400 border-cyan-400" title="Bấm để xem tất cả video">
-                    <div class="text-[11px] text-slate-400 font-semibold group-hover:text-cyan-300 transition">Tổng Video</div>
-                    <div id="statStudioTotal" class="text-lg font-black text-white mt-0.5">0</div>
-                </div>
-                <!-- Card 2: Công Khai -->
-                <div id="statCardPublic" onclick="setStudioFilter('public')" class="p-2.5 rounded-xl bg-gradient-to-br from-emerald-950/70 via-emerald-900/40 to-slate-950 border border-emerald-700/60 hover:border-emerald-400 cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-md text-center group" title="Bấm để chỉ lọc video Công khai">
-                    <div class="text-[11px] text-emerald-400 font-semibold group-hover:text-emerald-300 transition flex items-center justify-center gap-1">
-                        <span>🌐 Công Khai</span>
-                    </div>
-                    <div id="statStudioPublic" class="text-lg font-black text-emerald-300 mt-0.5">0</div>
-                </div>
-                <!-- Card 3: Riêng Tư -->
-                <div id="statCardPrivate" onclick="setStudioFilter('private')" class="p-2.5 rounded-xl bg-gradient-to-br from-rose-950/70 via-rose-900/40 to-slate-950 border border-rose-700/60 hover:border-rose-400 cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-md text-center group" title="Bấm để chỉ lọc video Riêng tư (Ẩn)">
-                    <div class="text-[11px] text-rose-400 font-semibold group-hover:text-rose-300 transition flex items-center justify-center gap-1">
-                        <span>🔒 Riêng Tư (Ẩn)</span>
-                    </div>
-                    <div id="statStudioPrivate" class="text-lg font-black text-rose-300 mt-0.5">0</div>
-                </div>
-                <!-- Card 4: Bạn Bè -->
-                <div id="statCardFriends" onclick="setStudioFilter('friends')" class="p-2.5 rounded-xl bg-gradient-to-br from-amber-950/70 via-amber-900/40 to-slate-950 border border-amber-700/60 hover:border-amber-400 cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-md text-center group" title="Bấm để chỉ lọc video Bạn bè">
-                    <div class="text-[11px] text-amber-400 font-semibold group-hover:text-amber-300 transition flex items-center justify-center gap-1">
-                        <span>👥 Bạn Bè</span>
-                    </div>
-                    <div id="statStudioFriends" class="text-lg font-black text-amber-300 mt-0.5">0</div>
-                </div>
-                <!-- Card 5: Trùng & Phạt -->
-                <div id="statCardDup" onclick="setStudioFilter('dup')" class="p-2.5 rounded-xl bg-gradient-to-br from-purple-950/70 via-purple-900/40 to-slate-950 border border-purple-700/60 hover:border-purple-400 cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-md text-center group col-span-2 sm:col-span-1" title="Bấm để lọc video trùng hoặc bị hạn chế FYP">
-                    <div class="text-[11px] text-purple-400 font-semibold group-hover:text-purple-300 transition flex items-center justify-center gap-1">
+            <!-- Compact Filter Toolbar: 5 Clickable Pills with Counts & Search Input in ONE row -->
+            <div class="px-3 py-1.5 bg-dark-950/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 flex-shrink-0 text-xs select-none">
+                <!-- 5 Clickable Compact Filter Pills -->
+                <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                    <!-- Pill 1: Tất cả -->
+                    <button 
+                        type="button" 
+                        id="statCardAll" 
+                        onclick="setStudioFilter('all')" 
+                        class="px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-cyan-600 text-white shadow-sm cursor-pointer border border-cyan-500 whitespace-nowrap"
+                        title="Bấm để xem tất cả video"
+                    >
+                        <span>Tất cả</span>
+                        <span id="statStudioTotal" class="px-1.5 py-0.2 rounded-md bg-cyan-800/90 text-white text-[11px] font-black font-mono">0</span>
+                    </button>
+                    <!-- Pill 2: Công khai -->
+                    <button 
+                        type="button" 
+                        id="statCardPublic" 
+                        onclick="setStudioFilter('public')" 
+                        class="px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/60 cursor-pointer whitespace-nowrap"
+                        title="Bấm để lọc video Công khai"
+                    >
+                        <span>🌐 Công khai</span>
+                        <span id="statStudioPublic" class="px-1.5 py-0.2 rounded-md bg-emerald-900/80 text-emerald-200 text-[11px] font-black font-mono">0</span>
+                    </button>
+                    <!-- Pill 3: Riêng tư -->
+                    <button 
+                        type="button" 
+                        id="statCardPrivate" 
+                        onclick="setStudioFilter('private')" 
+                        class="px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-rose-950/60 border border-rose-800/60 text-rose-300 hover:bg-rose-900/60 cursor-pointer whitespace-nowrap"
+                        title="Bấm để lọc video Riêng tư (Ẩn)"
+                    >
+                        <span>🔒 Riêng tư</span>
+                        <span id="statStudioPrivate" class="px-1.5 py-0.2 rounded-md bg-rose-900/80 text-rose-200 text-[11px] font-black font-mono">0</span>
+                    </button>
+                    <!-- Pill 4: Bạn bè -->
+                    <button 
+                        type="button" 
+                        id="statCardFriends" 
+                        onclick="setStudioFilter('friends')" 
+                        class="px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-amber-950/60 border border-amber-800/60 text-amber-300 hover:bg-amber-900/60 cursor-pointer whitespace-nowrap"
+                        title="Bấm để lọc video Bạn bè"
+                    >
+                        <span>👥 Bạn bè</span>
+                        <span id="statStudioFriends" class="px-1.5 py-0.2 rounded-md bg-amber-900/80 text-amber-200 text-[11px] font-black font-mono">0</span>
+                    </button>
+                    <!-- Pill 5: Trùng & Phạt -->
+                    <button 
+                        type="button" 
+                        id="statCardDup" 
+                        onclick="setStudioFilter('dup')" 
+                        class="px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-purple-950/60 border border-purple-800/60 text-purple-300 hover:bg-purple-900/60 cursor-pointer whitespace-nowrap"
+                        title="Bấm để lọc video trùng hoặc bị hạn chế FYP"
+                    >
                         <span>⚠️ Trùng & Phạt</span>
-                    </div>
-                    <div id="statStudioDup" class="text-lg font-black text-purple-300 mt-0.5">0</div>
-                </div>
-            </div>
-
-            <!-- Filter & Search Controls Bar -->
-            <div class="p-3 sm:p-4 bg-dark-900 border-b border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 flex-shrink-0">
-                <!-- Filter Tabs -->
-                <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-                    <button type="button" onclick="setStudioFilter('all')" id="sFilterAll" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-cyan-600 text-white shadow-sm whitespace-nowrap">
-                        Tất cả
-                    </button>
-                    <button type="button" onclick="setStudioFilter('public')" id="sFilterPublic" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap">
-                        🌐 Công khai
-                    </button>
-                    <button type="button" onclick="setStudioFilter('private')" id="sFilterPrivate" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap">
-                        🔒 Riêng tư
-                    </button>
-                    <button type="button" onclick="setStudioFilter('friends')" id="sFilterFriends" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap">
-                        👥 Bạn bè
-                    </button>
-                    <button type="button" onclick="setStudioFilter('dup')" id="sFilterDup" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap">
-                        ⚠️ Trùng / Phạt
+                        <span id="statStudioDup" class="px-1.5 py-0.2 rounded-md bg-purple-900/80 text-purple-200 text-[11px] font-black font-mono">0</span>
                     </button>
                 </div>
 
-                <!-- Search Input -->
-                <div class="flex items-center gap-2">
-                    <div class="relative flex-1 sm:w-72">
-                        <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-                        <input 
-                            type="text" 
-                            id="studioSearchInput" 
-                            placeholder="Lọc theo tiêu đề hoặc aweme_id..." 
-                            oninput="handleStudioSearch(this.value)"
-                            class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 placeholder-slate-500 font-medium"
-                        />
-                    </div>
+                <!-- Search Input in same row -->
+                <div class="relative w-64 flex-shrink-0">
+                    <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                    <input 
+                        type="text" 
+                        id="studioSearchInput" 
+                        placeholder="Lọc tiêu đề hoặc aweme_id..." 
+                        oninput="handleStudioSearch(this.value)"
+                        class="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-7 pr-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 placeholder-slate-500 font-medium"
+                    />
                 </div>
             </div>
 
@@ -981,27 +982,27 @@
 
                 <!-- Video Table: Landscape Full Columns like Desktop Tool -->
                 <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
-                    <thead class="bg-slate-950/95 sticky top-0 z-10 border-b border-slate-800 text-slate-300 font-bold text-[11px] uppercase tracking-wider select-none shadow-sm">
+                    <thead class="bg-slate-950 sticky top-0 z-10 border-b border-slate-800 text-slate-300 font-bold text-[11px] uppercase tracking-wider select-none shadow-sm">
                         <tr>
-                            <th class="py-3 px-3 w-12 text-center">
+                            <th class="py-1.5 px-2 w-12 text-center">
                                 <div class="flex items-center justify-center gap-1">
                                     <input type="checkbox" id="studioSelectAll" onchange="toggleSelectAllStudio(this.checked)" class="rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer" />
                                     <span>Chọn</span>
                                 </div>
                             </th>
-                            <th class="py-3 px-2 w-10 text-center">#</th>
-                            <th class="py-3 px-3 w-24 text-center">Ảnh bìa</th>
-                            <th class="py-3 px-4 min-w-[260px] whitespace-normal">Mô tả</th>
-                            <th class="py-3 px-3 w-20 text-center">Nguồn</th>
-                            <th class="py-3 px-2 w-16 text-center">Nhãn</th>
-                            <th class="py-3 px-3 w-20 text-center">Xem</th>
-                            <th class="py-3 px-3 w-32 text-center">Chỉ số phụ</th>
-                            <th class="py-3 px-3 w-24 text-center">Quốc gia</th>
-                            <th class="py-3 px-3 w-28 text-center">Shadowban</th>
-                            <th class="py-3 px-3 w-32 text-center">Án phạt</th>
-                            <th class="py-3 px-3 w-32 text-center">Trạng thái</th>
-                            <th class="py-3 px-3 w-44 text-center">aweme_id</th>
-                            <th class="py-3 px-4 w-48 text-center">Thao tác</th>
+                            <th class="py-1.5 px-1 w-8 text-center">#</th>
+                            <th class="py-1.5 px-1 w-12 text-center">Ảnh bìa</th>
+                            <th class="py-1.5 px-2 min-w-[240px] whitespace-normal">Mô tả</th>
+                            <th class="py-1.5 px-1 w-16 text-center">Nguồn</th>
+                            <th class="py-1.5 px-1 w-10 text-center">Nhãn</th>
+                            <th class="py-1.5 px-1 w-16 text-center">Xem</th>
+                            <th class="py-1.5 px-1 w-24 text-center">Chỉ số phụ</th>
+                            <th class="py-1.5 px-1 w-16 text-center">Quốc gia</th>
+                            <th class="py-1.5 px-1 w-20 text-center">Shadowban</th>
+                            <th class="py-1.5 px-1 w-20 text-center">Án phạt</th>
+                            <th class="py-1.5 px-1 w-24 text-center">Trạng thái</th>
+                            <th class="py-1.5 px-1 w-36 text-center">aweme_id</th>
+                            <th class="py-1.5 px-2 w-28 text-center">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody id="studioTableBody" class="divide-y divide-slate-800/80 text-slate-200 font-medium">
@@ -2404,37 +2405,21 @@
         function setStudioFilter(mode) {
             studioFilter = mode;
 
-            // Highlight 5 stat cards với viền sáng rực rỡ tương ứng
-            const cards = [
-                { id: 'statCardAll', activeClass: 'ring-2 ring-cyan-400 border-cyan-400' },
-                { id: 'statCardPublic', activeClass: 'ring-2 ring-emerald-400 border-emerald-400' },
-                { id: 'statCardPrivate', activeClass: 'ring-2 ring-rose-400 border-rose-400' },
-                { id: 'statCardFriends', activeClass: 'ring-2 ring-amber-400 border-amber-400' },
-                { id: 'statCardDup', activeClass: 'ring-2 ring-purple-400 border-purple-400' }
-            ];
+            const pillConfig = {
+                all: { id: 'statCardAll', active: 'bg-cyan-600 text-white shadow-sm border-cyan-500', inactive: 'bg-slate-800/80 border-slate-700/70 text-slate-300 hover:text-white' },
+                public: { id: 'statCardPublic', active: 'bg-emerald-600 text-white shadow-sm border-emerald-500', inactive: 'bg-emerald-950/60 border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/60' },
+                private: { id: 'statCardPrivate', active: 'bg-rose-600 text-white shadow-sm border-rose-500', inactive: 'bg-rose-950/60 border-rose-800/60 text-rose-300 hover:bg-rose-900/60' },
+                friends: { id: 'statCardFriends', active: 'bg-amber-600 text-white shadow-sm border-amber-500', inactive: 'bg-amber-950/60 border-amber-800/60 text-amber-300 hover:bg-amber-900/60' },
+                dup: { id: 'statCardDup', active: 'bg-purple-600 text-white shadow-sm border-purple-500', inactive: 'bg-purple-950/60 border-purple-800/60 text-purple-300 hover:bg-purple-900/60' }
+            };
 
-            const activeCardId = mode === 'all' ? 'statCardAll' : (mode === 'public' ? 'statCardPublic' : (mode === 'private' ? 'statCardPrivate' : (mode === 'friends' ? 'statCardFriends' : 'statCardDup')));
+            const baseClasses = 'px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap border ';
 
-            cards.forEach(c => {
-                const el = document.getElementById(c.id);
-                if (el) {
-                    if (c.id === activeCardId) {
-                        el.className = el.className.replace(/ring-2\s+ring-[a-z]+-400\s+border-[a-z]+-400/g, '').trim() + ' ' + c.activeClass;
-                    } else {
-                        el.className = el.className.replace(/ring-2\s+ring-[a-z]+-400\s+border-[a-z]+-400/g, '').trim();
-                    }
-                }
-            });
-
-            // Highlight filter tabs bên dưới
-            ['all', 'public', 'private', 'friends', 'dup'].forEach(m => {
-                const btn = document.getElementById('sFilter' + m.charAt(0).toUpperCase() + m.slice(1));
+            Object.keys(pillConfig).forEach(key => {
+                const conf = pillConfig[key];
+                const btn = document.getElementById(conf.id);
                 if (btn) {
-                    if (m === mode) {
-                        btn.className = "px-3 py-1.5 rounded-xl text-xs font-bold transition bg-cyan-600 text-white shadow-sm whitespace-nowrap";
-                    } else {
-                        btn.className = "px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white whitespace-nowrap";
-                    }
+                    btn.className = baseClasses + (key === mode ? conf.active : conf.inactive);
                 }
             });
 
@@ -2498,7 +2483,7 @@
                 return `
                     <tr class="hover:bg-slate-800/40 transition duration-150 ${isSelected ? 'bg-cyan-950/20' : ''}" id="studioRow_${item.item_id}">
                         <!-- Chọn Checkbox -->
-                        <td class="py-3 px-3 text-center">
+                        <td class="py-1 px-2 text-center">
                             <input 
                                 type="checkbox" 
                                 ${isSelected ? 'checked' : ''} 
@@ -2508,40 +2493,40 @@
                         </td>
 
                         <!-- STT -->
-                        <td class="py-3 px-2 text-center text-slate-500 font-mono text-[11px]">
+                        <td class="py-1 px-1 text-center text-slate-500 font-mono text-[11px]">
                             ${idx + 1}
                         </td>
 
-                        <!-- Ảnh bìa -->
-                        <td class="py-3 px-3 text-center">
-                            <div class="relative w-16 h-22 sm:w-20 sm:h-26 rounded-xl overflow-hidden bg-slate-950 border border-slate-700/80 group inline-block cursor-pointer shadow-md" onclick="window.open('${item.share_url}', '_blank')">
+                        <!-- Ảnh bìa: Nhỏ gọn w-10 h-14 chuẩn desktop tool -->
+                        <td class="py-1 px-1 text-center">
+                            <div class="relative w-10 h-14 rounded-md overflow-hidden bg-slate-950 border border-slate-700/80 group inline-block cursor-pointer shadow-sm" onclick="window.open('${item.share_url}', '_blank')">
                                 <img src="${cover}" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" onerror="this.src='https://ui-avatars.com/api/?name=Video'" referrerpolicy="no-referrer" />
                                 ${item.duration_str ? `
-                                    <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-md bg-black/85 text-[10px] font-bold text-white font-mono backdrop-blur-sm">
+                                    <span class="absolute bottom-0.5 right-0.5 px-1 py-0 rounded text-[9px] font-bold text-white font-mono bg-black/85 backdrop-blur-sm">
                                         ${item.duration_str}
                                     </span>
                                 ` : ''}
                                 <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition">
-                                    <i class="fa-solid fa-play text-xs"></i>
+                                    <i class="fa-solid fa-play text-[10px]"></i>
                                 </div>
                             </div>
                         </td>
 
                         <!-- Mô tả & Thời gian -->
-                        <td class="py-3 px-4 whitespace-normal">
-                            <div class="space-y-1.5 max-w-sm sm:max-w-md">
-                                <p class="text-xs text-slate-100 font-medium line-clamp-2 leading-relaxed" title="${escapeHtml(item.desc)}">
+                        <td class="py-1 px-2 whitespace-normal">
+                            <div class="space-y-0.5 max-w-sm sm:max-w-md">
+                                <p class="text-xs text-slate-100 font-medium line-clamp-1 leading-snug" title="${escapeHtml(item.desc)}">
                                     ${escapeHtml(item.desc)}
                                 </p>
-                                <div class="flex items-center gap-2 text-[11px] text-slate-400">
-                                    <span class="flex items-center gap-1">
-                                        <i class="fa-regular fa-clock text-slate-500"></i> ${item.date_str} (UTC)
+                                <div class="flex items-center gap-2 text-[10px] text-slate-400">
+                                    <span class="flex items-center gap-1 font-mono">
+                                        <i class="fa-regular fa-clock text-slate-500 text-[9px]"></i> ${item.date_str} (UTC)
                                     </span>
                                 </div>
                                 ${item.is_dup ? `
-                                    <div class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-rose-950/80 border border-rose-800 text-rose-300 font-bold">
-                                        <i class="fa-solid fa-triangle-exclamation"></i>
-                                        <span>Trùng video gốc</span>
+                                    <div class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800 text-rose-300 font-bold">
+                                        <i class="fa-solid fa-triangle-exclamation text-[8px]"></i>
+                                        <span>Trùng (Group #${item.group_id})</span>
                                         ${item.origin_url ? `
                                             <a href="${item.origin_url}" target="_blank" class="underline ml-1 hover:text-white">Xem</a>
                                         ` : ''}
@@ -2551,149 +2536,117 @@
                         </td>
 
                         <!-- Nguồn -->
-                        <td class="py-3 px-3 text-center">
-                            <span class="px-2 py-0.5 rounded-md bg-amber-950/80 text-amber-300 border border-amber-700/60 font-bold text-[10px] inline-flex items-center gap-1 shadow-sm">
+                        <td class="py-1 px-1 text-center">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950/60 text-amber-400 border border-amber-800/60 inline-flex items-center gap-1">
                                 <i class="fa-solid fa-globe text-[9px]"></i> Web
                             </span>
                         </td>
 
                         <!-- Nhãn -->
-                        <td class="py-3 px-2 text-center text-slate-500 font-mono text-[11px]">
+                        <td class="py-1 px-1 text-center text-slate-500 font-mono text-[11px]">
                             —
                         </td>
 
                         <!-- Xem -->
-                        <td class="py-3 px-3 text-center font-mono font-bold text-slate-200 text-xs">
+                        <td class="py-1 px-1 text-center font-mono font-bold text-slate-200 text-xs">
                             <div class="flex items-center justify-center gap-1">
-                                <i class="fa-regular fa-eye text-slate-400 text-[10px]"></i>
+                                <i class="fa-regular fa-eye text-cyan-400 text-[10px]"></i>
                                 <span>${item.play_count.toLocaleString()}</span>
                             </div>
                         </td>
 
                         <!-- Chỉ số phụ (Tim, Share, Comment, Lưu) -->
-                        <td class="py-3 px-3 text-center">
-                            <div class="grid grid-cols-2 gap-x-2.5 gap-y-1 text-[10px] font-mono text-left max-w-[120px] mx-auto">
+                        <td class="py-1 px-1 text-center">
+                            <div class="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] font-mono text-left w-20 mx-auto leading-tight">
                                 <span title="Thả tim" class="flex items-center gap-1 text-slate-300">
-                                    <i class="fa-solid fa-heart text-rose-500 text-[9px]"></i> ${item.digg_count.toLocaleString()}
-                                </span>
-                                <span title="Chia sẻ" class="flex items-center gap-1 text-slate-300">
-                                    <i class="fa-solid fa-share text-cyan-400 text-[9px]"></i> ${item.share_count.toLocaleString()}
+                                    <i class="fa-solid fa-heart text-rose-500 text-[8px]"></i> ${item.digg_count.toLocaleString()}
                                 </span>
                                 <span title="Bình luận" class="flex items-center gap-1 text-slate-300">
-                                    <i class="fa-solid fa-comment text-sky-400 text-[9px]"></i> ${item.comment_count.toLocaleString()}
+                                    <i class="fa-solid fa-comment text-sky-400 text-[8px]"></i> ${item.comment_count.toLocaleString()}
+                                </span>
+                                <span title="Chia sẻ" class="flex items-center gap-1 text-slate-300">
+                                    <i class="fa-solid fa-share text-cyan-400 text-[8px]"></i> ${item.share_count.toLocaleString()}
                                 </span>
                                 <span title="Lưu ghim" class="flex items-center gap-1 text-slate-300">
-                                    <i class="fa-solid fa-bookmark text-amber-400 text-[9px]"></i> ${(item.collect_count || 0).toLocaleString()}
+                                    <i class="fa-solid fa-bookmark text-amber-400 text-[8px]"></i> ${(item.collect_count || 0).toLocaleString()}
                                 </span>
                             </div>
                         </td>
 
                         <!-- Quốc gia -->
-                        <td class="py-3 px-3 text-center">
-                            <div class="inline-flex items-center justify-center gap-1.5 font-bold text-[11px] text-slate-300">
+                        <td class="py-1 px-1 text-center">
+                            <div class="inline-flex items-center justify-center gap-1 font-bold text-[11px] text-slate-300">
                                 ${getCountryFlag(channelCountry)}
                                 <span>${channelCountry}</span>
                             </div>
                         </td>
 
                         <!-- Shadowban -->
-                        <td class="py-3 px-3 text-center">
+                        <td class="py-1 px-1 text-center">
                             ${(item.has_penalty && !item.is_dup) ? `
-                                <span class="px-2 py-0.5 rounded-md bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1">
-                                    <i class="fa-solid fa-ban text-[9px]"></i> Có
+                                <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1">
+                                    <i class="fa-solid fa-ban text-[8px]"></i> Có
                                 </span>
                             ` : `
-                                <span class="px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-800 text-[10px] font-bold inline-flex items-center gap-1">
-                                    <i class="fa-solid fa-check text-[9px]"></i> Không
+                                <span class="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800 text-[10px] font-bold inline-flex items-center gap-1">
+                                    <i class="fa-solid fa-check text-[8px]"></i> Không
                                 </span>
                             `}
                         </td>
 
                         <!-- Án phạt -->
-                        <td class="py-3 px-3 text-center">
+                        <td class="py-1 px-1 text-center">
                             ${item.has_penalty ? `
-                                <span class="px-2 py-0.5 rounded-md bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1">
-                                    <i class="fa-solid fa-triangle-exclamation text-[9px]"></i> Mất FYP
+                                <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1">
+                                    <i class="fa-solid fa-triangle-exclamation text-[8px]"></i> Mất FYP
                                 </span>
                             ` : `
-                                <span class="px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-800 text-[10px] font-bold inline-flex items-center gap-1">
-                                    <i class="fa-solid fa-check text-[9px]"></i> Không
+                                <span class="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800 text-[10px] font-bold inline-flex items-center gap-1">
+                                    <i class="fa-solid fa-check text-[8px]"></i> Không
                                 </span>
                             `}
                         </td>
 
                         <!-- Trạng thái -->
-                        <td class="py-3 px-3 text-center">
-                            <div class="flex flex-col items-center gap-0.5">
-                                <span id="visBadge_${item.item_id}" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${item.visibility_badge}">
-                                    ${isPriv ? '<i class="fa-solid fa-lock text-[10px]"></i>' : (isFrd ? '<i class="fa-solid fa-user-group text-[10px]"></i>' : '<i class="fa-solid fa-earth-americas text-[10px]"></i>')}
-                                    <span>${item.visibility_label}</span>
+                        <td class="py-1 px-1 text-center">
+                            <div class="flex flex-col items-center gap-0.5 leading-tight">
+                                <span id="visBadge_${item.item_id}" class="text-[11px] font-bold ${isPriv ? 'text-rose-400' : (isFrd ? 'text-amber-400' : 'text-emerald-400')}">
+                                    ${item.visibility_label}
                                 </span>
                                 ${isPub ? '<span class="text-[9px] text-slate-500 font-mono">[Chưa kháng]</span>' : ''}
                             </div>
                         </td>
 
                         <!-- aweme_id -->
-                        <td class="py-3 px-3 text-center">
-                            <div class="inline-flex items-center justify-center gap-1 font-mono text-[11px] text-slate-300 bg-slate-950/80 px-2 py-1 rounded-lg border border-slate-800">
+                        <td class="py-1 px-1 text-center">
+                            <div class="inline-flex items-center justify-center gap-1 font-mono text-[11px] text-slate-300 bg-slate-950/70 px-1.5 py-0.5 rounded border border-slate-800">
                                 <span>${item.item_id}</span>
-                                <button type="button" onclick="copyText('${item.item_id}')" class="text-slate-500 hover:text-cyan-400 transition ml-1" title="Sao chép aweme_id">
-                                    <i class="fa-regular fa-copy text-[10px]"></i>
+                                <button type="button" onclick="copyText('${item.item_id}')" class="text-slate-500 hover:text-cyan-400 transition ml-0.5" title="Sao chép aweme_id">
+                                    <i class="fa-regular fa-copy text-[9px]"></i>
                                 </button>
                             </div>
                         </td>
 
-                        <!-- Thao tác: 4 Hàng Chữ Xếp Dọc Chuẩn Yêu Cầu -->
-                        <td class="py-3 px-4 text-center">
-                            <div class="flex flex-col gap-1 w-44 mx-auto py-1">
-                                <!-- Hàng 1: Ẩn / Riêng tư -->
+                        <!-- Thao tác: Gọn gàng 2 dòng chuẩn desktop tool (Dropdown chọn chế độ + Nút Xoá) -->
+                        <td class="py-1 px-2 text-center">
+                            <div class="flex flex-col gap-1 w-24 mx-auto py-0.5">
+                                <select 
+                                    id="selectVis_${item.item_id}" 
+                                    onchange="handleVisibilityChange('${item.item_id}', parseInt(this.value))" 
+                                    class="w-full text-[10px] font-bold py-1 px-1 rounded bg-sky-700 hover:bg-sky-600 text-white border border-sky-500 cursor-pointer text-center outline-none transition"
+                                    title="Đổi trạng thái hiển thị"
+                                >
+                                    <option value="1" ${isPub ? 'selected' : ''}>🌐 Công khai ▾</option>
+                                    <option value="2" ${isPriv ? 'selected' : ''}>🔒 Riêng tư ▾</option>
+                                    <option value="3" ${isFrd ? 'selected' : ''}>👥 Bạn bè ▾</option>
+                                </select>
                                 <button 
                                     type="button" 
-                                    id="btnVisPriv_${item.item_id}"
-                                    onclick="handleVisibilityChange('${item.item_id}', 2)"
-                                    ${isPriv ? 'disabled' : ''}
-                                    class="w-full py-1 px-2.5 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5 border shadow-sm ${isPriv ? 'bg-rose-950/30 text-rose-400 border-rose-900/30 opacity-40 cursor-not-allowed' : 'bg-slate-800 hover:bg-rose-950 text-slate-300 hover:text-rose-200 border-slate-700 hover:border-rose-700 active:scale-95'}"
-                                    title="Chuyển video sang Riêng tư (Ẩn)"
+                                    onclick="promptDeletePost('${item.item_id}')" 
+                                    class="w-full text-[10px] font-bold py-1 px-1 rounded bg-red-800 hover:bg-red-700 text-white border border-red-600 flex items-center justify-center gap-1 transition active:scale-95 shadow-sm"
+                                    title="Xóa video khỏi kênh"
                                 >
-                                    <i class="fa-solid fa-lock text-[10px]"></i>
-                                    <span>${isPriv ? '✓ Đang Riêng tư' : 'Ẩn (Riêng tư)'}</span>
-                                </button>
-
-                                <!-- Hàng 2: Bạn bè -->
-                                <button 
-                                    type="button" 
-                                    id="btnVisFrd_${item.item_id}"
-                                    onclick="handleVisibilityChange('${item.item_id}', 3)"
-                                    ${isFrd ? 'disabled' : ''}
-                                    class="w-full py-1 px-2.5 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5 border shadow-sm ${isFrd ? 'bg-amber-950/30 text-amber-400 border-amber-900/30 opacity-40 cursor-not-allowed' : 'bg-slate-800 hover:bg-amber-950 text-slate-300 hover:text-amber-200 border-slate-700 hover:border-amber-700 active:scale-95'}"
-                                    title="Chuyển video sang chế độ Bạn bè"
-                                >
-                                    <i class="fa-solid fa-user-group text-[10px]"></i>
-                                    <span>${isFrd ? '✓ Đang Bạn bè' : 'Chuyển Bạn bè'}</span>
-                                </button>
-
-                                <!-- Hàng 3: Công khai -->
-                                <button 
-                                    type="button" 
-                                    id="btnVisPub_${item.item_id}"
-                                    onclick="handleVisibilityChange('${item.item_id}', 1)"
-                                    ${isPub ? 'disabled' : ''}
-                                    class="w-full py-1 px-2.5 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5 border shadow-sm ${isPub ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/30 opacity-40 cursor-not-allowed' : 'bg-slate-800 hover:bg-emerald-950 text-slate-300 hover:text-emerald-200 border-slate-700 hover:border-emerald-700 active:scale-95'}"
-                                    title="Mở video sang Công khai"
-                                >
-                                    <i class="fa-solid fa-earth-americas text-[10px]"></i>
-                                    <span>${isPub ? '✓ Đang Công khai' : 'Mở Công khai'}</span>
-                                </button>
-
-                                <!-- Hàng 4: Xóa video -->
-                                <button 
-                                    type="button" 
-                                    onclick="promptDeletePost('${item.item_id}')"
-                                    class="w-full py-1 px-2.5 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5 border shadow-sm bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-300 border-slate-700 hover:border-red-700 active:scale-95"
-                                    title="Xóa vĩnh viễn video khỏi kênh TikTok"
-                                >
-                                    <i class="fa-solid fa-trash-can text-[10px]"></i>
-                                    <span>Xóa video</span>
+                                    <i class="fa-solid fa-trash-can text-[9px]"></i> <span>Xoá</span>
                                 </button>
                             </div>
                         </td>
@@ -2708,13 +2661,9 @@
             const item = studioPosts.find(v => String(v.item_id) === String(itemId));
             if (!item) return;
 
-            const btnId = newVis === 1 ? `btnVisPub_${itemId}` : (newVis === 2 ? `btnVisPriv_${itemId}` : `btnVisFrd_${itemId}`);
-            const btn = document.getElementById(btnId);
-            const origHtml = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-[10px]"></i> <span>Đang xử lý...</span>`;
-            }
+            const sel = document.getElementById(`selectVis_${itemId}`);
+            const oldVis = item.visibility_code;
+            if (sel) sel.disabled = true;
 
             try {
                 const res = await fetch('/api/studio/item/visibility', {
@@ -2747,11 +2696,17 @@
                     showToast(data.message || `Đã chuyển sang ${item.visibility_label}!`);
                 } else {
                     showToast("Lỗi: " + (data.error || "Không thể đổi trạng thái."));
-                    if (btn) btn.innerHTML = origHtml;
+                    if (sel) {
+                        sel.disabled = false;
+                        sel.value = String(oldVis);
+                    }
                 }
             } catch (err) {
                 showToast("Lỗi kết nối: " + err.message);
-                if (btn) btn.innerHTML = origHtml;
+                if (sel) {
+                    sel.disabled = false;
+                    sel.value = String(oldVis);
+                }
             }
         }
 
