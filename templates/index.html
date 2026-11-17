@@ -684,7 +684,7 @@
     <!-- MODAL ĐĂNG NHẬP STUDIO (TRÌNH DUYỆT & DÁN COOKIE) -->
     <!-- ============================================================================== -->
     <div id="authModal" class="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-300 hidden">
-        <div class="relative max-w-lg w-full bg-dark-900 border border-slate-700/80 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-4 overflow-hidden">
+        <div class="relative max-w-xl w-full bg-dark-900 border border-slate-700/80 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-4 overflow-hidden">
             <!-- Glow background -->
             <div class="absolute -top-16 -right-16 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
             <div class="absolute -bottom-16 -left-16 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -706,25 +706,50 @@
             </div>
 
             <!-- Cài đặt Proxy chung cho cả Trình Duyệt & Cookie (Hỗ trợ SOCKS5 & HTTP) -->
-            <div class="relative z-10 p-3 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1.5">
-                <div class="flex items-center justify-between">
-                    <label class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+            <div class="relative z-10 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2.5">
+                <div class="flex items-center justify-between gap-2 flex-nowrap">
+                    <label class="text-xs font-bold text-slate-200 flex items-center gap-1.5 whitespace-nowrap">
                         <i class="fa-solid fa-shield-halved text-cyan-400"></i>
-                        <span>Proxy Kênh (Tùy chọn - Dành cho kênh US/Ngoại):</span>
+                        <span>Proxy Kênh (Tùy chọn - Kênh US/Ngoại):</span>
                     </label>
-                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-700/50 text-emerald-400 font-bold">
+                    <span class="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-600/60 text-emerald-300 font-bold whitespace-nowrap flex-shrink-0">
                         Hỗ trợ SOCKS5 & HTTP
                     </span>
                 </div>
-                <input 
-                    type="text" 
-                    id="loginProxyInput" 
-                    placeholder="socks5://user:pass@ip:port hoặc ip:port:user:pass (để trống nếu không dùng)" 
-                    class="w-full bg-dark-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-500"
-                />
-                <p class="text-[10px] text-slate-400 leading-normal">
-                    ⚡ Áp dụng đồng bộ cho cả Mở trình duyệt và Nạp Cookie. Hỗ trợ đầy đủ <code class="text-cyan-300">socks5://user:pass@ip:port</code> hoặc <code class="text-cyan-300">ip:port:user:pass</code>.
-                </p>
+
+                <!-- Bộ chọn Proxy PIA có sẵn & Tùy chọn -->
+                <div class="space-y-1.5">
+                    <div class="relative">
+                        <select 
+                            id="piaProxySelect" 
+                            onchange="handlePiaProxySelectChange(this.value)"
+                            class="w-full bg-dark-900 border border-cyan-500/50 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-cyan-400 cursor-pointer shadow-sm"
+                        >
+                            <option value="socks5://127.0.0.1:1080" selected>⚡ [Mặc định PIA] 🇸🇬 Singapore (SOCKS5: 1080)</option>
+                            <option value="socks5://127.0.0.1:1081">⚡ 🇯🇵 JP Tokyo (SOCKS5: 1081)</option>
+                            <option value="socks5://127.0.0.1:1082">⚡ 🇹🇼 Taiwan (SOCKS5: 1082)</option>
+                            <option value="socks5://127.0.0.1:1083">⚡ 🇭🇰 Hong Kong (SOCKS5: 1083)</option>
+                            <option value="direct">🚫 Không dùng Proxy (Mạng thường)</option>
+                            <option value="custom">✏️ Nhập Proxy riêng khác...</option>
+                        </select>
+                    </div>
+
+                    <input 
+                        type="text" 
+                        id="loginProxyInput" 
+                        value="socks5://127.0.0.1:1080"
+                        placeholder="socks5://user:pass@ip:port hoặc ip:port:user:pass" 
+                        class="w-full bg-dark-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-500"
+                        oninput="handleCustomProxyInput(this.value)"
+                    />
+                </div>
+
+                <div class="flex items-center justify-between text-[10px] text-slate-400 px-0.5">
+                    <span>💡 Đã gắn sẵn các cổng SOCKS5 PIA đang chạy ngầm trên máy.</span>
+                    <button type="button" onclick="loadPiaProxiesFromBackend()" class="text-cyan-400 hover:text-cyan-300 font-bold transition flex items-center gap-1">
+                        <i class="fa-solid fa-arrows-rotate text-[9px]"></i> Cập nhật PIA
+                    </button>
+                </div>
             </div>
 
             <!-- Cách 1: Mở Trình Duyệt Đăng Nhập Trực Tiếp (1-Click) -->
@@ -2386,10 +2411,10 @@
                         <img src="${avatar}" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl object-cover border border-cyan-400/50 flex-shrink-0 cursor-pointer" onclick="openCheckPostModal()" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(acc.nickname || acc.username || 'User')}" />
                         <div class="hidden sm:block text-left pr-1 cursor-pointer" onclick="openCheckPostModal()">
                             <div class="text-xs font-bold text-white flex items-center gap-1.5 leading-tight">
-                                <span class="truncate max-w-[100px]">${escapeHtml(acc.nickname || 'User')}</span>
+                                <span class="whitespace-nowrap">${escapeHtml(acc.nickname || 'User')}</span>
                                 ${flag}
                             </div>
-                            <div class="text-[10px] text-cyan-400 font-mono leading-tight">${escapeHtml(acc.username || '')}</div>
+                            <div class="text-[10px] text-cyan-400 font-mono leading-tight whitespace-nowrap">${escapeHtml(acc.username || '')}</div>
                         </div>
 
                         <!-- Dropdown chuyển đổi nick nhanh trên Navbar -->
@@ -2453,15 +2478,15 @@
                             </div>
                         </div>
 
-                        <!-- Nút Thêm Nick trực tiếp ra ngoài Navbar -->
+                        <!-- Nút Thêm Nick trực tiếp ra ngoài Navbar đồng bộ màu, icon với Check Post -->
                         <button 
                             type="button" 
                             onclick="openAuthModal()" 
-                            class="px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white border border-slate-700 font-bold text-xs flex items-center gap-1.5 shadow transition active:scale-95"
+                            class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95"
                             title="Thêm nick mới (Mở trình duyệt hoặc nạp cookie)"
                         >
-                            <i class="fa-solid fa-user-plus text-[11px]"></i>
-                            <span>+ Thêm nick</span>
+                            <i class="fa-solid fa-user-plus text-amber-300"></i>
+                            <span>Thêm nick</span>
                         </button>
 
                         <button type="button" onclick="openCheckPostModal()" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95" title="Mở Studio Check Post">
@@ -2488,6 +2513,69 @@
 
         let wasCheckPostOpenBeforeAuth = false;
 
+        function handlePiaProxySelectChange(val) {
+            const input = document.getElementById('loginProxyInput');
+            if (!input) return;
+            if (val === 'direct') {
+                input.value = '';
+            } else if (val === 'custom') {
+                input.value = '';
+                input.focus();
+            } else {
+                input.value = val;
+            }
+            localStorage.setItem('tikflow_last_proxy', input.value.trim());
+        }
+
+        function handleCustomProxyInput(val) {
+            const sel = document.getElementById('piaProxySelect');
+            if (!sel) return;
+            const v = (val || '').trim();
+            let found = false;
+            for (let i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === v) {
+                    sel.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                if (!v) {
+                    sel.value = 'direct';
+                } else {
+                    sel.value = 'custom';
+                }
+            }
+            localStorage.setItem('tikflow_last_proxy', v);
+        }
+
+        async function loadPiaProxiesFromBackend() {
+            try {
+                const res = await fetch('/api/studio/pia/proxies');
+                const data = await res.json();
+                if (data.success && data.proxies && data.proxies.length > 0) {
+                    const sel = document.getElementById('piaProxySelect');
+                    if (!sel) return;
+                    const currentVal = document.getElementById('loginProxyInput')?.value?.trim() || '';
+
+                    const flags = { 'SG': '🇸🇬', 'JP': '🇯🇵', 'TW': '🇹🇼', 'HK': '🇭🇰', 'US': '🇺🇸', 'DE': '🇩🇪', 'ID': '🇮🇩', 'VN': '🇻🇳' };
+                    let html = '';
+                    data.proxies.forEach((p, idx) => {
+                        const fl = flags[p.country] || '🌐';
+                        const isDefault = idx === 0 ? ' [Mặc định PIA]' : '';
+                        html += `<option value="${p.socks5_url}">⚡${isDefault} ${fl} ${p.region_name} (SOCKS5: ${p.socks_port})</option>`;
+                    });
+                    html += `<option value="direct">🚫 Không dùng Proxy (Mạng thường)</option>`;
+                    html += `<option value="custom">✏️ Nhập Proxy riêng khác...</option>`;
+                    sel.innerHTML = html;
+
+                    if (currentVal) {
+                        handleCustomProxyInput(currentVal);
+                    }
+                }
+            } catch (e) {}
+        }
+
         function openAuthModal() {
             const checkPostModal = document.getElementById('checkPostModal');
             if (checkPostModal && !checkPostModal.classList.contains('hidden')) {
@@ -2496,14 +2584,14 @@
             } else {
                 wasCheckPostOpenBeforeAuth = false;
             }
-            // Tự động khôi phục proxy đã dùng trước đó (nếu ô nhập đang trống)
+            // Tự động khôi phục proxy đã dùng trước đó hoặc lấy mặc định PIA Singapore
             const proxyInput = document.getElementById('loginProxyInput');
-            if (proxyInput && !proxyInput.value.trim()) {
-                const savedProxy = localStorage.getItem('tikflow_last_proxy') || (activeStudioSession ? activeStudioSession.proxy : '') || '';
-                if (savedProxy) {
-                    proxyInput.value = savedProxy;
-                }
+            if (proxyInput) {
+                const savedProxy = localStorage.getItem('tikflow_last_proxy') || (activeStudioSession ? activeStudioSession.proxy : '') || 'socks5://127.0.0.1:1080';
+                proxyInput.value = savedProxy;
+                handleCustomProxyInput(savedProxy);
             }
+            loadPiaProxiesFromBackend();
             document.getElementById('authModal').classList.remove('hidden');
         }
 

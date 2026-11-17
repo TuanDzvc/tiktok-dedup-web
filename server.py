@@ -569,6 +569,28 @@ def api_studio_browser_login_cancel():
     res = studio_engine.cancel_interactive_browser_login()
     return JSONResponse(content=res)
 
+@app.get("/api/studio/pia/proxies")
+def api_studio_pia_proxies():
+    """Lấy danh sách các cổng SOCKS5 PIA đang chạy trên máy từ pia_socks5."""
+    proxies = []
+    try:
+        sys.path.insert(0, "E:/Tool/pia_socks5")
+        import pia_proxy
+        active = pia_proxy.load_active_proxies()
+        for port, info in active.items():
+            proxies.append({
+                "port": int(port),
+                "region_id": info.get("region_id", ""),
+                "region_name": info.get("region_name", f"Port {port}"),
+                "country": info.get("country", ""),
+                "socks_port": int(info.get("socks_port", port)),
+                "http_port": int(info.get("http_port", int(port) + 1000)),
+                "socks5_url": f"socks5://127.0.0.1:{port}"
+            })
+    except Exception:
+        pass
+    return JSONResponse(content={"success": True, "proxies": proxies})
+
 @app.post("/api/studio/browser/login")
 def api_studio_browser_login():
     """Tương thích ngược: bắt đầu phiên đăng nhập trình duyệt."""
