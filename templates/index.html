@@ -2442,8 +2442,20 @@
             document.getElementById('authModal').classList.remove('hidden');
         }
 
+        let browserLoginPollInterval = null;
+
         function closeAuthModal() {
             document.getElementById('authModal').classList.add('hidden');
+            if (browserLoginPollInterval) {
+                clearInterval(browserLoginPollInterval);
+                browserLoginPollInterval = null;
+                fetch('/api/studio/browser/login/cancel', { method: 'POST' }).catch(() => {});
+            }
+            const btn = document.getElementById('btnBrowserLogin');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-window-maximize text-amber-300"></i> <span>Mở Cửa Sổ Trình Duyệt Đăng Nhập</span>`;
+            }
         }
 
         async function handleBrowserLogin() {
@@ -2454,27 +2466,99 @@
             }
 
             const btn = document.getElementById('btnBrowserLogin');
-            const origHtml = btn.innerHTML;
+            const origHtml = `<i class="fa-solid fa-window-maximize text-amber-300"></i> <span>Mở Cửa Sổ Trình Duyệt Đăng Nhập</span>`;
             btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-amber-300"></i> <span>Đang mở cửa sổ trình duyệt đăng nhập...</span>`;
-            showToast("Đang mở cửa sổ trình duyệt TikTok... Hãy đăng nhập!");
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-amber-300"></i> <span>Đang khởi động Chrome...</span>`;
+            showToast("Đang mở cửa sổ trình duyệt Chrome để đăng nhập...");
+
+            if (browserLoginPollInterval) {
+                clearInterval(browserLoginPollInterval);
+                browserLoginPollInterval = null;
+            }
 
             try {
-                const res = await fetch('/api/studio/browser/login', { method: 'POST' });
-                const data = await res.json();
-                if (data.success && data.account) {
-                    saveStudioAccount(data.account, data.cookie, '');
-                    closeAuthModal();
-                    showToast("Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
-                    openCheckPostModal();
-                } else {
-                    alert(data.error || "Đăng nhập không thành công.");
+                const startRes = await fetch('/api/studio/browser/login/start', { method: 'POST' });
+                const text = await startRes.text();
+                let startData = null;
+                try {
+                    startData = JSON.parse(text);
+                } catch (pe) {
+                    throw new Error("Máy chủ phản hồi không đúng định dạng. Vui lòng thử lại sau vài giây.");
                 }
+
+                if (!startData || !startData.success) {
+                    alert(startData && startData.error ? startData.error : "Không thể khởi động trình duyệt.");
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                    return;
+                }
+
+                showToast("Cửa sổ Chrome đang bật lên trên màn hình! Hãy quét mã QR...");
+
+                // Bắt đầu chu kỳ Polling an toàn không bao giờ bị Cloudflare Timeout
+                let pollCount = 0;
+                browserLoginPollInterval = setInterval(async () => {
+                    pollCount++;
+                    if (pollCount > 200) { // 200 * 1.5s = 300s (5 phút)
+                        clearInterval(browserLoginPollInterval);
+                        browserLoginPollInterval = null;
+                        btn.disabled = false;
+                        btn.innerHTML = origHtml;
+                        alert("Đã hết thời gian chờ đăng nhập (5 phút).");
+                        return;
+                    }
+
+                    try {
+                        const statusRes = await fetch('/api/studio/browser/login/status?t=' + Date.now());
+                        const statusText = await statusRes.text();
+                        let data = null;
+                        try {
+                            data = JSON.parse(statusText);
+                        } catch (err) {
+                            return; // Bỏ qua nếu có ngắt quãng mạng ngắn
+                        }
+
+                        if (!data) return;
+
+                        if (data.status === 'starting') {
+                            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-amber-300"></i> <span>Đang khởi động Chrome...</span>`;
+                        } else if (data.status === 'waiting') {
+                            btn.innerHTML = `<i class="fa-solid fa-qrcode animate-pulse text-emerald-400"></i> <span>Cửa sổ đã mở! Hãy quét mã QR...</span>`;
+                        } else if (data.status === 'success' && data.account) {
+                            clearInterval(browserLoginPollInterval);
+                            browserLoginPollInterval = null;
+                            btn.disabled = false;
+                            btn.innerHTML = origHtml;
+                            saveStudioAccount(data.account, data.cookie, '');
+                            closeAuthModal();
+                            showToast("Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
+                            openCheckPostModal();
+                        } else if (data.status === 'cancelled') {
+                            clearInterval(browserLoginPollInterval);
+                            browserLoginPollInterval = null;
+                            btn.disabled = false;
+                            btn.innerHTML = origHtml;
+                            showToast("Bạn đã đóng cửa sổ trình duyệt.");
+                        } else if (data.status === 'error' || data.status === 'timeout') {
+                            clearInterval(browserLoginPollInterval);
+                            browserLoginPollInterval = null;
+                            btn.disabled = false;
+                            btn.innerHTML = origHtml;
+                            alert(data.error || "Đăng nhập không thành công.");
+                        }
+                    } catch (pollErr) {
+                        // Lỗi mạng tạm thời, lượt sau thử tiếp
+                    }
+                }, 1500);
+
             } catch (e) {
-                alert("Lỗi kết nối: " + e.message);
-            } finally {
+                if (browserLoginPollInterval) {
+                    clearInterval(browserLoginPollInterval);
+                    browserLoginPollInterval = null;
+                }
                 btn.disabled = false;
                 btn.innerHTML = origHtml;
+                alert("Lỗi kết nối: " + e.message);
             }
         }
 

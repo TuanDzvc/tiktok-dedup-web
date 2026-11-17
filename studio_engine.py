@@ -744,8 +744,80 @@ def delete_studio_post(cookie_str: str, item_id: str, proxy: str = "") -> Dict[s
         return {"success": False, "error": f"Lỗi xóa video: {str(e)}"}
 
 
-def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
-    """Mở cửa sổ trình duyệt Chromium trực tiếp trên màn hình máy tính để đăng nhập siêu tốc."""
+# Quản lý trạng thái đăng nhập trình duyệt tương tác bất đồng bộ (tránh timeout Cloudflare)
+_BROWSER_LOGIN_STATE: Dict[str, Any] = {
+    "status": "idle",
+    "account": None,
+    "cookie": "",
+    "error": "",
+    "updated_at": 0
+}
+_BROWSER_LOGIN_LOCK = threading.Lock()
+_BROWSER_STOP_EVENT = threading.Event()
+
+
+def start_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
+    """Khởi động luồng chạy trình duyệt đăng nhập nền và phản hồi ngay lập tức để không bao giờ bị timeout."""
+    global _BROWSER_LOGIN_STATE, _BROWSER_STOP_EVENT
+    with _BROWSER_LOGIN_LOCK:
+        current_status = _BROWSER_LOGIN_STATE.get("status", "idle")
+        updated_at = _BROWSER_LOGIN_STATE.get("updated_at", 0)
+        # Nếu đang mở sẵn và vừa cập nhật trong vòng 45 giây gần đây
+        if current_status in ("starting", "waiting") and (time.time() - updated_at < 45):
+            return {
+                "success": True,
+                "status": current_status,
+                "message": "Trình duyệt đang mở sẵn trên màn hình, vui lòng quét mã QR hoặc đăng nhập!"
+            }
+
+        # Báo hiệu dừng phiên cũ nếu có
+        _BROWSER_STOP_EVENT.set()
+        _BROWSER_STOP_EVENT = threading.Event()
+
+        _BROWSER_LOGIN_STATE = {
+            "status": "starting",
+            "account": None,
+            "cookie": "",
+            "error": "",
+            "updated_at": time.time()
+        }
+
+        t = threading.Thread(
+            target=_worker_browser_login,
+            args=(timeout_sec, _BROWSER_STOP_EVENT),
+            daemon=True
+        )
+        t.start()
+
+        return {
+            "success": True,
+            "status": "starting",
+            "message": "Đang mở cửa sổ trình duyệt Chrome..."
+        }
+
+
+def get_interactive_login_status() -> Dict[str, Any]:
+    """Lấy trạng thái phiên đăng nhập trình duyệt hiện tại."""
+    global _BROWSER_LOGIN_STATE
+    with _BROWSER_LOGIN_LOCK:
+        return dict(_BROWSER_LOGIN_STATE)
+
+
+def cancel_interactive_browser_login() -> Dict[str, Any]:
+    """Hủy phiên đăng nhập trình duyệt và đóng cửa sổ."""
+    global _BROWSER_LOGIN_STATE, _BROWSER_STOP_EVENT
+    _BROWSER_STOP_EVENT.set()
+    with _BROWSER_LOGIN_LOCK:
+        _BROWSER_LOGIN_STATE["status"] = "cancelled"
+        _BROWSER_LOGIN_STATE["error"] = "Đã hủy phiên đăng nhập."
+        _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+    return {"success": True, "status": "cancelled"}
+
+
+def _worker_browser_login(timeout_sec: int, stop_event: threading.Event):
+    """Luồng worker chạy Playwright Chromium/Chrome mở cửa sổ thực tế trên desktop."""
+    global _BROWSER_LOGIN_STATE
+    browser = None
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
@@ -765,24 +837,49 @@ def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
                 browser = p.chromium.launch(**launch_kwargs)
 
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                user_agent=DEFAULT_UA,
                 viewport={"width": 1050, "height": 750}
             )
             context.add_init_script("delete Object.getPrototypeOf(navigator).webdriver")
             page = context.new_page()
-            # Dùng wait_until="domcontentloaded" để cửa sổ bật lên ngay tức thì trong 1-2s
-            page.goto("https://www.tiktok.com/login", wait_until="domcontentloaded", timeout=25000)
+
+            with _BROWSER_LOGIN_LOCK:
+                _BROWSER_LOGIN_STATE["status"] = "waiting"
+                _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+
             try:
-                page.locator("text=/Use QR|Dùng mã QR|Quét mã QR/i").first.click(timeout=1200)
+                # Dùng wait_until="domcontentloaded" để cửa sổ bật lên ngay tức thì trong 1-2s
+                page.goto("https://www.tiktok.com/login", wait_until="domcontentloaded", timeout=25000)
+            except Exception:
+                pass
+
+            try:
+                page.locator("text=/Use QR|Dùng mã QR|Quét mã QR/i").first.click(timeout=1500)
             except Exception:
                 pass
 
             start_ts = time.time()
             while time.time() - start_ts < timeout_sec:
+                if stop_event.is_set():
+                    try:
+                        browser.close()
+                    except Exception:
+                        pass
+                    return
+
                 try:
                     cookies = context.cookies()
                 except Exception:
-                    return {"success": False, "error": "Bạn đã đóng cửa sổ trình duyệt."}
+                    # Người dùng đã tắt cửa sổ trình duyệt bằng nút X đỏ
+                    with _BROWSER_LOGIN_LOCK:
+                        _BROWSER_LOGIN_STATE["status"] = "cancelled"
+                        _BROWSER_LOGIN_STATE["error"] = "Bạn đã đóng cửa sổ trình duyệt."
+                        _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+                    try:
+                        browser.close()
+                    except Exception:
+                        pass
+                    return
 
                 sid = next((c['value'] for c in cookies if c.get('name') == 'sessionid'), None)
                 if sid:
@@ -808,16 +905,54 @@ def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
                             acc_info["avatar"] = av_found
                     except Exception:
                         pass
-                    browser.close()
-                    return {
-                        "success": True,
-                        "account": acc_info,
-                        "cookie": cookie_str
-                    }
+
+                    try:
+                        browser.close()
+                    except Exception:
+                        pass
+
+                    with _BROWSER_LOGIN_LOCK:
+                        _BROWSER_LOGIN_STATE["status"] = "success"
+                        _BROWSER_LOGIN_STATE["account"] = acc_info
+                        _BROWSER_LOGIN_STATE["cookie"] = cookie_str
+                        _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+                    return
+
                 time.sleep(1)
 
-            browser.close()
-            return {"success": False, "error": "Đã hết thời gian chờ đăng nhập (5 phút)."}
+            # Quá thời gian chờ (5 phút)
+            try:
+                browser.close()
+            except Exception:
+                pass
+            with _BROWSER_LOGIN_LOCK:
+                _BROWSER_LOGIN_STATE["status"] = "timeout"
+                _BROWSER_LOGIN_STATE["error"] = "Đã hết thời gian chờ đăng nhập (5 phút)."
+                _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+
     except Exception as e:
-        return {"success": False, "error": f"Lỗi mở trình duyệt: {str(e)}"}
+        if browser:
+            try:
+                browser.close()
+            except Exception:
+                pass
+        with _BROWSER_LOGIN_LOCK:
+            _BROWSER_LOGIN_STATE["status"] = "error"
+            _BROWSER_LOGIN_STATE["error"] = f"Lỗi mở trình duyệt: {str(e)}"
+            _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+
+
+def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
+    """Hàm đồng bộ tương thích ngược: bắt đầu và đợi kết quả."""
+    start_interactive_browser_login(timeout_sec=timeout_sec)
+    start_ts = time.time()
+    while time.time() - start_ts < timeout_sec + 5:
+        st = get_interactive_login_status()
+        if st.get("status") == "success":
+            return {"success": True, "account": st.get("account"), "cookie": st.get("cookie")}
+        elif st.get("status") in ("cancelled", "error", "timeout"):
+            return {"success": False, "error": st.get("error", "Đăng nhập không thành công.")}
+        time.sleep(1)
+    return {"success": False, "error": "Đã hết thời gian chờ đăng nhập (5 phút)."}
+
 

@@ -545,10 +545,28 @@ async def api_studio_item_delete(req: Request):
     res = studio_engine.delete_studio_post(cookie_str, item_id, proxy=proxy)
     return JSONResponse(content=res)
 
+@app.post("/api/studio/browser/login/start")
+def api_studio_browser_login_start():
+    """Khởi chạy trình duyệt đăng nhập chạy ngầm và phản hồi ngay lập tức để không bao giờ bị timeout Cloudflare."""
+    res = studio_engine.start_interactive_browser_login()
+    return JSONResponse(content=res)
+
+@app.get("/api/studio/browser/login/status")
+def api_studio_browser_login_status():
+    """Lấy trạng thái phiên đăng nhập trình duyệt tương tác."""
+    res = studio_engine.get_interactive_login_status()
+    return JSONResponse(content=res)
+
+@app.post("/api/studio/browser/login/cancel")
+def api_studio_browser_login_cancel():
+    """Hủy phiên đăng nhập trình duyệt và đóng cửa sổ."""
+    res = studio_engine.cancel_interactive_browser_login()
+    return JSONResponse(content=res)
+
 @app.post("/api/studio/browser/login")
 def api_studio_browser_login():
-    """Mở cửa sổ trình duyệt Chromium trực tiếp trên màn hình máy tính để đăng nhập."""
-    res = studio_engine.run_interactive_browser_login()
+    """Tương thích ngược: bắt đầu phiên đăng nhập trình duyệt."""
+    res = studio_engine.start_interactive_browser_login()
     return JSONResponse(content=res)
 
 if __name__ == "__main__":
