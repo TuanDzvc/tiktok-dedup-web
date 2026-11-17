@@ -17,6 +17,9 @@ import uuid
 import base64
 import datetime
 import threading
+import socket
+from urllib.parse import urlparse
+import socks
 from typing import Any, Dict, List, Optional, Tuple
 import requests
 
@@ -69,48 +72,220 @@ def cookie_to_header_str(cookie_val: Any) -> str:
     return "; ".join(f"{k}={v}" for k, v in cdict.items() if k and v)
 
 
-def normalize_proxy_for_requests(p_str: str) -> Dict[str, str]:
-    """Chuẩn hóa proxy cho thư viện requests (hỗ trợ HTTP, HTTPS, SOCKS5, SOCKS5H)."""
-    if not p_str or not str(p_str).strip():
-        return {}
+def detect_proxy_type(host: str, port: int, timeout: float = 1.0) -> str:
+    """Tự động kiểm tra port là SOCKS5 hay HTTP nếu người dùng không ghi scheme."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((host, int(port)))
+        s.sendall(b"\x05\x02\x00\x02")
+        resp = s.recv(2)
+        s.close()
+        if len(resp) >= 2 and resp[0] == 5 and resp[1] in (0, 2):
+            return "socks5"
+    except Exception:
+        pass
+    return "http"
+
+
+def parse_proxy_components(p_str: str) -> Tuple[bool, str, str, str, str]:
+    """Tách chuỗi proxy thành (is_socks, ip, port, user, pwd)."""
     p = str(p_str).strip()
     is_socks = p.startswith(("socks5://", "socks5h://")) or "socks" in p.lower()
     clean = p.replace("socks5h://", "").replace("socks5://", "").replace("http://", "").replace("https://", "").strip()
 
+    ip, port, user, pwd = "", "", "", ""
     if clean.count(":") == 3:
         ip, port, user, pwd = clean.split(":")
-        scheme = "socks5h" if is_socks else "http"
-        px = f"{scheme}://{user}:{pwd}@{ip}:{port}"
-    elif is_socks:
-        px = "socks5h://" + clean
-    elif p.startswith(("http://", "https://")):
-        px = p
+    elif "@" in clean:
+        auth, host = clean.split("@", 1)
+        if ":" in auth:
+            user, pwd = auth.split(":", 1)
+        if ":" in host:
+            ip, port = host.split(":", 1)
+        else:
+            ip = host
+    elif ":" in clean:
+        ip, port = clean.split(":", 1)
     else:
-        px = f"http://{clean}"
+        ip = clean
 
+    # Nếu người dùng không nhập scheme (vd: ip:port:user:pass), tự động phát hiện port là SOCKS5 hay HTTP
+    if not is_socks and ip and port and port.isdigit():
+        detected = detect_proxy_type(ip, int(port))
+        if detected == "socks5":
+            is_socks = True
+
+    return is_socks, ip, port, user, pwd
+
+
+def normalize_proxy_for_requests(p_str: str) -> Dict[str, str]:
+    """Chuẩn hóa proxy cho thư viện requests (hỗ trợ HTTP, HTTPS, SOCKS5, SOCKS5H remote DNS)."""
+    if not p_str or not str(p_str).strip():
+        return {}
+    is_socks, ip, port, user, pwd = parse_proxy_components(p_str)
+    if not ip or not port:
+        return {}
+    if is_socks:
+        if user and pwd:
+            px = f"socks5h://{user}:{pwd}@{ip}:{port}"
+        else:
+            px = f"socks5h://{ip}:{port}"
+    else:
+        if user and pwd:
+            px = f"http://{user}:{pwd}@{ip}:{port}"
+        else:
+            px = f"http://{ip}:{port}"
     return {"http": px, "https": px}
 
 
-def normalize_proxy_for_playwright(p_str: str) -> Optional[Dict[str, str]]:
-    """Chuẩn hóa proxy cho Playwright Chromium (hỗ trợ HTTP, HTTPS, SOCKS5)."""
+class LocalSocks5Bridge:
+    """
+    Cầu nối HTTP-to-SOCKS5 cục bộ chạy ngầm trên 127.0.0.1.
+    Giải quyết triệt để lỗi của Chromium/Chrome: 'Browser does not support socks5 proxy authentication'.
+    Chuyển tiếp toàn bộ kết nối của Chrome qua SOCKS5 từ xa với Remote DNS (rdns=True),
+    đảm bảo không bị leak DNS hoặc IP Việt Nam khi đăng nhập TikTok.
+    """
+    def __init__(self, remote_host: str, remote_port: int, username: str = "", password: str = ""):
+        self.remote_host = remote_host
+        self.remote_port = int(remote_port)
+        self.username = username or None
+        self.password = password or None
+        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_sock.bind(('127.0.0.1', 0))
+        self.server_sock.listen(50)
+        self.port = self.server_sock.getsockname()[1]
+        self.running = True
+        self.thread = threading.Thread(target=self._accept_loop, daemon=True)
+        self.thread.start()
+
+    def _accept_loop(self):
+        while self.running:
+            try:
+                client_sock, _ = self.server_sock.accept()
+                threading.Thread(target=self._handle_client, args=(client_sock,), daemon=True).start()
+            except Exception:
+                break
+
+    def _handle_client(self, client_sock):
+        remote_sock = None
+        try:
+            req_data = b""
+            while b"\r\n\r\n" not in req_data:
+                chunk = client_sock.recv(4096)
+                if not chunk:
+                    break
+                req_data += chunk
+            if not req_data:
+                client_sock.close()
+                return
+
+            first_line = req_data.split(b"\r\n")[0].decode('latin1', 'ignore')
+            parts = first_line.split()
+            if len(parts) < 2:
+                client_sock.close()
+                return
+
+            method, target = parts[0], parts[1]
+            if method.upper() == 'CONNECT':
+                dst_host, dst_port = target.split(':', 1) if ':' in target else (target, 443)
+                remote_sock = socks.socksocket()
+                remote_sock.set_proxy(
+                    socks.SOCKS5,
+                    self.remote_host,
+                    self.remote_port,
+                    rdns=True,
+                    username=self.username,
+                    password=self.password
+                )
+                remote_sock.settimeout(20)
+                remote_sock.connect((dst_host, int(dst_port)))
+                remote_sock.settimeout(None)
+                client_sock.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+            else:
+                parsed = urlparse(target)
+                dst_host = parsed.hostname or "127.0.0.1"
+                dst_port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+                remote_sock = socks.socksocket()
+                remote_sock.set_proxy(
+                    socks.SOCKS5,
+                    self.remote_host,
+                    self.remote_port,
+                    rdns=True,
+                    username=self.username,
+                    password=self.password
+                )
+                remote_sock.settimeout(20)
+                remote_sock.connect((dst_host, int(dst_port)))
+                remote_sock.settimeout(None)
+                remote_sock.sendall(req_data)
+
+            def forward(src, dst):
+                try:
+                    while True:
+                        data = src.recv(8192)
+                        if not data:
+                            break
+                        dst.sendall(data)
+                except Exception:
+                    pass
+                finally:
+                    try: src.close()
+                    except Exception: pass
+                    try: dst.close()
+                    except Exception: pass
+
+            t1 = threading.Thread(target=forward, args=(client_sock, remote_sock), daemon=True)
+            t2 = threading.Thread(target=forward, args=(remote_sock, client_sock), daemon=True)
+            t1.start()
+            t2.start()
+        except Exception:
+            try: client_sock.close()
+            except Exception: pass
+            if remote_sock:
+                try: remote_sock.close()
+                except Exception: pass
+
+    def stop(self):
+        self.running = False
+        try:
+            self.server_sock.close()
+        except Exception:
+            pass
+
+
+def setup_browser_proxy(p_str: str) -> Tuple[Optional[Dict[str, str]], Optional[LocalSocks5Bridge]]:
+    """
+    Thiết lập proxy cho Playwright Chromium / Chrome.
+    - Với SOCKS5 có mật khẩu (user/pass): Dùng LocalSocks5Bridge để chuyển tiếp an toàn 100%.
+    - Với SOCKS5 không mật khẩu: Dùng trực tiếp socks5://ip:port.
+    - Với HTTP/HTTPS: Dùng trực tiếp Playwright proxy dict.
+    """
     if not p_str or not str(p_str).strip():
-        return None
-    p = str(p_str).strip()
-    is_socks = p.startswith(("socks5://", "socks5h://")) or "socks" in p.lower()
-    clean = p.replace("socks5h://", "").replace("socks5://", "").replace("http://", "").replace("https://", "").strip()
-    scheme = "socks5" if is_socks else "http"
+        return None, None
 
-    if clean.count(":") == 3:
-        ip, port, user, pwd = clean.split(":")
-        return {"server": f"{scheme}://{ip}:{port}", "username": user, "password": pwd}
+    is_socks, ip, port, user, pwd = parse_proxy_components(p_str)
+    if not ip or not port:
+        return None, None
 
-    if "@" in clean:
-        auth, host = clean.split("@", 1)
-        if ":" in auth:
-            u, pwd = auth.split(":", 1)
-            return {"server": f"{scheme}://{host}", "username": u, "password": pwd}
+    if is_socks:
+        if user and pwd:
+            bridge = LocalSocks5Bridge(ip, int(port), username=user, password=pwd)
+            return {"server": f"http://127.0.0.1:{bridge.port}"}, bridge
+        else:
+            return {"server": f"socks5://{ip}:{port}"}, None
+    else:
+        if user and pwd:
+            return {"server": f"http://{ip}:{port}", "username": user, "password": pwd}, None
+        else:
+            return {"server": f"http://{ip}:{port}"}, None
 
-    return {"server": f"{scheme}://{clean}"}
+
+def normalize_proxy_for_playwright(p_str: str) -> Optional[Dict[str, str]]:
+    """Giữ tương thích ngược cho QR worker."""
+    pw_dict, _ = setup_browser_proxy(p_str)
+    return pw_dict
 
 
 def _pw_qr_worker(session_id: str):
@@ -836,9 +1011,10 @@ def cancel_interactive_browser_login() -> Dict[str, Any]:
 
 
 def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: str = ""):
-    """Luồng worker chạy Playwright Chromium/Chrome mở cửa sổ thực tế trên desktop (hỗ trợ HTTP & SOCKS5)."""
+    """Luồng worker chạy Playwright Chromium/Chrome mở cửa sổ thực tế trên desktop (hỗ trợ HTTP & SOCKS5 chống leak IP)."""
     global _BROWSER_LOGIN_STATE
     browser = None
+    bridge = None
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
@@ -848,11 +1024,14 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                     "--disable-blink-features=AutomationControlled",
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
-                    "--disable-infobars"
+                    "--disable-infobars",
+                    "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+                    "--disable-webrtc-multiple-routes",
+                    "--enforce-webrtc-ip-permission-check"
                 ]
             }
             if proxy:
-                pw_proxy = normalize_proxy_for_playwright(proxy)
+                pw_proxy, bridge = setup_browser_proxy(proxy)
                 if pw_proxy:
                     launch_kwargs["proxy"] = pw_proxy
 
@@ -967,6 +1146,12 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
             _BROWSER_LOGIN_STATE["status"] = "error"
             _BROWSER_LOGIN_STATE["error"] = f"Lỗi mở trình duyệt: {str(e)}"
             _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+    finally:
+        if bridge:
+            try:
+                bridge.stop()
+            except Exception:
+                pass
 
 
 def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:

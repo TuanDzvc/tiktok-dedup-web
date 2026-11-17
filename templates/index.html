@@ -2453,6 +2453,17 @@
                             </div>
                         </div>
 
+                        <!-- Nút Thêm Nick trực tiếp ra ngoài Navbar -->
+                        <button 
+                            type="button" 
+                            onclick="openAuthModal()" 
+                            class="px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white border border-slate-700 font-bold text-xs flex items-center gap-1.5 shadow transition active:scale-95"
+                            title="Thêm nick mới (Mở trình duyệt hoặc nạp cookie)"
+                        >
+                            <i class="fa-solid fa-user-plus text-[11px]"></i>
+                            <span>+ Thêm nick</span>
+                        </button>
+
                         <button type="button" onclick="openCheckPostModal()" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95" title="Mở Studio Check Post">
                             <i class="fa-solid fa-layer-group text-amber-300"></i>
                             <span>Check Post</span>
@@ -2485,6 +2496,14 @@
             } else {
                 wasCheckPostOpenBeforeAuth = false;
             }
+            // Tự động khôi phục proxy đã dùng trước đó (nếu ô nhập đang trống)
+            const proxyInput = document.getElementById('loginProxyInput');
+            if (proxyInput && !proxyInput.value.trim()) {
+                const savedProxy = localStorage.getItem('tikflow_last_proxy') || (activeStudioSession ? activeStudioSession.proxy : '') || '';
+                if (savedProxy) {
+                    proxyInput.value = savedProxy;
+                }
+            }
             document.getElementById('authModal').classList.remove('hidden');
         }
 
@@ -2516,12 +2535,19 @@
                 return;
             }
 
-            const proxy = (document.getElementById('loginProxyInput')?.value || document.getElementById('cookieProxyInput')?.value || '').trim();
+            const proxy = (document.getElementById('loginProxyInput')?.value || '').trim();
+            if (proxy) {
+                localStorage.setItem('tikflow_last_proxy', proxy);
+            }
             const btn = document.getElementById('btnBrowserLogin');
             const origHtml = `<i class="fa-solid fa-window-maximize text-amber-300"></i> <span>Mở Cửa Sổ Trình Duyệt Đăng Nhập</span>`;
             btn.disabled = true;
             btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-amber-300"></i> <span>Đang khởi động Chrome...</span>`;
-            showToast("Đang mở cửa sổ trình duyệt Chrome để đăng nhập...");
+            if (proxy) {
+                showToast("Đang kết nối qua Proxy: " + proxy + " và mở Chrome...");
+            } else {
+                showToast("Đang mở cửa sổ trình duyệt Chrome để đăng nhập...");
+            }
 
             if (browserLoginPollInterval) {
                 clearInterval(browserLoginPollInterval);
@@ -2642,6 +2668,7 @@
                 const data = await res.json();
 
                 if (data.success && data.account) {
+                    if (proxy) localStorage.setItem('tikflow_last_proxy', proxy);
                     saveStudioAccount(data.account, data.cookie, proxy);
                     wasCheckPostOpenBeforeAuth = false;
                     closeAuthModal();
