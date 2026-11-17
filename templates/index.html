@@ -1065,6 +1065,28 @@
                         <i class="fa-solid fa-check-double text-cyan-400"></i>
                         <span>Chọn tất cả (<span id="bottomSelectedCount">0</span>)</span>
                     </button>
+                    <!-- Nút nhập số lượng video cần chọn nhanh (thay vì chọn hết cả 50 video) -->
+                    <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1">
+                        <span class="text-xs text-slate-400 font-medium">Chọn:</span>
+                        <input 
+                            type="number" 
+                            id="inputCustomSelectCount" 
+                            min="1" 
+                            max="500" 
+                            placeholder="Số lượng" 
+                            class="w-14 bg-slate-950 border border-slate-700 rounded-lg px-1.5 py-0.5 text-xs text-center text-cyan-400 font-bold focus:outline-none focus:border-cyan-400 font-mono"
+                            onkeydown="if(event.key === 'Enter') selectFirstNVideos(this.value)"
+                        />
+                        <span class="text-xs text-slate-400 font-medium">video</span>
+                        <button 
+                            type="button" 
+                            onclick="selectFirstNVideos(document.getElementById('inputCustomSelectCount').value)"
+                            class="px-2.5 py-0.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-bold text-xs transition active:scale-95 cursor-pointer shadow-sm"
+                            title="Chọn đúng số lượng video này để thao tác (ví dụ xóa 10, 20 video)"
+                        >
+                            Chọn
+                        </button>
+                    </div>
                     <div id="studioLoadMoreContainer">
                         <button 
                             type="button" 
@@ -2624,13 +2646,13 @@
                         </td>
 
                         <!-- STT -->
-                        <td class="py-1 px-1 text-center text-slate-500 font-mono text-[11px]">
+                        <td class="py-1 px-1 text-center text-slate-500 font-mono text-[11px] row-stt-cell">
                             ${idx + 1}
                         </td>
 
-                        <!-- Ảnh bìa: w-12 h-16 (64px) chuẩn desktop tool, hàng cao đúng 70px -> 8 dòng = 560px -->
+                        <!-- Ảnh bìa: Bấm mở trực tiếp link @username/video chuẩn không bị 404 -->
                         <td class="py-1 px-1 text-center">
-                            <div class="relative w-12 h-16 rounded-md overflow-hidden bg-slate-950 border border-slate-700/80 group inline-block cursor-pointer shadow-sm" onclick="window.open('${item.share_url}', '_blank')">
+                            <div class="relative w-12 h-16 rounded-md overflow-hidden bg-slate-950 border border-slate-700/80 group inline-block cursor-pointer shadow-sm" onclick="openStudioVideoLink('${item.item_id}', '${item.share_url}')">
                                 <img src="${cover}" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" onerror="this.src='https://ui-avatars.com/api/?name=Video'" referrerpolicy="no-referrer" />
                                 ${item.duration_str ? `
                                     <span class="absolute bottom-0.5 right-0.5 px-1 py-0 rounded text-[9px] font-bold text-white font-mono bg-black/85 backdrop-blur-sm">
@@ -2925,10 +2947,7 @@
 
                 if (data.success) {
                     const deletedId = pendingDeleteItem.item_id;
-                    studioPosts = studioPosts.filter(v => String(v.item_id) !== String(deletedId));
-                    selectedStudioItemIds.delete(deletedId);
-                    updateStudioStats();
-                    filterStudioPosts();
+                    removeStudioRowImmediately(deletedId);
                     closeConfirmDeleteModal();
                     showToast("Đã xóa vĩnh viễn video thành công khỏi kênh TikTok!");
                 } else {
@@ -2939,6 +2958,84 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> <span>Xóa Vĩnh Viễn</span>`;
+            }
+        }
+
+
+        function openStudioVideoLink(itemId, itemShareUrl) {
+            let curUsername = '';
+            if (activeStudioSession && activeStudioSession.account) {
+                curUsername = (activeStudioSession.account.uniqueId || activeStudioSession.account.username || '').replace('@', '').trim();
+            }
+            let targetUrl = itemShareUrl || '';
+            if (curUsername && itemId) {
+                targetUrl = `https://www.tiktok.com/@${curUsername}/video/${itemId}`;
+            } else if (!targetUrl || !targetUrl.includes('/@')) {
+                targetUrl = `https://www.tiktok.com/@tiktok/video/${itemId}`;
+            }
+            window.open(targetUrl, '_blank');
+        }
+
+        function selectFirstNVideos(n) {
+            const num = parseInt(n);
+            if (!num || num <= 0) {
+                showToast("Vui lòng nhập số lượng video hợp lệ (lớn hơn 0)!");
+                return;
+            }
+            selectedStudioItemIds.clear();
+            const count = Math.min(num, filteredStudioPosts.length);
+            for (let i = 0; i < count; i++) {
+                selectedStudioItemIds.add(filteredStudioPosts[i].item_id);
+            }
+            updateBatchBar();
+            renderStudioTable();
+            showToast(`Đã chọn ${count} video! Bây giờ bạn có thể bấm Xóa hoặc Ẩn.`);
+        }
+
+        function removeStudioRowImmediately(itemId) {
+            const idStr = String(itemId);
+            // 1. Cập nhật dữ liệu bộ nhớ ngay
+            studioPosts = studioPosts.filter(v => String(v.item_id) !== idStr);
+            filteredStudioPosts = filteredStudioPosts.filter(v => String(v.item_id) !== idStr);
+            selectedStudioItemIds.delete(itemId);
+            selectedStudioItemIds.delete(idStr);
+
+            // 2. Tìm dòng HTML trên bảng và cho biến mất ngay lập tức (không chờ đợi)
+            const row = document.getElementById('studioRow_' + idStr);
+            if (row) {
+                row.style.transition = 'all 0.22s ease-out';
+                row.style.opacity = '0';
+                row.style.backgroundColor = 'rgba(239, 68, 68, 0.35)';
+                row.style.transform = 'scaleY(0)';
+                row.style.height = '0px';
+                setTimeout(() => {
+                    if (row && row.parentNode) {
+                        row.parentNode.removeChild(row);
+                    }
+                    renumberStudioRows();
+                }, 220);
+            }
+
+            // 3. Cập nhật số liệu tức thì
+            updateStudioStats();
+            updateBatchBar();
+        }
+
+        function renumberStudioRows() {
+            const tbody = document.getElementById('studioTableBody');
+            if (!tbody) return;
+            const rows = tbody.querySelectorAll('tr[id^="studioRow_"]');
+            rows.forEach((r, i) => {
+                const sttCell = r.querySelector('.row-stt-cell');
+                if (sttCell) sttCell.innerText = (i + 1);
+            });
+            const shownEl = document.getElementById('studioShownCount');
+            if (shownEl) shownEl.innerText = rows.length.toLocaleString();
+
+            const emptyState = document.getElementById('studioEmptyState');
+            if (emptyState) {
+                if (rows.length === 0) emptyState.classList.remove('hidden');
+                else emptyState.classList.add('hidden');
             }
         }
 
@@ -3066,7 +3163,8 @@
                     const d = await res.json();
                     if (d.success) {
                         successCount++;
-                        studioPosts = studioPosts.filter(v => String(v.item_id) !== String(id));
+                        // Dòng xóa đến đâu biến mất ngay lập tức đến đó!
+                        removeStudioRowImmediately(id);
                     }
                 } catch (e) {
                     console.error("Batch delete error:", e);
@@ -3074,8 +3172,6 @@
             }
 
             clearStudioSelection();
-            updateStudioStats();
-            filterStudioPosts();
             showToast(`Đã xóa vĩnh viễn thành công ${successCount}/${count} video khỏi kênh!`);
         }
 
@@ -3252,7 +3348,7 @@
                                 const delData = await delRes.json();
                                 if (delData.success) {
                                     successCount++;
-                                    studioPosts = studioPosts.filter(x => String(x.item_id) !== vidId);
+                                    removeStudioRowImmediately(vidId);
                                     addLog(`Đã xóa: ${vidId}`, "text-emerald-400");
                                 } else {
                                     addLog(`Lỗi xóa ${vidId}: ${delData.error || 'Thất bại'}`, "text-rose-400");

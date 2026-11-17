@@ -522,6 +522,15 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 if isinstance(av, str) and av.startswith("http"):
                     author_avatar = av
 
+            auth = it.get("author") if isinstance(it.get("author"), dict) else {}
+            item_author = (
+                auth.get("unique_id")
+                or auth.get("uniqueId")
+                or it.get("author_unique_id")
+                or it.get("author_name")
+                or ""
+            )
+
             aid = str(it.get("item_id") or it.get("id") or it.get("aweme_id") or "")
             if not aid:
                 continue
@@ -615,7 +624,7 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 "group_id": group_id,
                 "origin_url": f"https://www.tiktok.com/@tiktok/video/{group_id}" if is_dup else "",
                 "has_penalty": has_penalty,
-                "share_url": f"https://www.tiktok.com/video/{aid}"
+                "share_url": f"https://www.tiktok.com/@{item_author}/video/{aid}" if item_author else f"https://www.tiktok.com/video/{aid}"
             })
 
         return {
