@@ -274,11 +274,37 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
             if user_id and user_id != "0":
                 u_name = data.get("username") or data.get("screen_name") or "User"
                 nick = data.get("nickname") or data.get("screen_name") or u_name
-                avatar = data.get("avatar_url") or data.get("avatar_thumb") or ""
+                avatar = (
+                    data.get("avatar_url")
+                    or data.get("avatar_larger")
+                    or data.get("avatar_medium")
+                    or data.get("avatar_thumb")
+                    or data.get("avatar_300x300")
+                    or data.get("avatar_168x168")
+                    or data.get("avatar")
+                    or ""
+                )
                 country = (data.get("store_country") or data.get("country") or data.get("region") or "US").upper()
                 c_ts = int(data.get("create_time") or 0)
                 c_date = datetime.datetime.fromtimestamp(c_ts).strftime("%d/%m/%Y") if c_ts > 0 else "-"
                 sec_uid = str(data.get("sec_user_id") or data.get("sec_uid") or "")
+
+                # Thử lấy thêm avatar từ API TikTok nếu chưa có
+                if not avatar and u_name:
+                    try:
+                        u_resp = requests.get(
+                            f"https://www.tiktok.com/api/user/detail/?aid=1988&uniqueId={u_name}",
+                            headers=headers,
+                            proxies=proxies if proxies else None,
+                            timeout=4
+                        )
+                        if u_resp.status_code == 200:
+                            ud = u_resp.json().get("userInfo", {}).get("user", {})
+                            avatar = ud.get("avatarLarger") or ud.get("avatarMedium") or ud.get("avatarThumb") or ""
+                            if not nick or nick == u_name:
+                                nick = ud.get("nickname") or nick
+                    except Exception:
+                        pass
 
                 return {
                     "valid": True,
@@ -411,9 +437,22 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 except Exception:
                     pass
 
-        # Parse chuẩn hóa toàn bộ dữ liệu video
+        # Parse chuẩn hóa toàn bộ dữ liệu video & trích xuất Avatar kênh từ item
         parsed_list = []
+        author_avatar = ""
+
         for it in raw_items:
+            # Tìm avatar kênh từ thông tin author nếu có
+            if not author_avatar:
+                auth = it.get("author") if isinstance(it.get("author"), dict) else {}
+                av = auth.get("avatarLarger") or auth.get("avatarMedium") or auth.get("avatarThumb") or auth.get("avatar_url") or ""
+                if isinstance(av, dict):
+                    ul = av.get("url_list") or []
+                    if ul:
+                        av = ul[0]
+                if isinstance(av, str) and av.startswith("http"):
+                    author_avatar = av
+
             aid = str(it.get("item_id") or it.get("id") or it.get("aweme_id") or "")
             if not aid:
                 continue
@@ -424,6 +463,7 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
             digg_cnt = int(it.get("like_count") or it.get("digg_count") or stats.get("digg_count") or stats.get("diggCount") or 0)
             cmt_cnt = int(it.get("comment_count") or stats.get("comment_count") or stats.get("commentCount") or 0)
             share_cnt = int(it.get("share_count") or stats.get("share_count") or stats.get("shareCount") or 0)
+            collect_cnt = int(it.get("collect_count") or stats.get("collect_count") or stats.get("collectCount") or 0)
 
             # Thumbnail an toàn hỗ trợ list/dict/string
             cover_url = ""
@@ -498,6 +538,7 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 "digg_count": digg_cnt,
                 "comment_count": cmt_cnt,
                 "share_count": share_cnt,
+                "collect_count": collect_cnt,
                 "visibility_code": visibility_code,
                 "visibility_label": visibility_label,
                 "visibility_badge": visibility_badge,
@@ -511,6 +552,7 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
         return {
             "success": True,
             "items": parsed_list,
+            "author_avatar": author_avatar,
             "has_more": has_more,
             "cursor": next_cursor,
             "total_count": len(parsed_list)
@@ -661,6 +703,26 @@ def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
                 if sid:
                     cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies if c.get('name') and c.get('value'))
                     acc_info = get_account_info(cookie_str)
+                    # Trích xuất trực tiếp Avatar của kênh từ trình duyệt đang mở
+                    try:
+                        page.wait_for_timeout(1000)
+                        av_found = page.evaluate("""() => {
+                            const img = document.querySelector('[data-e2e="profile-icon"] img, img[class*="avatar"], img[alt*="avatar"], header img[src*="tiktok"]');
+                            if (img && (img.currentSrc || img.src)) return img.currentSrc || img.src;
+                            try {
+                                const u = window.__UNIVERSAL_DATA_FOR_REHYDRATION__;
+                                if (u && u.__DEFAULT_SCOPE__) {
+                                    const ud = u.__DEFAULT_SCOPE__["webapp.app-context"] || u.__DEFAULT_SCOPE__["webapp.user-detail"] || {};
+                                    const user = ud.user || (ud.userInfo && ud.userInfo.user);
+                                    if (user) return user.avatarLarger || user.avatarMedium || user.avatarThumb || "";
+                                }
+                            } catch(e) {}
+                            return "";
+                        }""")
+                        if av_found and not acc_info.get("avatar"):
+                            acc_info["avatar"] = av_found
+                    except Exception:
+                        pass
                     browser.close()
                     return {
                         "success": True,
