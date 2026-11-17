@@ -546,9 +546,15 @@ async def api_studio_item_delete(req: Request):
     return JSONResponse(content=res)
 
 @app.post("/api/studio/browser/login/start")
-def api_studio_browser_login_start():
-    """Khởi chạy trình duyệt đăng nhập chạy ngầm và phản hồi ngay lập tức để không bao giờ bị timeout Cloudflare."""
-    res = studio_engine.start_interactive_browser_login()
+async def api_studio_browser_login_start(req: Request):
+    """Khởi chạy trình duyệt đăng nhập chạy ngầm (hỗ trợ HTTP & SOCKS5) và phản hồi ngay lập tức."""
+    proxy = ""
+    try:
+        body = await req.json()
+        proxy = str(body.get("proxy") or "").strip()
+    except Exception:
+        pass
+    res = studio_engine.start_interactive_browser_login(proxy=proxy)
     return JSONResponse(content=res)
 
 @app.get("/api/studio/browser/login/status")

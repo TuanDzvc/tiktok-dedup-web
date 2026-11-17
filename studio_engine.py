@@ -69,6 +69,50 @@ def cookie_to_header_str(cookie_val: Any) -> str:
     return "; ".join(f"{k}={v}" for k, v in cdict.items() if k and v)
 
 
+def normalize_proxy_for_requests(p_str: str) -> Dict[str, str]:
+    """Chuẩn hóa proxy cho thư viện requests (hỗ trợ HTTP, HTTPS, SOCKS5, SOCKS5H)."""
+    if not p_str or not str(p_str).strip():
+        return {}
+    p = str(p_str).strip()
+    is_socks = p.startswith(("socks5://", "socks5h://")) or "socks" in p.lower()
+    clean = p.replace("socks5h://", "").replace("socks5://", "").replace("http://", "").replace("https://", "").strip()
+
+    if clean.count(":") == 3:
+        ip, port, user, pwd = clean.split(":")
+        scheme = "socks5h" if is_socks else "http"
+        px = f"{scheme}://{user}:{pwd}@{ip}:{port}"
+    elif is_socks:
+        px = "socks5h://" + clean
+    elif p.startswith(("http://", "https://")):
+        px = p
+    else:
+        px = f"http://{clean}"
+
+    return {"http": px, "https": px}
+
+
+def normalize_proxy_for_playwright(p_str: str) -> Optional[Dict[str, str]]:
+    """Chuẩn hóa proxy cho Playwright Chromium (hỗ trợ HTTP, HTTPS, SOCKS5)."""
+    if not p_str or not str(p_str).strip():
+        return None
+    p = str(p_str).strip()
+    is_socks = p.startswith(("socks5://", "socks5h://")) or "socks" in p.lower()
+    clean = p.replace("socks5h://", "").replace("socks5://", "").replace("http://", "").replace("https://", "").strip()
+    scheme = "socks5" if is_socks else "http"
+
+    if clean.count(":") == 3:
+        ip, port, user, pwd = clean.split(":")
+        return {"server": f"{scheme}://{ip}:{port}", "username": user, "password": pwd}
+
+    if "@" in clean:
+        auth, host = clean.split("@", 1)
+        if ":" in auth:
+            u, pwd = auth.split(":", 1)
+            return {"server": f"{scheme}://{host}", "username": u, "password": pwd}
+
+    return {"server": f"{scheme}://{clean}"}
+
+
 def _pw_qr_worker(session_id: str):
     sess = QR_SESSIONS.get(session_id)
     if not sess:
@@ -272,12 +316,7 @@ def fetch_user_avatar(username: str, cookie_str: str = "", proxy: str = None) ->
         except Exception:
             pass
 
-    proxies = {}
-    if proxy:
-        px = proxy.strip()
-        if not px.startswith(("http://", "https://", "socks5://")):
-            px = f"http://{px}"
-        proxies = {"http": px, "https": px}
+    proxies = normalize_proxy_for_requests(proxy)
 
     try:
         r = requests.get(
@@ -321,12 +360,7 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
         "Accept": "application/json, text/plain, */*",
         "Referer": "https://www.tiktok.com/",
     }
-    proxies = {}
-    if proxy:
-        px = proxy.strip()
-        if not px.startswith(("http://", "https://", "socks5://")):
-            px = f"http://{px}"
-        proxies = {"http": px, "https": px}
+    proxies = normalize_proxy_for_requests(proxy)
 
     try:
         r = requests.get(
@@ -442,12 +476,7 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
             "is_recent_posts": False
         }
     }
-    proxies = {}
-    if proxy:
-        px = proxy.strip()
-        if not px.startswith(("http://", "https://", "socks5://")):
-            px = f"http://{px}"
-        proxies = {"http": px, "https": px}
+    proxies = normalize_proxy_for_requests(proxy)
 
     raw_items = []
     has_more = False
@@ -668,12 +697,7 @@ def set_post_visibility(cookie_str: str, item_id: str, visibility_type: int, pro
         "itemId": str(item_id).strip(),
         "visibilityType": int(visibility_type)
     }
-    proxies = {}
-    if proxy:
-        px = proxy.strip()
-        if not px.startswith(("http://", "https://", "socks5://")):
-            px = f"http://{px}"
-        proxies = {"http": px, "https": px}
+    proxies = normalize_proxy_for_requests(proxy)
 
     try:
         url = "https://www.tiktok.com/tiktokstudio/api/web/item/visibility"
@@ -720,12 +744,7 @@ def delete_studio_post(cookie_str: str, item_id: str, proxy: str = "") -> Dict[s
         "itemId": str(item_id).strip(),
         "item_id": str(item_id).strip()
     }
-    proxies = {}
-    if proxy:
-        px = proxy.strip()
-        if not px.startswith(("http://", "https://", "socks5://")):
-            px = f"http://{px}"
-        proxies = {"http": px, "https": px}
+    proxies = normalize_proxy_for_requests(proxy)
 
     try:
         url = "https://www.tiktok.com/tiktokstudio/api/web/item/delete"
@@ -749,6 +768,7 @@ _BROWSER_LOGIN_STATE: Dict[str, Any] = {
     "status": "idle",
     "account": None,
     "cookie": "",
+    "proxy": "",
     "error": "",
     "updated_at": 0
 }
@@ -756,8 +776,8 @@ _BROWSER_LOGIN_LOCK = threading.Lock()
 _BROWSER_STOP_EVENT = threading.Event()
 
 
-def start_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
-    """Khởi động luồng chạy trình duyệt đăng nhập nền và phản hồi ngay lập tức để không bao giờ bị timeout."""
+def start_interactive_browser_login(timeout_sec: int = 300, proxy: str = "") -> Dict[str, Any]:
+    """Khởi động luồng chạy trình duyệt đăng nhập nền (hỗ trợ HTTP & SOCKS5) và phản hồi ngay lập tức để không bao giờ bị timeout."""
     global _BROWSER_LOGIN_STATE, _BROWSER_STOP_EVENT
     with _BROWSER_LOGIN_LOCK:
         current_status = _BROWSER_LOGIN_STATE.get("status", "idle")
@@ -778,13 +798,14 @@ def start_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
             "status": "starting",
             "account": None,
             "cookie": "",
+            "proxy": proxy,
             "error": "",
             "updated_at": time.time()
         }
 
         t = threading.Thread(
             target=_worker_browser_login,
-            args=(timeout_sec, _BROWSER_STOP_EVENT),
+            args=(timeout_sec, _BROWSER_STOP_EVENT, proxy),
             daemon=True
         )
         t.start()
@@ -814,8 +835,8 @@ def cancel_interactive_browser_login() -> Dict[str, Any]:
     return {"success": True, "status": "cancelled"}
 
 
-def _worker_browser_login(timeout_sec: int, stop_event: threading.Event):
-    """Luồng worker chạy Playwright Chromium/Chrome mở cửa sổ thực tế trên desktop."""
+def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: str = ""):
+    """Luồng worker chạy Playwright Chromium/Chrome mở cửa sổ thực tế trên desktop (hỗ trợ HTTP & SOCKS5)."""
     global _BROWSER_LOGIN_STATE
     browser = None
     try:
@@ -830,6 +851,11 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event):
                     "--disable-infobars"
                 ]
             }
+            if proxy:
+                pw_proxy = normalize_proxy_for_playwright(proxy)
+                if pw_proxy:
+                    launch_kwargs["proxy"] = pw_proxy
+
             # Ưu tiên mở bằng Google Chrome thật nếu có sẵn trên máy để mở siêu nhanh
             try:
                 browser = p.chromium.launch(channel="chrome", **launch_kwargs)
@@ -884,7 +910,7 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event):
                 sid = next((c['value'] for c in cookies if c.get('name') == 'sessionid'), None)
                 if sid:
                     cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies if c.get('name') and c.get('value'))
-                    acc_info = get_account_info(cookie_str)
+                    acc_info = get_account_info(cookie_str, proxy=proxy)
                     # Trích xuất trực tiếp Avatar của kênh từ trình duyệt đang mở
                     try:
                         page.wait_for_timeout(1000)
@@ -915,6 +941,7 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event):
                         _BROWSER_LOGIN_STATE["status"] = "success"
                         _BROWSER_LOGIN_STATE["account"] = acc_info
                         _BROWSER_LOGIN_STATE["cookie"] = cookie_str
+                        _BROWSER_LOGIN_STATE["proxy"] = proxy
                         _BROWSER_LOGIN_STATE["updated_at"] = time.time()
                     return
 
