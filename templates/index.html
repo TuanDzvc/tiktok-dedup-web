@@ -1921,8 +1921,8 @@
             const btn = document.getElementById('btnBrowserLogin');
             const origHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-amber-300"></i> <span>Đang mở Chrome... Hãy đăng nhập trên cửa sổ Chrome vừa hiện lên!</span>`;
-            showToast("Đang mở trình duyệt Chrome trên màn hình... Hãy đăng nhập!");
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-amber-300"></i> <span>Đang mở cửa sổ trình duyệt đăng nhập...</span>`;
+            showToast("Đang mở cửa sổ trình duyệt TikTok... Hãy đăng nhập!");
 
             try {
                 const res = await fetch('/api/studio/browser/login', { method: 'POST' });
