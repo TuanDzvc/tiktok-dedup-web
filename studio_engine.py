@@ -1062,9 +1062,45 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
             except Exception:
                 browser = p.chromium.launch(**launch_kwargs)
 
+            # Tự động đồng bộ Múi giờ (Timezone) và Ngôn ngữ (Locale) theo quốc gia Proxy
+            # để TikTok nhận diện 100% chuẩn thiết bị bản địa, không bị leak múi giờ Việt Nam (GMT+7)
+            tz = "America/Los_Angeles"
+            loc = "en-US"
+            if proxy:
+                p_lower = proxy.lower()
+                if "11104" in proxy or "11105" in proxy or "nyc" in p_lower or "new_york" in p_lower:
+                    tz = "America/New_York"
+                elif "11103" in proxy or "las_vegas" in p_lower:
+                    tz = "America/Los_Angeles"
+                elif "11102" in proxy or "silicon" in p_lower:
+                    tz = "America/Los_Angeles"
+                elif "11108" in proxy or "11109" in proxy or ":de" in p_lower or "germany" in p_lower:
+                    tz = "Europe/Berlin"
+                    loc = "de-DE"
+                elif "11106" in proxy or ":id" in p_lower or "jakarta" in p_lower or "indonesia" in p_lower:
+                    tz = "Asia/Jakarta"
+                    loc = "id-ID"
+                elif "11107" in proxy or ":mx" in p_lower or "mexico" in p_lower:
+                    tz = "America/Mexico_City"
+                    loc = "es-MX"
+                elif "1080" in proxy or "singapore" in p_lower:
+                    tz = "Asia/Singapore"
+                    loc = "en-SG"
+                elif "1081" in proxy or "tokyo" in p_lower or "japan" in p_lower:
+                    tz = "Asia/Tokyo"
+                    loc = "ja-JP"
+                elif "1082" in proxy or "taiwan" in p_lower:
+                    tz = "Asia/Taipei"
+                    loc = "zh-TW"
+                elif "1083" in proxy or "hong_kong" in p_lower or "hk" in p_lower:
+                    tz = "Asia/Hong_Kong"
+                    loc = "zh-HK"
+
             context = browser.new_context(
                 user_agent=DEFAULT_UA,
-                viewport={"width": 1050, "height": 750}
+                viewport={"width": 1050, "height": 750},
+                locale=loc,
+                timezone_id=tz
             )
             context.add_init_script("delete Object.getPrototypeOf(navigator).webdriver")
             page = context.new_page()

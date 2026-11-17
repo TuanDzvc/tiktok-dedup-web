@@ -179,9 +179,12 @@
     <main class="flex-grow max-w-7xl 2xl:max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
         <!-- Hero Section: Input Box -->
-        <section class="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden border border-slate-700/60">
-            <div class="absolute -top-24 -left-24 w-72 h-72 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none animate-pulse-slow"></div>
-            <div class="absolute -bottom-24 -right-24 w-72 h-72 bg-purple-500/15 rounded-full blur-3xl pointer-events-none animate-pulse-slow"></div>
+        <section class="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl relative border border-slate-700/60">
+            <!-- Glow background decor (được bọc overflow-hidden riêng để không bao giờ cắt xén menu dropdown con) -->
+            <div class="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+                <div class="absolute -top-24 -left-24 w-72 h-72 bg-cyan-500/15 rounded-full blur-3xl animate-pulse-slow"></div>
+                <div class="absolute -bottom-24 -right-24 w-72 h-72 bg-purple-500/15 rounded-full blur-3xl animate-pulse-slow"></div>
+            </div>
 
             <div class="relative z-10 max-w-3xl mx-auto text-center space-y-4">
                 <h1 class="text-2xl sm:text-4xl font-extrabold tracking-tight">
@@ -203,20 +206,20 @@
                             placeholder="Nhập @username (VD: @nathan.lynn.walker) hoặc dán link TikTok..."
                             value=""
                             autocomplete="off"
-                            class="w-full bg-transparent border-none text-white text-base sm:text-lg focus:outline-none placeholder-slate-400 font-medium cursor-text"
+                            class="w-full bg-transparent border-none text-white text-base sm:text-lg focus:outline-none placeholder-slate-400 font-medium cursor-text min-w-0"
                             onkeydown="if(event.key === 'Enter'){ event.preventDefault(); handleCheck(); }"
                             onclick="this.select()"
                             onfocus="this.select()"
                             required
                         />
 
-                        <!-- Nút Chọn Nick đã thêm vào tool -->
+                        <!-- Nút Chọn Nick đã thêm vào tool (Gọn gàng, không đè lẹm placeholder) -->
                         <div class="relative flex-shrink-0" id="channelAccountPickerContainer">
                             <button 
                                 type="button" 
                                 id="btnChannelAccountPicker" 
                                 onclick="toggleChannelAccountPicker(event)" 
-                                class="hidden px-2.5 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-xs font-bold items-center gap-1.5 transition active:scale-95 shadow-sm"
+                                class="hidden px-2.5 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-xs font-bold items-center gap-1.5 transition active:scale-95 shadow-sm whitespace-nowrap"
                                 title="Bấm để chọn nhanh nick TikTok đã thêm vào tool"
                             >
                                 <i class="fa-solid fa-users text-cyan-400"></i>
@@ -224,17 +227,17 @@
                                 <i class="fa-solid fa-chevron-down text-[9px] text-slate-400"></i>
                             </button>
 
-                            <!-- Dropdown chọn nick -->
+                            <!-- Dropdown chọn nick (z-[999999] nổi lên trên mọi thành phần, không bị che khuất) -->
                             <div 
                                 id="channelAccountPickerMenu" 
-                                class="hidden absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl p-2.5 z-50 divide-y divide-slate-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.95)] border border-cyan-500/40" 
+                                class="hidden absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl p-2.5 z-[999999] divide-y divide-slate-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.95)] border border-cyan-500/40 text-left" 
                                 style="background-color: #0b1329 !important;"
                             >
                                 <div class="text-[11px] font-bold text-slate-400 px-2 pb-2 flex items-center justify-between">
                                     <span>CHỌN NICK ĐÃ THÊM</span>
                                     <span class="text-cyan-400 text-[10px]">Click để quét ngay</span>
                                 </div>
-                                <div id="channelAccountPickerList" class="py-1.5 max-h-[300px] overflow-y-auto space-y-1">
+                                <div id="channelAccountPickerList" class="py-1.5 max-h-[350px] overflow-y-auto space-y-1">
                                     <!-- Populated by JS -->
                                 </div>
                             </div>
