@@ -725,19 +725,37 @@
                             onchange="handlePiaProxySelectChange(this.value)"
                             class="w-full bg-dark-900 border border-cyan-500/50 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-cyan-400 cursor-pointer shadow-sm"
                         >
-                            <option value="socks5://127.0.0.1:1080" selected>⚡ [Mặc định PIA] 🇸🇬 Singapore (SOCKS5: 1080)</option>
-                            <option value="socks5://127.0.0.1:1081">⚡ 🇯🇵 JP Tokyo (SOCKS5: 1081)</option>
-                            <option value="socks5://127.0.0.1:1082">⚡ 🇹🇼 Taiwan (SOCKS5: 1082)</option>
-                            <option value="socks5://127.0.0.1:1083">⚡ 🇭🇰 Hong Kong (SOCKS5: 1083)</option>
-                            <option value="direct">🚫 Không dùng Proxy (Mạng thường)</option>
-                            <option value="custom">✏️ Nhập Proxy riêng khác...</option>
+                            <optgroup label="🇺🇸 PIA US (Chuyên Quản Lý Kênh TikTok US)">
+                                <option value="socks5://192.168.2.101:11101" selected>⚡ [Mặc định] 🇺🇸 US • California (Los Angeles - 11101)</option>
+                                <option value="socks5://192.168.2.101:11104">⚡ 🇺🇸 US • New York (NYC - 11104)</option>
+                                <option value="socks5://192.168.2.101:11102">⚡ 🇺🇸 US • Silicon Valley (11102)</option>
+                                <option value="socks5://192.168.2.101:11103">⚡ 🇺🇸 US • Las Vegas (11103)</option>
+                                <option value="socks5://192.168.2.101:11105">⚡ 🇺🇸 US • Washington DC (11105)</option>
+                                <option value="socks5://192.168.2.101:11110">⚡ 🇺🇸 US • Los Angeles (#2 - 11110)</option>
+                            </optgroup>
+                            <optgroup label="🌍 PIA Quốc Tế (Châu Âu / Mỹ Latin / ĐNÁ)">
+                                <option value="socks5://192.168.2.101:11108">⚡ 🇩🇪 DE • Frankfurt (Đức - 11108)</option>
+                                <option value="socks5://192.168.2.101:11109">⚡ 🇩🇪 DE • Berlin (Đức - 11109)</option>
+                                <option value="socks5://192.168.2.101:11107">⚡ 🇲🇽 MX • Mexico City (11107)</option>
+                                <option value="socks5://192.168.2.101:11106">⚡ 🇮🇩 ID • Jakarta (Indonesia - 11106)</option>
+                            </optgroup>
+                            <optgroup label="🌏 PIA Local PC (Châu Á)">
+                                <option value="socks5://127.0.0.1:1080">⚡ 🇸🇬 Singapore (1080)</option>
+                                <option value="socks5://127.0.0.1:1081">⚡ 🇯🇵 JP Tokyo (1081)</option>
+                                <option value="socks5://127.0.0.1:1082">⚡ 🇹🇼 Taiwan (1082)</option>
+                                <option value="socks5://127.0.0.1:1083">⚡ 🇭🇰 Hong Kong (1083)</option>
+                            </optgroup>
+                            <optgroup label="⚙️ Tùy Chọn Khác">
+                                <option value="direct">🚫 Không dùng Proxy (Mạng thường)</option>
+                                <option value="custom">✏️ Nhập Proxy riêng khác...</option>
+                            </optgroup>
                         </select>
                     </div>
 
                     <input 
                         type="text" 
                         id="loginProxyInput" 
-                        value="socks5://127.0.0.1:1080"
+                        value="socks5://192.168.2.101:11101"
                         placeholder="socks5://user:pass@ip:port hoặc ip:port:user:pass" 
                         class="w-full bg-dark-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-500"
                         oninput="handleCustomProxyInput(this.value)"
@@ -2558,15 +2576,30 @@
                     if (!sel) return;
                     const currentVal = document.getElementById('loginProxyInput')?.value?.trim() || '';
 
-                    const flags = { 'SG': '🇸🇬', 'JP': '🇯🇵', 'TW': '🇹🇼', 'HK': '🇭🇰', 'US': '🇺🇸', 'DE': '🇩🇪', 'ID': '🇮🇩', 'VN': '🇻🇳' };
-                    let html = '';
-                    data.proxies.forEach((p, idx) => {
-                        const fl = flags[p.country] || '🌐';
-                        const isDefault = idx === 0 ? ' [Mặc định PIA]' : '';
-                        html += `<option value="${p.socks5_url}">⚡${isDefault} ${fl} ${p.region_name} (SOCKS5: ${p.socks_port})</option>`;
+                    const flags = { 'US': '🇺🇸', 'DE': '🇩🇪', 'MX': '🇲🇽', 'ID': '🇮🇩', 'SG': '🇸🇬', 'JP': '🇯🇵', 'TW': '🇹🇼', 'HK': '🇭🇰', 'VN': '🇻🇳' };
+                    
+                    // Nhóm danh sách proxy theo cụm
+                    const groups = {};
+                    data.proxies.forEach(p => {
+                        const g = p.group || 'Khác';
+                        if (!groups[g]) groups[g] = [];
+                        groups[g].push(p);
                     });
+
+                    let html = '';
+                    for (const [gName, items] of Object.entries(groups)) {
+                        html += `<optgroup label="${gName}">`;
+                        items.forEach(p => {
+                            const fl = flags[p.country] || '🌐';
+                            const isDef = p.is_default ? ' [Mặc định]' : '';
+                            html += `<option value="${p.socks5_url}">⚡${isDef} ${fl} ${p.region_name} (${p.socks_port})</option>`;
+                        });
+                        html += `</optgroup>`;
+                    }
+                    html += `<optgroup label="⚙️ Tùy Chọn Khác">`;
                     html += `<option value="direct">🚫 Không dùng Proxy (Mạng thường)</option>`;
                     html += `<option value="custom">✏️ Nhập Proxy riêng khác...</option>`;
+                    html += `</optgroup>`;
                     sel.innerHTML = html;
 
                     if (currentVal) {
@@ -2584,10 +2617,10 @@
             } else {
                 wasCheckPostOpenBeforeAuth = false;
             }
-            // Tự động khôi phục proxy đã dùng trước đó hoặc lấy mặc định PIA Singapore
+            // Tự động khôi phục proxy đã dùng trước đó hoặc lấy mặc định US California
             const proxyInput = document.getElementById('loginProxyInput');
             if (proxyInput) {
-                const savedProxy = localStorage.getItem('tikflow_last_proxy') || (activeStudioSession ? activeStudioSession.proxy : '') || 'socks5://127.0.0.1:1080';
+                const savedProxy = localStorage.getItem('tikflow_last_proxy') || (activeStudioSession ? activeStudioSession.proxy : '') || 'socks5://192.168.2.101:11101';
                 proxyInput.value = savedProxy;
                 handleCustomProxyInput(savedProxy);
             }

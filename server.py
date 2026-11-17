@@ -571,24 +571,54 @@ def api_studio_browser_login_cancel():
 
 @app.get("/api/studio/pia/proxies")
 def api_studio_pia_proxies():
-    """Lấy danh sách các cổng SOCKS5 PIA đang chạy trên máy từ pia_socks5."""
+    """Lấy FULL toàn bộ các cổng SOCKS5 PIA trong tool (Bao gồm cụm US & Quốc tế của tool và cụm Local)."""
     proxies = []
+
+    # 1. Cụm Router VPN chuyên dụng của Tool (Dành cho kênh US & Quốc tế)
+    router_targets = [
+        {"port": 11101, "name": "US • California (Los Angeles)", "country": "US", "host": "192.168.2.101", "default": True},
+        {"port": 11104, "name": "US • New York (NYC)", "country": "US", "host": "192.168.2.101"},
+        {"port": 11102, "name": "US • Silicon Valley", "country": "US", "host": "192.168.2.101"},
+        {"port": 11103, "name": "US • Las Vegas", "country": "US", "host": "192.168.2.101"},
+        {"port": 11105, "name": "US • Washington DC", "country": "US", "host": "192.168.2.101"},
+        {"port": 11110, "name": "US • Los Angeles (#2)", "country": "US", "host": "192.168.2.101"},
+        {"port": 11108, "name": "DE • Frankfurt (Đức)", "country": "DE", "host": "192.168.2.101"},
+        {"port": 11109, "name": "DE • Berlin (Đức)", "country": "DE", "host": "192.168.2.101"},
+        {"port": 11107, "name": "MX • Mexico City", "country": "MX", "host": "192.168.2.101"},
+        {"port": 11106, "name": "ID • Jakarta (Indonesia)", "country": "ID", "host": "192.168.2.101"},
+    ]
+
+    for item in router_targets:
+        proxies.append({
+            "port": item["port"],
+            "region_id": item["name"],
+            "region_name": item["name"],
+            "country": item["country"],
+            "socks_port": item["port"],
+            "socks5_url": f"socks5://{item['host']}:{item['port']}",
+            "group": "US & Quốc Tế (Chuyên Kênh)",
+            "is_default": item.get("default", False)
+        })
+
+    # 2. Cụm Local PC (Châu Á & Download)
     try:
         sys.path.insert(0, "E:/Tool/pia_socks5")
         import pia_proxy
         active = pia_proxy.load_active_proxies()
         for port, info in active.items():
+            p_int = int(port)
             proxies.append({
-                "port": int(port),
+                "port": p_int,
                 "region_id": info.get("region_id", ""),
                 "region_name": info.get("region_name", f"Port {port}"),
                 "country": info.get("country", ""),
-                "socks_port": int(info.get("socks_port", port)),
-                "http_port": int(info.get("http_port", int(port) + 1000)),
-                "socks5_url": f"socks5://127.0.0.1:{port}"
+                "socks_port": p_int,
+                "socks5_url": f"socks5://127.0.0.1:{p_int}",
+                "group": "Châu Á & Khác"
             })
     except Exception:
         pass
+
     return JSONResponse(content={"success": True, "proxies": proxies})
 
 @app.post("/api/studio/browser/login")
