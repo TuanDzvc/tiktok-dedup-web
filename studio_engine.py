@@ -745,28 +745,35 @@ def delete_studio_post(cookie_str: str, item_id: str, proxy: str = "") -> Dict[s
 
 
 def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
-    """Mở cửa sổ trình duyệt Chromium trực tiếp trên màn hình máy tính để đăng nhập 100% thành công."""
+    """Mở cửa sổ trình duyệt Chromium trực tiếp trên màn hình máy tính để đăng nhập siêu tốc."""
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=False,
-                args=[
+            launch_kwargs = {
+                "headless": False,
+                "args": [
                     "--disable-blink-features=AutomationControlled",
                     "--no-sandbox",
-                    "--disable-setuid-sandbox"
+                    "--disable-setuid-sandbox",
+                    "--disable-infobars"
                 ]
-            )
+            }
+            # Ưu tiên mở bằng Google Chrome thật nếu có sẵn trên máy để mở siêu nhanh
+            try:
+                browser = p.chromium.launch(channel="chrome", **launch_kwargs)
+            except Exception:
+                browser = p.chromium.launch(**launch_kwargs)
+
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-                viewport={"width": 1000, "height": 720}
+                viewport={"width": 1050, "height": 750}
             )
             context.add_init_script("delete Object.getPrototypeOf(navigator).webdriver")
             page = context.new_page()
-            page.goto("https://www.tiktok.com/login", timeout=30000)
-            page.wait_for_timeout(1500)
+            # Dùng wait_until="domcontentloaded" để cửa sổ bật lên ngay tức thì trong 1-2s
+            page.goto("https://www.tiktok.com/login", wait_until="domcontentloaded", timeout=25000)
             try:
-                page.locator("text=/Use QR|Dùng mã QR|Quét mã QR|QR/i").first.click(timeout=3000)
+                page.locator("text=/Use QR|Dùng mã QR|Quét mã QR/i").first.click(timeout=1200)
             except Exception:
                 pass
 

@@ -374,9 +374,13 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     return JSONResponse(content=res)
 
 @app.get("/api/proxy/image")
-def proxy_image(url: str = Query(..., description="TikTok CDN image URL")):
+def proxy_image(
+    url: str = Query(..., description="TikTok CDN image URL"),
+    cookie: str = Query("", description="Chuỗi Cookie tài khoản (cần thiết cho video riêng tư / private CDN)")
+):
     """
     Proxy tải ảnh đại diện và ảnh bìa từ TikTok CDN tránh lỗi CORS / 403 Forbidden của TikTok.
+    Hỗ trợ Cookie của tài khoản để tải ảnh bìa video riêng tư (Private CDN).
     Sử dụng bộ nhớ đệm RAM (RAM Cache) + Connection Pool siêu tốc (0.001s).
     """
     if not url or not url.startswith("http"):
@@ -390,14 +394,15 @@ def proxy_image(url: str = Query(..., description="TikTok CDN image URL")):
 
     # 2. Tải qua Connection Pool dùng chung
     b_cookie, b_ua, _ = get_borrowed_cookie()
+    target_cookie = cookie.strip() if cookie else b_cookie
     headers = {
         "User-Agent": b_ua or DEFAULT_UA,
         "Referer": "https://www.tiktok.com/",
         "Origin": "https://www.tiktok.com",
         "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
     }
-    if b_cookie:
-        headers["Cookie"] = b_cookie
+    if target_cookie:
+        headers["Cookie"] = target_cookie
 
     try:
         r = PROXY_SESSION.get(url, headers=headers, timeout=8)
@@ -406,16 +411,21 @@ def proxy_image(url: str = Query(..., description="TikTok CDN image URL")):
             _put_image_cache(url, r.content, content_type)
             return Response(content=r.content, media_type=content_type, headers={"Cache-Control": "public, max-age=604800, immutable"})
         else:
-            if b_cookie:
+            # Thử lại không dùng Cookie (nếu CDN public) hoặc dùng Cookie thay thế
+            if target_cookie:
                 headers.pop("Cookie", None)
                 r2 = PROXY_SESSION.get(url, headers=headers, timeout=6)
                 if r2.status_code == 200 and r2.content:
                     content_type = r2.headers.get("Content-Type", "image/jpeg")
                     _put_image_cache(url, r2.content, content_type)
                     return Response(content=r2.content, media_type=content_type, headers={"Cache-Control": "public, max-age=604800, immutable"})
-            raise HTTPException(status_code=r.status_code, detail="Không thể tải ảnh từ máy chủ TikTok")
+            
+            # Trả về ảnh placeholder SVG màu tối nếu TikTok CDN từ chối
+            fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#38bdf8">🎬</text></svg>'
+            return Response(content=fallback_svg.encode("utf-8"), media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi kết nối ảnh: {e}")
+        fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#38bdf8">🎬</text></svg>'
+        return Response(content=fallback_svg.encode("utf-8"), media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"})
 
 @app.get("/api/debug_worker")
 def debug_worker():

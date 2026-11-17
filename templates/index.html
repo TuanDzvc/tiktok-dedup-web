@@ -1065,23 +1065,24 @@
                         <i class="fa-solid fa-check-double text-cyan-400"></i>
                         <span>Chọn tất cả (<span id="bottomSelectedCount">0</span>)</span>
                     </button>
-                    <!-- Nút nhập số lượng video cần chọn nhanh (thay vì chọn hết cả 50 video) -->
+                    <!-- Nút nhập số lượng video cần chọn nhanh (click vào tự xóa để nhập, blur ra nếu trống thì khôi phục) -->
                     <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1">
-                        <span class="text-xs text-slate-400 font-medium">Chọn:</span>
+                        <span class="text-xs text-slate-400 font-medium select-none">Chọn:</span>
                         <input 
-                            type="number" 
+                            type="text" 
+                            inputmode="numeric"
                             id="inputCustomSelectCount" 
-                            min="1" 
-                            max="500" 
                             placeholder="Số lượng" 
-                            class="w-14 bg-slate-950 border border-slate-700 rounded-lg px-1.5 py-0.5 text-xs text-center text-cyan-400 font-bold focus:outline-none focus:border-cyan-400 font-mono"
+                            class="w-16 bg-slate-950 border border-slate-700 rounded-lg px-2 py-0.5 text-xs text-center text-cyan-400 font-bold focus:outline-none focus:border-cyan-400 font-mono"
+                            onfocus="this.dataset.prev = this.value; this.value = '';"
+                            onblur="if (!this.value.trim()) this.value = this.dataset.prev || '';"
                             onkeydown="if(event.key === 'Enter') selectFirstNVideos(this.value)"
                         />
-                        <span class="text-xs text-slate-400 font-medium">video</span>
+                        <span class="text-xs text-slate-400 font-medium select-none">video</span>
                         <button 
                             type="button" 
                             onclick="selectFirstNVideos(document.getElementById('inputCustomSelectCount').value)"
-                            class="px-2.5 py-0.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-bold text-xs transition active:scale-95 cursor-pointer shadow-sm"
+                            class="px-2.5 py-0.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-bold text-xs transition active:scale-95 cursor-pointer shadow-sm select-none"
                             title="Chọn đúng số lượng video này để thao tác (ví dụ xóa 10, 20 video)"
                         >
                             Chọn
@@ -1244,14 +1245,14 @@
 
         function showToast(msg) {
             const toast = document.createElement('div');
-            toast.className = "fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-xl bg-cyan-600 text-white text-xs font-bold shadow-2xl flex items-center gap-2 transition-all transform duration-300";
-            toast.innerHTML = `<i class="fa-solid fa-check"></i> <span>${msg}</span>`;
+            toast.className = "fixed top-6 right-6 z-[99999] px-4 py-2.5 rounded-2xl bg-dark-950/95 border border-cyan-500/70 text-cyan-100 text-xs font-bold shadow-2xl backdrop-blur-md flex items-center gap-2.5 transition-all transform duration-300 max-w-sm pointer-events-auto";
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-cyan-400 text-sm"></i> <span class="leading-snug">${msg}</span>`;
             document.body.appendChild(toast);
             setTimeout(() => {
                 toast.style.opacity = '0';
-                toast.style.transform = 'translateY(10px)';
+                toast.style.transform = 'translateY(-10px)';
                 setTimeout(() => toast.remove(), 300);
-            }, 2500);
+            }, 2600);
         }
 
         function clearInput() {
@@ -1259,13 +1260,17 @@
             document.getElementById('channelInput').focus();
         }
 
-        function getProxiedImage(url, fallbackName = 'TikTok') {
+        function getProxiedImage(url, fallbackName = 'Video', cookieStr = '') {
             if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-                return `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=0284c7&color=ffffff&bold=true`;
+                return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128"><rect width="100%" height="100%" fill="%230f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="%2338bdf8">🎬</text></svg>`;
             }
             if (url.includes('ui-avatars.com')) return url;
-            // Dùng backend proxy với RAM cache để vượt mọi chặn referer / CORS của TikTok CDN
-            return `/api/proxy/image?url=${encodeURIComponent(url)}`;
+            const ck = cookieStr || (activeStudioSession ? activeStudioSession.cookie : '') || '';
+            let apiUrl = `/api/proxy/image?url=${encodeURIComponent(url)}`;
+            if (ck) {
+                apiUrl += `&cookie=${encodeURIComponent(ck)}`;
+            }
+            return apiUrl;
         }
 
         function handleStudioAvatarError(img) {
@@ -2308,16 +2313,30 @@
             renderAccountDropdown();
         }
 
+        function toggleNavAccountDropdown(event) {
+            if (event) event.stopPropagation();
+            const menu = document.getElementById('navAccountDropdownMenu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        function closeNavAccountDropdown() {
+            const menu = document.getElementById('navAccountDropdownMenu');
+            if (menu) menu.classList.add('hidden');
+        }
+
         function renderAuthNav() {
             const container = document.getElementById('authNavContainer');
             if (!container) return;
 
+            const accounts = getSavedStudioAccounts();
             if (activeStudioSession && activeStudioSession.account) {
                 const acc = activeStudioSession.account;
-                const avatar = getProxiedImage(acc.avatar, acc.nickname || acc.username);
+                const avatar = getProxiedImage(acc.avatar, acc.nickname || acc.username, activeStudioSession.cookie || '');
                 const flag = getCountryFlag(acc.country);
+                const count = accounts.length || 1;
+
                 container.innerHTML = `
-                    <div class="flex items-center gap-2 bg-dark-900/95 border border-cyan-500/40 rounded-2xl p-1.5 pl-2.5 pr-2 shadow-lg shadow-cyan-950/40">
+                    <div class="flex items-center gap-2 bg-dark-900/95 border border-cyan-500/40 rounded-2xl p-1.5 pl-2.5 pr-2 shadow-lg shadow-cyan-950/40 relative">
                         <img src="${avatar}" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl object-cover border border-cyan-400/50 flex-shrink-0 cursor-pointer" onclick="openCheckPostModal()" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(acc.nickname || acc.username || 'User')}" />
                         <div class="hidden sm:block text-left pr-1 cursor-pointer" onclick="openCheckPostModal()">
                             <div class="text-xs font-bold text-white flex items-center gap-1.5 leading-tight">
@@ -2326,12 +2345,69 @@
                             </div>
                             <div class="text-[10px] text-cyan-400 font-mono leading-tight">${escapeHtml(acc.username || '')}</div>
                         </div>
+
+                        <!-- Dropdown chuyển đổi nick nhanh trên Navbar -->
+                        <div class="relative inline-block">
+                            <button 
+                                type="button" 
+                                onclick="toggleNavAccountDropdown(event)" 
+                                class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 font-bold text-xs border border-slate-700/90 shadow transition active:scale-95"
+                                title="Danh sách các nick đã login để đổi qua đổi lại nhanh chóng"
+                            >
+                                <i class="fa-solid fa-users text-cyan-400"></i>
+                                <span>${count} nick</span>
+                                <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+                            </button>
+
+                            <!-- Menu Dropdown -->
+                            <div id="navAccountDropdownMenu" class="hidden absolute right-0 mt-2 w-80 bg-dark-950/98 backdrop-blur-xl border border-slate-700/90 rounded-2xl shadow-2xl p-2.5 z-[999999] divide-y divide-slate-800/80">
+                                <div class="text-[11px] font-bold text-slate-400 px-2 pb-2 flex items-center justify-between">
+                                    <span>DANH SÁCH TÀI KHOẢN (${count})</span>
+                                    <span class="text-cyan-400 text-[10px]">Bấm để đổi nick</span>
+                                </div>
+                                <div class="py-1.5 max-h-64 overflow-y-auto space-y-1">
+                                    ${accounts.map(a => {
+                                        const isActive = String(a.uid) === String(acc.uid);
+                                        const aAv = getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '');
+                                        const aFlag = getCountryFlag(a.country);
+                                        return `
+                                            <div onclick="switchStudioAccount('${a.uid}'); closeNavAccountDropdown();" class="flex items-center justify-between p-2 rounded-xl cursor-pointer transition ${isActive ? 'bg-cyan-950/80 border border-cyan-500/60 shadow-sm' : 'hover:bg-slate-800/80 border border-transparent'}">
+                                                <div class="flex items-center gap-2 overflow-hidden">
+                                                    <img src="${aAv}" class="w-8 h-8 rounded-xl object-cover border border-slate-700 flex-shrink-0" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(a.nickname || a.username || 'User')}" />
+                                                    <div class="text-left overflow-hidden">
+                                                        <div class="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                                                            <span class="truncate max-w-[120px]">${escapeHtml(a.nickname || 'User')}</span>
+                                                            ${aFlag}
+                                                        </div>
+                                                        <div class="text-[10px] text-cyan-400 font-mono truncate">${escapeHtml(a.username || '')}</div>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center gap-1.5 flex-shrink-0 pl-1">
+                                                    ${isActive ? '<span class="text-emerald-400 text-xs font-bold px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60 text-[10px]">Đang dùng</span>' : '<span class="text-slate-400 hover:text-cyan-400 text-[10px]">Đổi</span>'}
+                                                    <button type="button" onclick="deleteStudioAccount('${a.uid}', event); renderAuthNav();" class="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition" title="Xóa nick này">
+                                                        <i class="fa-solid fa-trash-can text-[11px]"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                                <div class="pt-2 px-1">
+                                    <button 
+                                        type="button" 
+                                        onclick="openAuthModal(); closeNavAccountDropdown();" 
+                                        class="w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition active:scale-95"
+                                    >
+                                        <i class="fa-solid fa-user-plus text-xs"></i>
+                                        <span>+ Thêm nick mới</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <button type="button" onclick="openCheckPostModal()" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95" title="Mở Studio Check Post">
                             <i class="fa-solid fa-layer-group text-amber-300"></i>
                             <span>Check Post</span>
-                        </button>
-                        <button type="button" onclick="openAuthModal()" class="text-slate-400 hover:text-cyan-400 p-1.5 rounded-lg hover:bg-slate-800 transition" title="Thêm nick mới (+)">
-                            <i class="fa-solid fa-user-plus text-xs"></i>
                         </button>
                     </div>
                 `;
@@ -2628,7 +2704,7 @@
 
             tbody.innerHTML = filteredStudioPosts.map((item, idx) => {
                 const isSelected = selectedStudioItemIds.has(item.item_id);
-                const cover = getProxiedImage(item.cover_url);
+                const cover = getProxiedImage(item.cover_url, item.desc || 'Video', activeStudioSession ? activeStudioSession.cookie : '');
                 const isPriv = item.visibility_code === 2;
                 const isFrd = item.visibility_code === 3;
                 const isPub = item.visibility_code === 1;
@@ -2653,7 +2729,7 @@
                         <!-- Ảnh bìa: Bấm mở trực tiếp link @username/video chuẩn không bị 404 -->
                         <td class="py-1 px-1 text-center">
                             <div class="relative w-12 h-16 rounded-md overflow-hidden bg-slate-950 border border-slate-700/80 group inline-block cursor-pointer shadow-sm" onclick="openStudioVideoLink('${item.item_id}', '${item.share_url}')">
-                                <img src="${cover}" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" onerror="this.src='https://ui-avatars.com/api/?name=Video'" referrerpolicy="no-referrer" />
+                                <img src="${cover}" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'96\' height=\'128\' viewBox=\'0 0 96 128\'><rect width=\'100%\' height=\'100%\' fill=\'%230f172a\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\' font-size=\'26\' fill=\'%2338bdf8\'>🎬</text></svg>'" referrerpolicy="no-referrer" />
                                 ${item.duration_str ? `
                                     <span class="absolute bottom-0.5 right-0.5 px-1 py-0 rounded text-[9px] font-bold text-white font-mono bg-black/85 backdrop-blur-sm">
                                         ${item.duration_str}
@@ -3193,6 +3269,7 @@
 
         document.addEventListener('click', () => {
             closeFullChannelDropdown();
+            closeNavAccountDropdown();
         });
 
         async function startFullChannelAction(actionType) {
