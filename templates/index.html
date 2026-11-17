@@ -1034,7 +1034,6 @@
                             <th class="py-1.5 px-1 w-8 text-center">#</th>
                             <th class="py-1.5 px-1 w-14 text-center">Ảnh bìa</th>
                             <th class="py-1.5 px-3 min-w-[280px] max-w-[420px] text-center">Mô tả</th>
-                            <th class="py-1.5 px-1 w-14 text-center">Nguồn</th>
                             <th class="py-1.5 px-1 w-10 text-center">Nhãn</th>
                             <th class="py-1.5 px-1 w-14 text-center">Xem</th>
                             <th class="py-1.5 px-1 w-20 text-center">Chỉ số phụ</th>
@@ -2204,9 +2203,31 @@
             }).join('');
         }
 
+        function extractCountryFromCookie(cookieStr) {
+            if (!cookieStr) return '';
+            const m = cookieStr.match(/(?:store-country-code|country_code|region|country)\s*=\s*([a-zA-Z]{2})/i);
+            if (m) return m[1].toUpperCase();
+            if (cookieStr.includes('alisg')) return 'VN';
+            return '';
+        }
+
         function updateCheckPostHeader() {
             if (!activeStudioSession || !activeStudioSession.account) return;
             const acc = activeStudioSession.account;
+
+            // Tự động kiểm tra và sửa quốc gia từ Cookie nếu có
+            const detectedCountry = extractCountryFromCookie(activeStudioSession.cookie);
+            if (detectedCountry && (!acc.country || acc.country === 'US' || acc.country !== detectedCountry)) {
+                acc.country = detectedCountry;
+                localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
+                let accounts = getSavedStudioAccounts();
+                const curUid = String(acc.uid);
+                const idx = accounts.findIndex(a => String(a.uid) === curUid);
+                if (idx >= 0) {
+                    accounts[idx].country = detectedCountry;
+                    localStorage.setItem('tikflow_studio_accounts', JSON.stringify(accounts));
+                }
+            }
             const avatar = getProxiedImage(acc.avatar, acc.nickname || acc.username);
             const avatarEl = document.getElementById('studioAvatar');
             if (avatarEl) {
@@ -2489,8 +2510,9 @@
             const priv = studioPosts.filter(v => v.visibility_code === 2).length;
             const frd = studioPosts.filter(v => v.visibility_code === 3).length;
             const dup = studioPosts.filter(v => v.is_dup || v.has_penalty).length;
+            const activeRemaining = studioPosts.filter(v => v.visibility_code !== 2).length;
 
-            document.getElementById('statStudioTotal').innerText = total.toLocaleString();
+            document.getElementById('statStudioTotal').innerText = activeRemaining.toLocaleString();
             document.getElementById('statStudioPublic').innerText = pub.toLocaleString();
             document.getElementById('statStudioPrivate').innerText = priv.toLocaleString();
             document.getElementById('statStudioFriends').innerText = frd.toLocaleString();
@@ -2539,6 +2561,9 @@
 
         function filterStudioPosts() {
             filteredStudioPosts = studioPosts.filter(v => {
+                // Khi ở tab "Tất cả": Ẩn các video riêng tư (ẩn), chỉ hiện các video còn lại (công khai / bạn bè)
+                if (studioFilter === 'all' && v.visibility_code === 2) return false;
+
                 // Filter tab
                 if (studioFilter === 'public' && v.visibility_code !== 1) return false;
                 if (studioFilter === 'private' && v.visibility_code !== 2) return false;
@@ -2577,7 +2602,7 @@
             }
             emptyState.classList.add('hidden');
 
-            const channelCountry = (activeStudioSession && activeStudioSession.account && activeStudioSession.account.country) || 'US';
+            const channelCountry = (activeStudioSession && activeStudioSession.account && activeStudioSession.account.country) || extractCountryFromCookie(activeStudioSession ? activeStudioSession.cookie : '') || 'VN';
 
             tbody.innerHTML = filteredStudioPosts.map((item, idx) => {
                 const isSelected = selectedStudioItemIds.has(item.item_id);
@@ -2638,33 +2663,38 @@
                             </div>
                         </td>
 
-                        <!-- Nguồn -->
-                        <td class="py-1 px-1 text-center">
-                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950/60 text-amber-400 border border-amber-800/60 inline-flex items-center gap-1">
-                                <i class="fa-solid fa-globe text-[9px]"></i> Web
-                            </span>
-                        </td>
-
                         <!-- Nhãn -->
                         <td class="py-1 px-1 text-center text-slate-500 font-mono text-[11px]">
                             —
                         </td>
 
-                        <!-- Xem -->
-                        <td class="py-1 px-1 text-center font-mono font-bold text-slate-200 text-xs">
-                            <div class="flex items-center justify-center gap-1">
-                                <i class="fa-regular fa-eye text-cyan-400 text-[10px]"></i>
-                                <span>${item.play_count.toLocaleString()}</span>
+                        <!-- Xem: Đổi số xuống dòng (icon trên, số dưới) -->
+                        <td class="py-1 px-1 text-center font-mono text-xs">
+                            <div class="flex flex-col items-center justify-center leading-tight">
+                                <i class="fa-regular fa-eye text-cyan-400 text-[10px]" title="Lượt xem"></i>
+                                <span class="font-bold text-white text-[11px] mt-0.5">${item.play_count.toLocaleString()}</span>
                             </div>
                         </td>
 
-                        <!-- Chỉ số phụ (Tim, Share, Comment, Lưu) -->
+                        <!-- Chỉ số phụ: Đổi số xuống dòng (Icon trên, số dưới) -->
                         <td class="py-1 px-1 text-center">
-                            <div class="grid grid-cols-2 gap-x-1.5 gap-y-0.5 text-[10px] font-mono text-left w-16 mx-auto leading-tight">
-                                <span title="Thả tim" class="flex items-center gap-1 text-slate-300"><i class="fa-solid fa-heart text-rose-500 text-[8px]"></i> ${item.digg_count.toLocaleString()}</span>
-                                <span title="Bình luận" class="flex items-center gap-1 text-slate-300"><i class="fa-solid fa-comment text-sky-400 text-[8px]"></i> ${item.comment_count.toLocaleString()}</span>
-                                <span title="Chia sẻ" class="flex items-center gap-1 text-slate-300"><i class="fa-solid fa-share text-cyan-400 text-[8px]"></i> ${item.share_count.toLocaleString()}</span>
-                                <span title="Lưu ghim" class="flex items-center gap-1 text-slate-300"><i class="fa-solid fa-bookmark text-amber-400 text-[8px]"></i> ${(item.collect_count || 0).toLocaleString()}</span>
+                            <div class="flex items-center justify-center gap-2 text-center mx-auto">
+                                <div class="flex flex-col items-center leading-tight" title="Thả tim">
+                                    <i class="fa-solid fa-heart text-rose-500 text-[9px]"></i>
+                                    <span class="text-[10px] font-mono text-slate-300 mt-0.5">${item.digg_count.toLocaleString()}</span>
+                                </div>
+                                <div class="flex flex-col items-center leading-tight" title="Bình luận">
+                                    <i class="fa-solid fa-comment text-sky-400 text-[9px]"></i>
+                                    <span class="text-[10px] font-mono text-slate-300 mt-0.5">${item.comment_count.toLocaleString()}</span>
+                                </div>
+                                <div class="flex flex-col items-center leading-tight" title="Chia sẻ">
+                                    <i class="fa-solid fa-share text-cyan-400 text-[9px]"></i>
+                                    <span class="text-[10px] font-mono text-slate-300 mt-0.5">${item.share_count.toLocaleString()}</span>
+                                </div>
+                                <div class="flex flex-col items-center leading-tight" title="Lưu ghim">
+                                    <i class="fa-solid fa-bookmark text-amber-400 text-[9px]"></i>
+                                    <span class="text-[10px] font-mono text-slate-300 mt-0.5">${(item.collect_count || 0).toLocaleString()}</span>
+                                </div>
                             </div>
                         </td>
 
@@ -2735,10 +2765,10 @@
                                         type="button" 
                                         id="visBtn_${item.item_id}"
                                         onclick="toggleVisDropdown('${item.item_id}', event)"
-                                        class="w-full text-[10px] font-bold py-1 px-1.5 rounded transition flex items-center justify-between border shadow-sm ${isPriv ? 'bg-rose-950/80 text-rose-300 border-rose-800 hover:bg-rose-900' : (isFrd ? 'bg-amber-950/80 text-amber-300 border-amber-800 hover:bg-amber-900' : 'bg-sky-950/90 text-sky-200 border-sky-700 hover:bg-sky-900')}"
+                                        class="w-full text-[10px] font-bold py-1 px-1.5 rounded transition flex items-center justify-center gap-1.5 border shadow-sm ${isPriv ? 'bg-rose-950/80 text-rose-300 border-rose-800 hover:bg-rose-900' : (isFrd ? 'bg-amber-950/80 text-amber-300 border-amber-800 hover:bg-amber-900' : 'bg-sky-950/90 text-sky-200 border-sky-700 hover:bg-sky-900')}"
                                         title="Bấm để chọn trạng thái hiển thị"
                                     >
-                                        <span class="truncate flex items-center gap-1">
+                                        <span class="inline-flex items-center gap-1">
                                             ${isPriv ? '<i class="fa-solid fa-lock text-[8px]"></i> Riêng tư' : (isFrd ? '<i class="fa-solid fa-user-group text-[8px]"></i> Bạn bè' : '<i class="fa-solid fa-earth-americas text-[8px]"></i> Công khai')}
                                         </span>
                                         <i class="fa-solid fa-chevron-down text-[8px] opacity-70"></i>

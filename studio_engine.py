@@ -352,7 +352,17 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
                     or data.get("avatar")
                     or ""
                 )
-                country = (data.get("store_country") or data.get("country") or data.get("region") or "US").upper()
+                # Trích xuất quốc gia chính xác từ Cookie của tài khoản (store-country-code, v.v.)
+                m_country = re.search(r'(?:store-country-code|country_code|region|country)\s*=\s*([a-zA-Z]{2})', cookie_str, re.IGNORECASE)
+                cookie_country = m_country.group(1).upper() if m_country else ""
+
+                country = (
+                    cookie_country
+                    or data.get("store_country")
+                    or data.get("country")
+                    or data.get("region")
+                    or "VN"
+                ).upper()
                 c_ts = int(data.get("create_time") or 0)
                 c_date = datetime.datetime.fromtimestamp(c_ts).strftime("%d/%m/%Y") if c_ts > 0 else "-"
                 sec_uid = str(data.get("sec_user_id") or data.get("sec_uid") or "")
@@ -397,11 +407,15 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
     csrf_token = cdict.get("tt_csrf_token", "")
     cookie_header = cookie_to_header_str(cdict)
 
+    # Trích xuất quốc gia tài khoản để định tuyến đúng cụm máy chủ khu vực
+    m_country = re.search(r'store-country-code\s*=\s*([a-zA-Z]{2})', cookie_str, re.IGNORECASE)
+    c_code = m_country.group(1).upper() if m_country else "VN"
+
     # URL chuẩn của TikTok Creator Studio Item List
     url_studio = (
-        "https://www.tiktok.com/tiktok/creator/manage/item_list/v1/?"
-        "locale=en&aid=1988&priority_region=GB&region=US&"
-        "app_name=tiktok_creator_center&channel=tiktok_web&device_platform=web_pc"
+        f"https://www.tiktok.com/tiktok/creator/manage/item_list/v1/?"
+        f"locale=vi&aid=1988&priority_region={c_code}&region={c_code}&"
+        f"app_name=tiktok_creator_center&channel=tiktok_web&device_platform=web_pc"
     )
     headers = {
         "User-Agent": DEFAULT_UA,
