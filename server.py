@@ -446,6 +446,15 @@ def api_studio_qr_status(session_id: str = Query(..., description="ID phiên QR"
     res = studio_engine.check_qr_session_status(session_id)
     return JSONResponse(content=res)
 
+@app.get("/api/studio/profile/avatar")
+def api_studio_profile_avatar(username: str = Query(..., description="TikTok Username"), cookie: str = Query(None, description="Cookie (optional)")):
+    """Lấy avatar trực tiếp cho kênh TikTok nếu session chưa có avatar."""
+    clean_u = (username or "").lstrip("@").strip()
+    if not clean_u:
+        return JSONResponse(content={"success": False, "avatar": ""})
+    av = studio_engine.fetch_user_avatar(clean_u, cookie_str=cookie)
+    return JSONResponse(content={"success": bool(av), "avatar": av})
+
 @app.post("/api/studio/cookie/import")
 async def api_studio_cookie_import(req: Request):
     """Xác thực và nạp chuỗi Cookie tài khoản TikTok."""

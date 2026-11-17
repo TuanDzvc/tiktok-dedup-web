@@ -242,6 +242,73 @@ def check_qr_session_status(session_id: str) -> Dict[str, Any]:
         return {"success": True, "status": "waiting", "message": "Đang chờ quét mã..."}
 
 
+def fetch_user_avatar(username: str, cookie_str: str = "", proxy: str = None) -> str:
+    """
+    Lấy Avatar chất lượng cao của kênh TikTok dựa vào Username và Cookie đăng nhập.
+    Sử dụng SSR __UNIVERSAL_DATA_FOR_REHYDRATION__ từ trang profile chuẩn như desktop tool.
+    """
+    clean_u = (username or "").lstrip("@").strip()
+    if not clean_u:
+        return ""
+    
+    headers = {
+        "User-Agent": DEFAULT_UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.tiktok.com/",
+    }
+    if cookie_str:
+        headers["Cookie"] = cookie_to_header_str(cookie_str)
+    else:
+        try:
+            pool_path = Path(__file__).resolve().parent / "cookie_pool.json"
+            if pool_path.exists():
+                pool_data = json.loads(pool_path.read_text(encoding="utf-8"))
+                if pool_data.get("cookie"):
+                    headers["Cookie"] = pool_data["cookie"]
+                if pool_data.get("user_agent"):
+                    headers["User-Agent"] = pool_data["user_agent"]
+        except Exception:
+            pass
+
+    proxies = {}
+    if proxy:
+        px = proxy.strip()
+        if not px.startswith(("http://", "https://", "socks5://")):
+            px = f"http://{px}"
+        proxies = {"http": px, "https": px}
+
+    try:
+        r = requests.get(
+            f"https://www.tiktok.com/@{clean_u}",
+            headers=headers,
+            proxies=proxies if proxies else None,
+            timeout=8
+        )
+        if r.status_code == 200:
+            html = r.text
+            m = re.search(r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)</script>', html)
+            if m:
+                d = json.loads(m.group(1))
+                scope = d.get("__DEFAULT_SCOPE__", {})
+                user_detail = scope.get("webapp.user-detail", {})
+                u_info = user_detail.get("userInfo", {})
+                user = u_info.get("user", {})
+                av = user.get("avatarLarger") or user.get("avatarMedium") or user.get("avatarThumb")
+                if av:
+                    return av
+                app_ctx = scope.get("webapp.app-context", {})
+                app_user = app_ctx.get("user", {})
+                av = app_user.get("avatarLarger") or app_user.get("avatarMedium") or app_user.get("avatarThumb")
+                if av:
+                    return av
+            m_reg = re.search(r'"avatar(?:Larger|Medium|Thumb)":"([^"]+)"', html)
+            if m_reg:
+                return m_reg.group(1).replace(r"\u0026", "&").replace(r"\/", "/")
+    except Exception:
+        pass
+    return ""
+
 def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
     """Xác thực Cookie và lấy thông tin chi tiết tài khoản TikTok."""
     if not cookie_str:
@@ -289,22 +356,9 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
                 c_date = datetime.datetime.fromtimestamp(c_ts).strftime("%d/%m/%Y") if c_ts > 0 else "-"
                 sec_uid = str(data.get("sec_user_id") or data.get("sec_uid") or "")
 
-                # Thử lấy thêm avatar từ API TikTok nếu chưa có
+                # Lấy Avatar chất lượng cao từ SSR profile TikTok với Cookie vừa nạp
                 if not avatar and u_name:
-                    try:
-                        u_resp = requests.get(
-                            f"https://www.tiktok.com/api/user/detail/?aid=1988&uniqueId={u_name}",
-                            headers=headers,
-                            proxies=proxies if proxies else None,
-                            timeout=4
-                        )
-                        if u_resp.status_code == 200:
-                            ud = u_resp.json().get("userInfo", {}).get("user", {})
-                            avatar = ud.get("avatarLarger") or ud.get("avatarMedium") or ud.get("avatarThumb") or ""
-                            if not nick or nick == u_name:
-                                nick = ud.get("nickname") or nick
-                    except Exception:
-                        pass
+                    avatar = fetch_user_avatar(u_name, cookie_str=cookie_str, proxy=proxy)
 
                 return {
                     "valid": True,

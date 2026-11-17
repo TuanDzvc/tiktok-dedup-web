@@ -780,7 +780,7 @@
     <!-- MODAL CREATOR STUDIO / CHECK POST TOÀN NĂNG (BẢN RỘNG CHUẨN TOOL) -->
     <!-- ============================================================================== -->
     <div id="checkPostModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-1 sm:p-3 transition-all duration-300 hidden">
-        <div class="relative max-w-[98vw] 2xl:max-w-[1880px] w-full h-[96vh] max-h-[96vh] bg-dark-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div class="relative max-w-[98vw] 2xl:max-w-[1880px] w-full max-h-[95vh] bg-dark-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
             <!-- Header: Kênh Profile, Đổi Nick & Nút điều khiển -->
             <div class="p-3.5 sm:p-4 border-b border-slate-800 bg-dark-950/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 flex-shrink-0">
                 <div class="flex items-center gap-3">
@@ -967,7 +967,7 @@
             </div>
 
             <!-- Table Body (Scrollable Landscape) -->
-            <div class="flex-1 overflow-y-auto overflow-x-auto min-h-[300px] relative">
+            <div class="overflow-y-auto overflow-x-auto max-h-[570px] min-h-[350px] relative">
                 <!-- Loading Skeleton -->
                 <div id="studioLoadingState" class="absolute inset-0 bg-dark-900/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-20 hidden">
                     <i class="fa-solid fa-spinner animate-spin text-3xl text-cyan-400"></i>
@@ -1151,12 +1151,9 @@
             if (!url || typeof url !== 'string' || !url.startsWith('http')) {
                 return `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=0284c7&color=ffffff&bold=true`;
             }
-            // Chỉ các link ảnh private của TikTok Studio (p0-pu-image...) mới cần proxy backend (đã có RAM cache 0.001s)
-            if (url.includes('p0-pu-image') || url.includes('pu-image')) {
-                return `/api/proxy/image?url=${encodeURIComponent(url)}`;
-            }
-            // Toàn bộ ảnh CDN công khai (tiktokcdn, avatar...) tải trực tiếp qua trình duyệt với no-referrer cực nhanh (30ms)
-            return url;
+            if (url.includes('ui-avatars.com')) return url;
+            // Dùng backend proxy với RAM cache để vượt mọi chặn referer / CORS của TikTok CDN
+            return `/api/proxy/image?url=${encodeURIComponent(url)}`;
         }
 
         function handleStudioAvatarError(img) {
@@ -2130,6 +2127,24 @@
             document.getElementById('studioCountryFlag').innerHTML = getCountryFlag(acc.country);
             document.getElementById('studioUid').innerText = `UID: ${acc.uid || '-'}`;
             document.getElementById('studioCreatedDate').innerText = `Tạo: ${acc.create_date || '-'}`;
+
+            // Tự động kéo avatar chất lượng cao từ TikTok nếu nick chưa có avatar
+            if (!acc.avatar || acc.avatar.includes('ui-avatars')) {
+                const u = (acc.uniqueId || acc.username || '').replace('@', '').trim();
+                if (u) {
+                    fetch(`/api/studio/profile/avatar?username=${encodeURIComponent(u)}&cookie=${encodeURIComponent(activeStudioSession.cookie || '')}`)
+                        .then(r => r.json())
+                        .then(res => {
+                            if (res.success && res.avatar) {
+                                acc.avatar = res.avatar;
+                                saveStudioAccount(activeStudioSession);
+                                if (avatarEl) avatarEl.src = getProxiedImage(res.avatar, acc.nickname || acc.username);
+                                updateNavStudioButton();
+                            }
+                        })
+                        .catch(() => {});
+                }
+            }
         }
 
         // ==================== SESSION & NAV LOGIC ====================
@@ -2497,9 +2512,9 @@
                             ${idx + 1}
                         </td>
 
-                        <!-- Ảnh bìa: Nhỏ gọn w-10 h-14 chuẩn desktop tool -->
+                        <!-- Ảnh bìa: w-12 h-16 (64px) chuẩn desktop tool, hàng cao đúng 70px -> 8 dòng = 560px -->
                         <td class="py-1 px-1 text-center">
-                            <div class="relative w-10 h-14 rounded-md overflow-hidden bg-slate-950 border border-slate-700/80 group inline-block cursor-pointer shadow-sm" onclick="window.open('${item.share_url}', '_blank')">
+                            <div class="relative w-12 h-16 rounded-md overflow-hidden bg-slate-950 border border-slate-700/80 group inline-block cursor-pointer shadow-sm" onclick="window.open('${item.share_url}', '_blank')">
                                 <img src="${cover}" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" onerror="this.src='https://ui-avatars.com/api/?name=Video'" referrerpolicy="no-referrer" />
                                 ${item.duration_str ? `
                                     <span class="absolute bottom-0.5 right-0.5 px-1 py-0 rounded text-[9px] font-bold text-white font-mono bg-black/85 backdrop-blur-sm">
