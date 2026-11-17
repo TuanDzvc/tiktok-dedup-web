@@ -571,21 +571,21 @@ def api_studio_browser_login_cancel():
 
 @app.get("/api/studio/pia/proxies")
 def api_studio_pia_proxies():
-    """Lấy FULL toàn bộ các cổng SOCKS5 PIA trong tool (Bao gồm cụm US & Quốc tế của tool và cụm Local)."""
+    """Lấy FULL toàn bộ các cổng SOCKS5 PIA trong tool (Tách riêng từng quốc gia: US, Đức, Mexico, Indonesia, Châu Á)."""
     proxies = []
 
-    # 1. Cụm Router VPN chuyên dụng của Tool (Dành cho kênh US & Quốc tế)
+    # 1. Cụm Router VPN chuyên dụng của Tool (Tách thành các nhóm quốc gia riêng biệt)
     router_targets = [
-        {"port": 11101, "name": "US • California (Los Angeles)", "country": "US", "host": "192.168.2.101", "default": True},
-        {"port": 11104, "name": "US • New York (NYC)", "country": "US", "host": "192.168.2.101"},
-        {"port": 11102, "name": "US • Silicon Valley", "country": "US", "host": "192.168.2.101"},
-        {"port": 11103, "name": "US • Las Vegas", "country": "US", "host": "192.168.2.101"},
-        {"port": 11105, "name": "US • Washington DC", "country": "US", "host": "192.168.2.101"},
-        {"port": 11110, "name": "US • Los Angeles (#2)", "country": "US", "host": "192.168.2.101"},
-        {"port": 11108, "name": "DE • Frankfurt (Đức)", "country": "DE", "host": "192.168.2.101"},
-        {"port": 11109, "name": "DE • Berlin (Đức)", "country": "DE", "host": "192.168.2.101"},
-        {"port": 11107, "name": "MX • Mexico City", "country": "MX", "host": "192.168.2.101"},
-        {"port": 11106, "name": "ID • Jakarta (Indonesia)", "country": "ID", "host": "192.168.2.101"},
+        {"port": 11101, "name": "California (Los Angeles)", "country": "US", "host": "192.168.2.101", "default": True, "group": "🇺🇸 Hoa Kỳ (US)"},
+        {"port": 11104, "name": "New York (NYC)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+        {"port": 11102, "name": "Silicon Valley", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+        {"port": 11103, "name": "Las Vegas", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+        {"port": 11105, "name": "Washington DC", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+        {"port": 11110, "name": "Los Angeles (#2)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+        {"port": 11108, "name": "Frankfurt", "country": "DE", "host": "192.168.2.101", "group": "🇩🇪 Đức (Germany)"},
+        {"port": 11109, "name": "Berlin", "country": "DE", "host": "192.168.2.101", "group": "🇩🇪 Đức (Germany)"},
+        {"port": 11107, "name": "Mexico City", "country": "MX", "host": "192.168.2.101", "group": "🇲🇽 Mexico"},
+        {"port": 11106, "name": "Jakarta", "country": "ID", "host": "192.168.2.101", "group": "🇮🇩 Indonesia"},
     ]
 
     for item in router_targets:
@@ -596,25 +596,28 @@ def api_studio_pia_proxies():
             "country": item["country"],
             "socks_port": item["port"],
             "socks5_url": f"socks5://{item['host']}:{item['port']}",
-            "group": "US & Quốc Tế (Chuyên Kênh)",
+            "group": item["group"],
             "is_default": item.get("default", False)
         })
 
-    # 2. Cụm Local PC (Châu Á & Download)
+    # 2. Cụm Local PC (Châu Á)
     try:
         sys.path.insert(0, "E:/Tool/pia_socks5")
         import pia_proxy
         active = pia_proxy.load_active_proxies()
-        for port, info in active.items():
+        sorted_ports = sorted(active.keys(), key=lambda x: int(x))
+        for port in sorted_ports:
+            info = active[port]
             p_int = int(port)
+            r_name = info.get("region_name", f"Port {port}")
             proxies.append({
                 "port": p_int,
                 "region_id": info.get("region_id", ""),
-                "region_name": info.get("region_name", f"Port {port}"),
+                "region_name": r_name,
                 "country": info.get("country", ""),
                 "socks_port": p_int,
                 "socks5_url": f"socks5://127.0.0.1:{p_int}",
-                "group": "Châu Á & Khác"
+                "group": "🌏 Châu Á (Singapore, Nhật Bản, Đài Loan, HK)"
             })
     except Exception:
         pass
