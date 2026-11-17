@@ -624,53 +624,133 @@ def delete_studio_post(cookie_str: str, item_id: str, proxy: str = "") -> Dict[s
         return {"success": False, "error": f"Lỗi xóa video: {str(e)}"}
 
 
+def find_chrome_executable() -> Optional[str]:
+    candidates = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
+
+
 def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
-    """Mở cửa sổ trình duyệt Chromium trực tiếp trên màn hình máy tính để đăng nhập 100% thành công."""
+    """Mở cửa sổ trình duyệt Chrome/Edge thực tế trực tiếp trên màn hình máy tính (WinSta0\\Default) để người dùng đăng nhập."""
+    chrome_path = find_chrome_executable()
+    if not chrome_path:
+        return {"success": False, "error": "Không tìm thấy trình duyệt Google Chrome hoặc Edge trên máy tính để mở cửa sổ."}
+
+    import tempfile
+    import socket
+    import subprocess
+    import shutil
+
+    def get_free_port():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', 0))
+            return s.getsockname()[1]
+
+    port = get_free_port()
+    temp_profile = os.path.join(tempfile.gettempdir(), f"tiktok_login_profile_{port}")
+    os.makedirs(temp_profile, exist_ok=True)
+
+    si = subprocess.STARTUPINFO()
+    # Ép buộc cửa sổ hiển thị trực tiếp lên màn hình máy tính của người dùng
+    si.lpDesktop = r"WinSta0\Default"
+
+    cmd = [
+        chrome_path,
+        f"--user-data-dir={temp_profile}",
+        f"--remote-debugging-port={port}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--remote-allow-origins=*",
+        "--window-size=1020,720",
+        "https://www.tiktok.com/login"
+    ]
+
     try:
+        proc = subprocess.Popen(cmd, startupinfo=si)
+    except Exception as e:
+        return {"success": False, "error": f"Không thể khởi động trình duyệt Chrome: {str(e)}"}
+
+    try:
+        time.sleep(1.5)
         from playwright.sync_api import sync_playwright
+
         with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=False,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox"
-                ]
-            )
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-                viewport={"width": 1000, "height": 720}
-            )
-            context.add_init_script("delete Object.getPrototypeOf(navigator).webdriver")
-            page = context.new_page()
-            page.goto("https://www.tiktok.com/login", timeout=30000)
-            page.wait_for_timeout(1500)
+            # Kết nối CDP tới trình duyệt Chrome vừa mở
+            browser = None
+            for _ in range(5):
+                try:
+                    browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
+                    break
+                except Exception:
+                    time.sleep(1)
+
+            if not browser:
+                proc.terminate()
+                return {"success": False, "error": "Không thể kết nối tới trình duyệt Chrome vừa mở."}
+
+            context = browser.contexts[0]
+
+            # Thử tự động kích hoạt chuyển sang tab mã QR trên trang login nếu có
             try:
-                page.locator("text=/Use QR|Dùng mã QR|Quét mã QR|QR/i").first.click(timeout=3000)
+                pages = context.pages
+                if pages:
+                    pages[0].wait_for_timeout(1000)
+                    pages[0].locator("text=/Use QR|Dùng mã QR|Quét mã QR|QR/i").first.click(timeout=3000)
             except Exception:
                 pass
 
             start_ts = time.time()
             while time.time() - start_ts < timeout_sec:
+                if proc.poll() is not None:
+                    return {"success": False, "error": "Bạn đã đóng cửa sổ trình duyệt trước khi hoàn tất đăng nhập."}
+
                 try:
                     cookies = context.cookies()
                 except Exception:
                     return {"success": False, "error": "Bạn đã đóng cửa sổ trình duyệt."}
 
-                sid = next((c['value'] for c in cookies if c['name'] == 'sessionid'), None)
+                sid = next((c['value'] for c in cookies if c.get('name') == 'sessionid'), None)
                 if sid:
                     cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies if c.get('name') and c.get('value'))
                     acc_info = get_account_info(cookie_str)
-                    browser.close()
+                    try:
+                        browser.close()
+                    except Exception:
+                        pass
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
                     return {
                         "success": True,
                         "account": acc_info,
                         "cookie": cookie_str
                     }
+
                 time.sleep(1)
 
-            browser.close()
+            try:
+                proc.terminate()
+            except Exception:
+                pass
             return {"success": False, "error": "Đã hết thời gian chờ đăng nhập (5 phút)."}
     except Exception as e:
-        return {"success": False, "error": f"Lỗi mở trình duyệt: {str(e)}"}
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+        return {"success": False, "error": f"Lỗi trong quá trình đăng nhập: {str(e)}"}
+    finally:
+        try:
+            shutil.rmtree(temp_profile, ignore_errors=True)
+        except Exception:
+            pass
 

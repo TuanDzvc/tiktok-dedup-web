@@ -1912,11 +1912,17 @@
         }
 
         async function handleBrowserLogin() {
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            if (isMobile) {
+                alert("Tính năng [Mở Cửa Sổ Trình Duyệt] hoạt động trên máy tính (PC/Laptop).\n\nVì bạn đang mở web trên điện thoại, vui lòng kéo xuống dùng [Cách 2: Dán Cookie Tài Khoản] để nạp nick nhé!");
+                return;
+            }
+
             const btn = document.getElementById('btnBrowserLogin');
             const origHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Đang mở cửa sổ trình duyệt đăng nhập...</span>`;
-            showToast("Đang mở trình duyệt... Hãy đăng nhập trên cửa sổ vừa hiện lên!");
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-amber-300"></i> <span>Đang mở Chrome... Hãy đăng nhập trên cửa sổ Chrome vừa hiện lên!</span>`;
+            showToast("Đang mở trình duyệt Chrome trên màn hình... Hãy đăng nhập!");
 
             try {
                 const res = await fetch('/api/studio/browser/login', { method: 'POST' });
