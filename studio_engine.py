@@ -669,6 +669,27 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
             has_more = bool(res_data.get("has_more") or res_data.get("data", {}).get("has_more", False))
             next_cursor = int(res_data.get("cursor") or (max_cursor + len(raw_items)))
 
+            # Nếu yêu cầu count > 50 (ví dụ mặc định 100 video) mà lượt 1 TikTok trả về tối đa 50:
+            while len(raw_items) > 0 and len(raw_items) < count and has_more:
+                remain = count - len(raw_items)
+                payload_next = dict(payload)
+                payload_next["cursor"] = next_cursor
+                payload_next["size"] = min(remain, 50)
+                try:
+                    r2 = requests.post(url_studio, headers=headers, json=payload_next, proxies=proxies if proxies else None, timeout=12)
+                    if r2.status_code == 200:
+                        res2 = r2.json()
+                        items2 = res2.get("item_list") or res2.get("data", {}).get("item_list") or res2.get("items") or []
+                        if not items2:
+                            break
+                        raw_items.extend(items2)
+                        has_more = bool(res2.get("has_more") or res2.get("data", {}).get("has_more", False))
+                        next_cursor = int(res2.get("cursor") or (next_cursor + len(items2)))
+                    else:
+                        break
+                except Exception:
+                    break
+
             # Nếu item_list/v1 báo lỗi hoặc rỗng
             if not raw_items and (code == 8 or status_code == 8 or "login expired" in str(res_data).lower()):
                 # Xác thực chéo lại cookie xem có thực sự hết hạn không hay do lỗi query

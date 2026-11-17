@@ -195,7 +195,7 @@
                 <!-- Input form: 2 Dòng riêng biệt rộng rãi, không bị lẹm placeholder -->
                 <form id="checkForm" action="javascript:void(0);" onsubmit="handleCheck(event); return false;" class="pt-2 space-y-3">
                     <!-- DÒNG 1: Ô nhập full-width thoải mái hiển thị đầy đủ link/username -->
-                    <div class="relative flex items-center gap-3 bg-dark-900/95 px-4 py-3.5 rounded-2xl border-2 border-slate-700/80 focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-500/20 transition-all shadow-xl">
+                    <div class="relative flex items-center gap-2 sm:gap-3 bg-dark-900/95 px-3 sm:px-4 py-3 sm:py-3.5 rounded-2xl border-2 border-slate-700/80 focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-500/20 transition-all shadow-xl">
                         <i class="fa-solid fa-magnifying-glass text-cyan-400 text-lg flex-shrink-0"></i>
                         <input 
                             type="text" 
@@ -209,6 +209,37 @@
                             onfocus="this.select()"
                             required
                         />
+
+                        <!-- Nút Chọn Nick đã thêm vào tool -->
+                        <div class="relative flex-shrink-0" id="channelAccountPickerContainer">
+                            <button 
+                                type="button" 
+                                id="btnChannelAccountPicker" 
+                                onclick="toggleChannelAccountPicker(event)" 
+                                class="hidden px-2.5 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-xs font-bold items-center gap-1.5 transition active:scale-95 shadow-sm"
+                                title="Bấm để chọn nhanh nick TikTok đã thêm vào tool"
+                            >
+                                <i class="fa-solid fa-users text-cyan-400"></i>
+                                <span id="channelAccountPickerLabel">Chọn nick</span>
+                                <i class="fa-solid fa-chevron-down text-[9px] text-slate-400"></i>
+                            </button>
+
+                            <!-- Dropdown chọn nick -->
+                            <div 
+                                id="channelAccountPickerMenu" 
+                                class="hidden absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl p-2.5 z-50 divide-y divide-slate-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.95)] border border-cyan-500/40" 
+                                style="background-color: #0b1329 !important;"
+                            >
+                                <div class="text-[11px] font-bold text-slate-400 px-2 pb-2 flex items-center justify-between">
+                                    <span>CHỌN NICK ĐÃ THÊM</span>
+                                    <span class="text-cyan-400 text-[10px]">Click để quét ngay</span>
+                                </div>
+                                <div id="channelAccountPickerList" class="py-1.5 max-h-[300px] overflow-y-auto space-y-1">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+
                         <button 
                             type="button" 
                             onclick="clearInput()" 
@@ -218,6 +249,16 @@
                         >
                             <i class="fa-solid fa-xmark text-base"></i>
                         </button>
+                    </div>
+
+                    <!-- DÒNG SHORTCUT: Các nick đã thêm hiển thị sẵn dưới ô tìm kiếm để click 1 chạm -->
+                    <div id="quickAccountPillsRow" class="hidden flex items-center gap-2 overflow-x-auto py-0.5 text-xs select-none">
+                        <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
+                            <i class="fa-solid fa-bolt text-amber-400 text-[10px]"></i> Kênh đã thêm:
+                        </span>
+                        <div id="quickAccountPillsList" class="flex items-center gap-2 flex-wrap">
+                            <!-- Populated by JS -->
+                        </div>
                     </div>
 
                     <!-- DÒNG 2: Tùy chọn số lượng quét bên trái + Nút Kiểm Tra Ngay bên phải -->
@@ -719,40 +760,33 @@
 
                 <!-- Bộ chọn Proxy PIA có sẵn & Tùy chọn -->
                 <div class="space-y-1.5">
-                    <div class="relative">
-                        <select 
-                            id="piaProxySelect" 
-                            onchange="handlePiaProxySelectChange(this.value)"
-                            class="w-full bg-dark-900 border border-cyan-500/50 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-cyan-400 cursor-pointer shadow-sm"
+                    <div class="relative" id="customProxySelectContainer">
+                        <!-- Custom Select Button with Real Flag -->
+                        <button 
+                            type="button" 
+                            id="customProxyBtn"
+                            onclick="toggleCustomProxyDropdown(event)"
+                            class="w-full bg-dark-900 border border-cyan-500/50 rounded-xl px-3 py-2 text-xs text-white font-medium flex items-center justify-between cursor-pointer shadow-sm hover:border-cyan-400 transition"
                         >
-                            <optgroup label="🇺🇸 Hoa Kỳ (US)">
-                                <option value="socks5://192.168.2.101:11101" selected>⚡ [Mặc định] California (Los Angeles) (11101)</option>
-                                <option value="socks5://192.168.2.101:11104">⚡ New York (NYC) (11104)</option>
-                                <option value="socks5://192.168.2.101:11102">⚡ Silicon Valley (11102)</option>
-                                <option value="socks5://192.168.2.101:11103">⚡ Las Vegas (11103)</option>
-                                <option value="socks5://192.168.2.101:11105">⚡ Washington DC (11105)</option>
-                                <option value="socks5://192.168.2.101:11110">⚡ Los Angeles (#2) (11110)</option>
-                            </optgroup>
-                            <optgroup label="🇩🇪 Đức (Germany)">
-                                <option value="socks5://192.168.2.101:11108">⚡ Frankfurt (11108)</option>
-                                <option value="socks5://192.168.2.101:11109">⚡ Berlin (11109)</option>
-                            </optgroup>
-                            <optgroup label="🇲🇽 Mexico">
-                                <option value="socks5://192.168.2.101:11107">⚡ Mexico City (11107)</option>
-                            </optgroup>
-                            <optgroup label="🇮🇩 Indonesia">
-                                <option value="socks5://192.168.2.101:11106">⚡ Jakarta (11106)</option>
-                            </optgroup>
-                            <optgroup label="🌏 Châu Á (Singapore, Nhật Bản, Đài Loan, HK)">
-                                <option value="socks5://127.0.0.1:1080">⚡ Singapore (1080)</option>
-                                <option value="socks5://127.0.0.1:1081">⚡ JP Tokyo (1081)</option>
-                                <option value="socks5://127.0.0.1:1082">⚡ Taiwan (1082)</option>
-                                <option value="socks5://127.0.0.1:1083">⚡ Hong Kong (1083)</option>
-                            </optgroup>
-                            <optgroup label="⚙️ Tùy Chọn Khác">
-                                <option value="direct">🚫 Không dùng Proxy (Mạng thường)</option>
-                                <option value="custom">✏️ Nhập Proxy riêng khác...</option>
-                            </optgroup>
+                            <div class="flex items-center gap-2 truncate pr-2" id="customProxyBtnDisplay">
+                                <img id="customProxyBtnFlag" src="https://flagcdn.com/24x18/us.png" class="w-5 h-3.5 object-cover rounded shadow-sm flex-shrink-0" alt="Flag" onerror="this.outerHTML='🌐'" />
+                                <span id="customProxyBtnText" class="truncate font-semibold text-slate-100">⚡ [Mặc định] California (Los Angeles) (11101)</span>
+                            </div>
+                            <i class="fa-solid fa-chevron-down text-slate-400 text-xs flex-shrink-0"></i>
+                        </button>
+
+                        <!-- Custom Dropdown Menu with Real Country Flags -->
+                        <div 
+                            id="customProxyMenu" 
+                            class="hidden absolute left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-2xl p-2 z-[999999] shadow-[0_20px_50px_rgba(0,0,0,0.95)] border border-cyan-500/40 divide-y divide-slate-800/80" 
+                            style="background-color: #0b1329 !important;"
+                        >
+                            <!-- Populated dynamically by JS with real country flags -->
+                        </div>
+
+                        <!-- Giữ lại thẻ select ẩn để tương thích 100% -->
+                        <select id="piaProxySelect" onchange="handlePiaProxySelectChange(this.value)" class="hidden">
+                            <option value="socks5://192.168.2.101:11101" selected>California (Los Angeles) (11101)</option>
                         </select>
                     </div>
 
@@ -868,7 +902,7 @@
                                         <span>CHỌN TÀI KHOẢN STUDIO</span>
                                         <span id="dropdownAccountCount" class="text-cyan-400 font-mono">1</span>
                                     </div>
-                                    <div id="accountListContainer" class="py-1.5 max-h-60 overflow-y-auto space-y-1">
+                                    <div id="accountListContainer" class="py-1.5 max-h-[330px] overflow-y-auto space-y-1">
                                         <!-- Populated by JS -->
                                     </div>
                                     <div class="pt-2 px-1">
@@ -2089,6 +2123,7 @@
 
             // Khởi tạo Creator Studio Session từ localStorage nếu có
             initStudioSession();
+            renderChannelAccountPicker();
         });
         // ==============================================================================
         // TIKTOK CREATOR STUDIO & CHECK POST LOGIC
@@ -2458,7 +2493,7 @@
                                     <span>DANH SÁCH TÀI KHOẢN (${count})</span>
                                     <span class="text-cyan-400 text-[10px]">Bấm để đổi nick</span>
                                 </div>
-                                <div class="py-1.5 max-h-64 overflow-y-auto space-y-1">
+                                <div class="py-1.5 max-h-[330px] overflow-y-auto space-y-1">
                                     ${accounts.map(a => {
                                         const isActive = String(a.uid) === String(acc.uid);
                                         const aAv = (a.avatar && a.avatar.startsWith('http')) 
@@ -2531,9 +2566,138 @@
                     </button>
                 `;
             }
+            renderChannelAccountPicker();
         }
 
         let wasCheckPostOpenBeforeAuth = false;
+
+        // ==================== BỘ CHỌN NICK CHO Ô NHẬP @USER TÌM KIẾM ====================
+        function toggleChannelAccountPicker(event) {
+            if (event) event.stopPropagation();
+            const menu = document.getElementById('channelAccountPickerMenu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        function closeChannelAccountPicker() {
+            const menu = document.getElementById('channelAccountPickerMenu');
+            if (menu) menu.classList.add('hidden');
+        }
+
+        function selectAccountForCheck(username) {
+            const clean = username.startsWith('@') ? username : '@' + username;
+            const input = document.getElementById('channelInput');
+            if (input) input.value = clean;
+            const qInput = document.getElementById('quickCheckInput');
+            if (qInput) qInput.value = clean;
+            closeChannelAccountPicker();
+            handleCheck();
+        }
+
+        function renderChannelAccountPicker() {
+            const accounts = getSavedStudioAccounts();
+            const btn = document.getElementById('btnChannelAccountPicker');
+            const label = document.getElementById('channelAccountPickerLabel');
+            const list = document.getElementById('channelAccountPickerList');
+            const pillsRow = document.getElementById('quickAccountPillsRow');
+            const pillsList = document.getElementById('quickAccountPillsList');
+
+            if (!accounts || accounts.length === 0) {
+                if (btn) btn.classList.add('hidden');
+                if (pillsRow) pillsRow.classList.add('hidden');
+                return;
+            }
+
+            if (btn) {
+                btn.classList.remove('hidden');
+                btn.classList.add('flex');
+            }
+            if (label) {
+                label.innerText = `Chọn nick (${accounts.length})`;
+            }
+
+            if (list) {
+                list.innerHTML = accounts.map(a => {
+                    const aAv = (a.avatar && a.avatar.startsWith('http')) 
+                        ? getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '') 
+                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nickname || a.username || 'User')}&background=0284c7&color=ffffff&bold=true`;
+                    const aFlag = getCountryFlag(a.country);
+                    const handle = a.username ? `@${a.username}` : (a.nickname || 'User');
+                    return `
+                        <div onclick="selectAccountForCheck('${escapeHtml(handle)}')" class="flex items-center justify-between p-2 rounded-xl hover:bg-slate-800/90 cursor-pointer transition border border-transparent hover:border-cyan-500/40">
+                            <div class="flex items-center gap-2 overflow-hidden">
+                                <img src="${aAv}" class="w-8 h-8 rounded-xl object-cover border border-slate-700 flex-shrink-0" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(a.nickname || a.username || 'User')}" />
+                                <div class="text-left overflow-hidden">
+                                    <div class="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                                        <span class="truncate max-w-[130px]">${escapeHtml(a.nickname || 'User')}</span>
+                                        ${aFlag}
+                                    </div>
+                                    <div class="text-[10px] text-cyan-400 font-mono truncate">${escapeHtml(handle)}</div>
+                                </div>
+                            </div>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold flex-shrink-0">Quét</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            if (pillsRow && pillsList) {
+                pillsRow.classList.remove('hidden');
+                pillsList.innerHTML = accounts.map(a => {
+                    const aAv = (a.avatar && a.avatar.startsWith('http')) 
+                        ? getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '') 
+                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nickname || a.username || 'User')}&background=0284c7&color=ffffff&bold=true`;
+                    const aFlag = getCountryFlag(a.country);
+                    const handle = a.username ? `@${a.username}` : (a.nickname || 'User');
+                    return `
+                        <button type="button" onclick="selectAccountForCheck('${escapeHtml(handle)}')" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-cyan-950/80 border border-slate-700/80 hover:border-cyan-500/60 text-slate-200 text-xs font-medium transition active:scale-95 shadow-sm">
+                            <img src="${aAv}" class="w-4 h-4 rounded-full object-cover flex-shrink-0" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(a.nickname || a.username || 'User')}" />
+                            <span class="font-bold text-white text-[11px] truncate max-w-[120px]">${escapeHtml(a.nickname || a.username || 'User')}</span>
+                            ${aFlag}
+                        </button>
+                    `;
+                }).join('');
+            }
+        }
+
+        // ==================== BỘ CHỌN PROXY PIA TÙY BIẾN VỚI CỜ QUỐC GIA CHUẨN ====================
+        let cachedPiaProxies = [];
+
+        function toggleCustomProxyDropdown(event) {
+            if (event) event.stopPropagation();
+            const menu = document.getElementById('customProxyMenu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        function closeCustomProxyDropdown() {
+            const menu = document.getElementById('customProxyMenu');
+            if (menu) menu.classList.add('hidden');
+        }
+
+        function selectCustomProxy(val, countryCode, displayText) {
+            const btnFlag = document.getElementById('customProxyBtnFlag');
+            const btnText = document.getElementById('customProxyBtnText');
+            const sel = document.getElementById('piaProxySelect');
+
+            if (val === 'direct') {
+                if (btnFlag) btnFlag.style.display = 'none';
+                if (btnText) btnText.innerHTML = `🚫 <span class="font-bold text-slate-300">Không dùng Proxy (Mạng thường)</span>`;
+            } else if (val === 'custom') {
+                if (btnFlag) btnFlag.style.display = 'none';
+                if (btnText) btnText.innerHTML = `✏️ <span class="font-bold text-slate-300">Nhập Proxy riêng khác...</span>`;
+            } else {
+                if (btnFlag) {
+                    btnFlag.style.display = 'inline-block';
+                    btnFlag.src = `https://flagcdn.com/24x18/${(countryCode || 'us').toLowerCase()}.png`;
+                }
+                if (btnText) btnText.innerText = displayText;
+            }
+
+            if (sel) {
+                sel.value = val;
+            }
+            handlePiaProxySelectChange(val);
+            closeCustomProxyDropdown();
+        }
 
         function handlePiaProxySelectChange(val) {
             const input = document.getElementById('loginProxyInput');
@@ -2551,22 +2715,31 @@
 
         function handleCustomProxyInput(val) {
             const sel = document.getElementById('piaProxySelect');
-            if (!sel) return;
+            const btnFlag = document.getElementById('customProxyBtnFlag');
+            const btnText = document.getElementById('customProxyBtnText');
             const v = (val || '').trim();
-            let found = false;
-            for (let i = 0; i < sel.options.length; i++) {
-                if (sel.options[i].value === v) {
-                    sel.selectedIndex = i;
-                    found = true;
-                    break;
-                }
+
+            if (!v) {
+                if (sel) sel.value = 'direct';
+                if (btnFlag) btnFlag.style.display = 'none';
+                if (btnText) btnText.innerHTML = `🚫 <span class="font-bold text-slate-300">Không dùng Proxy (Mạng thường)</span>`;
+                localStorage.setItem('tikflow_last_proxy', '');
+                return;
             }
-            if (!found) {
-                if (!v) {
-                    sel.value = 'direct';
-                } else {
-                    sel.value = 'custom';
+
+            const matched = cachedPiaProxies.find(p => p.socks5_url === v);
+            if (matched) {
+                if (sel) sel.value = matched.socks5_url;
+                if (btnFlag) {
+                    btnFlag.style.display = 'inline-block';
+                    btnFlag.src = `https://flagcdn.com/24x18/${(matched.country || 'us').toLowerCase()}.png`;
                 }
+                const isDef = matched.is_default ? ' [Mặc định]' : '';
+                if (btnText) btnText.innerText = `⚡${isDef} ${matched.region_name} (${matched.socks_port})`;
+            } else {
+                if (sel) sel.value = 'custom';
+                if (btnFlag) btnFlag.style.display = 'none';
+                if (btnText) btnText.innerHTML = `✏️ <span class="font-mono text-cyan-300">${escapeHtml(v)}</span>`;
             }
             localStorage.setItem('tikflow_last_proxy', v);
         }
@@ -2576,8 +2749,9 @@
                 const res = await fetch('/api/studio/pia/proxies');
                 const data = await res.json();
                 if (data.success && data.proxies && data.proxies.length > 0) {
+                    cachedPiaProxies = data.proxies;
+                    const menu = document.getElementById('customProxyMenu');
                     const sel = document.getElementById('piaProxySelect');
-                    if (!sel) return;
                     const currentVal = document.getElementById('loginProxyInput')?.value?.trim() || '';
 
                     // Nhóm danh sách proxy theo từng quốc gia / nhóm riêng biệt
@@ -2588,26 +2762,97 @@
                         groups[g].push(p);
                     });
 
-                    let html = '';
+                    // Tạo HTML cho menu tùy biến hiển thị CỜ THẬT BẰNG ẢNH
+                    const countryFlagMap = { 'US': 'us', 'DE': 'de', 'MX': 'mx', 'ID': 'id', 'SG': 'sg', 'JP': 'jp', 'TW': 'tw', 'HK': 'hk', 'VN': 'vn' };
+                    let menuHtml = '';
+                    let selHtml = '';
+
                     for (const [gName, items] of Object.entries(groups)) {
-                        html += `<optgroup label="${gName}">`;
+                        let groupHeader = '';
+                        if (gName.includes('US') || gName.includes('Hoa Kỳ')) {
+                            groupHeader = `<img src="https://flagcdn.com/24x18/us.png" class="w-4 h-3 rounded object-cover shadow-sm flex-shrink-0" alt="US" onerror="this.outerHTML='🌐'" /> <span>Hoa Kỳ (US)</span>`;
+                        } else if (gName.includes('Đức') || gName.includes('Germany')) {
+                            groupHeader = `<img src="https://flagcdn.com/24x18/de.png" class="w-4 h-3 rounded object-cover shadow-sm flex-shrink-0" alt="DE" onerror="this.outerHTML='🌐'" /> <span>Đức (Germany)</span>`;
+                        } else if (gName.includes('Mexico')) {
+                            groupHeader = `<img src="https://flagcdn.com/24x18/mx.png" class="w-4 h-3 rounded object-cover shadow-sm flex-shrink-0" alt="MX" onerror="this.outerHTML='🌐'" /> <span>Mexico</span>`;
+                        } else if (gName.includes('Indonesia')) {
+                            groupHeader = `<img src="https://flagcdn.com/24x18/id.png" class="w-4 h-3 rounded object-cover shadow-sm flex-shrink-0" alt="ID" onerror="this.outerHTML='🌐'" /> <span>Indonesia</span>`;
+                        } else {
+                            groupHeader = `<span class="text-xs">🌏</span> <span>Châu Á (Local PC)</span>`;
+                        }
+
+                        menuHtml += `
+                            <div class="p-1">
+                                <div class="px-2 pt-2 pb-1 text-[11px] font-black uppercase text-slate-300 flex items-center gap-1.5 tracking-wider">
+                                    ${groupHeader}
+                                </div>
+                                <div class="space-y-0.5">
+                        `;
+                        selHtml += `<optgroup label="${gName}">`;
+
                         items.forEach(p => {
+                            const cCode = countryFlagMap[p.country] || (p.country || 'us').toLowerCase();
                             const isDef = p.is_default ? ' [Mặc định]' : '';
-                            html += `<option value="${p.socks5_url}">⚡${isDef} ${p.region_name} (${p.socks_port})</option>`;
+                            const fullLabel = `⚡${isDef} ${p.region_name} (${p.socks_port})`;
+
+                            menuHtml += `
+                                <div 
+                                    onclick="selectCustomProxy('${p.socks5_url}', '${cCode}', '${escapeHtml(fullLabel)}')" 
+                                    class="flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-slate-800/90 cursor-pointer text-xs transition group border border-transparent hover:border-cyan-500/40"
+                                >
+                                    <div class="flex items-center gap-2 overflow-hidden pr-2">
+                                        <img src="https://flagcdn.com/24x18/${cCode}.png" class="w-4 h-3 rounded object-cover shadow-sm flex-shrink-0" alt="${p.country}" onerror="this.outerHTML='🌐'" />
+                                        <span class="text-amber-400 font-bold text-xs flex-shrink-0">⚡</span>
+                                        <span class="text-slate-200 group-hover:text-white font-medium truncate">${isDef} ${p.region_name}</span>
+                                    </div>
+                                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-cyan-400 font-bold flex-shrink-0">${p.socks_port}</span>
+                                </div>
+                            `;
+                            selHtml += `<option value="${p.socks5_url}">${fullLabel}</option>`;
                         });
-                        html += `</optgroup>`;
+
+                        menuHtml += `
+                                </div>
+                            </div>
+                        `;
+                        selHtml += `</optgroup>`;
                     }
-                    html += `<optgroup label="⚙️ Tùy Chọn Khác">`;
-                    html += `<option value="direct">🚫 Không dùng Proxy (Mạng thường)</option>`;
-                    html += `<option value="custom">✏️ Nhập Proxy riêng khác...</option>`;
-                    html += `</optgroup>`;
-                    sel.innerHTML = html;
+
+                    // Tùy chọn khác
+                    menuHtml += `
+                        <div class="p-1">
+                            <div class="px-2 pt-2 pb-1 text-[11px] font-black uppercase text-slate-400 flex items-center gap-1.5 tracking-wider">
+                                <span>⚙️</span> <span>Tùy Chọn Khác</span>
+                            </div>
+                            <div class="space-y-0.5">
+                                <div onclick="selectCustomProxy('direct', '', '🚫 Không dùng Proxy (Mạng thường)')" class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-slate-800/90 cursor-pointer text-xs text-rose-300 transition">
+                                    <span>🚫</span>
+                                    <span>Không dùng Proxy (Mạng thường)</span>
+                                </div>
+                                <div onclick="selectCustomProxy('custom', '', '✏️ Nhập Proxy riêng khác...')" class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-slate-800/90 cursor-pointer text-xs text-amber-300 transition">
+                                    <span>✏️</span>
+                                    <span>Nhập Proxy riêng khác...</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    selHtml += `
+                        <optgroup label="⚙️ Tùy Chọn Khác">
+                            <option value="direct">🚫 Không dùng Proxy (Mạng thường)</option>
+                            <option value="custom">✏️ Nhập Proxy riêng khác...</option>
+                        </optgroup>
+                    `;
+
+                    if (menu) menu.innerHTML = menuHtml;
+                    if (sel) sel.innerHTML = selHtml;
 
                     if (currentVal) {
                         handleCustomProxyInput(currentVal);
                     }
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error("Lỗi nạp PIA Proxies:", e);
+            }
         }
 
         function openAuthModal() {
@@ -2831,7 +3076,7 @@
             closeAccountDropdown();
         }
 
-        async function loadStudioPosts(reset = false) {
+        async function loadStudioPosts(reset = false, customCount = null) {
             if (!activeStudioSession || !activeStudioSession.cookie) return;
 
             const targetUid = String(activeStudioSession.account?.uid || '');
@@ -2883,6 +3128,7 @@
 
             try {
                 const secUid = (activeStudioSession && activeStudioSession.account && activeStudioSession.account.sec_uid) || '';
+                const fetchCount = reset ? (customCount || 100) : (customCount || 50);
                 const res = await fetch('/api/studio/posts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2890,7 +3136,7 @@
                     body: JSON.stringify({
                         cookie: activeStudioSession.cookie,
                         proxy: activeStudioSession.proxy || '',
-                        count: 50,
+                        count: fetchCount,
                         max_cursor: studioCursor,
                         sec_uid: secUid
                     })
@@ -2929,6 +3175,7 @@
                             updateCheckPostHeader();
                             renderAuthNav();
                             renderAccountDropdown();
+                            renderChannelAccountPicker();
                         }
                     }
 
@@ -2955,6 +3202,27 @@
                 if (btnLoadMore) {
                     btnLoadMore.disabled = false;
                     btnLoadMore.innerHTML = '<i class="fa-solid fa-arrow-down"></i> <span>Tải thêm video</span>';
+                }
+            }
+        }
+
+        // ==================== CƠ CHẾ BÙ VIDEO TỰ ĐỘNG VÀO BẢNG ====================
+        let isStudioRefilling = false;
+        async function checkAndRefillStudioPosts(targetCount = 100) {
+            if (!activeStudioSession || !activeStudioSession.cookie) return;
+            if (isStudioLoading || isStudioRefilling) return;
+            if (!studioHasMore) return; // Kênh đã hết video trên TikTok
+
+            const currentCount = studioPosts.length;
+            if (currentCount < targetCount) {
+                const needed = targetCount - currentCount;
+                const fetchCount = Math.max(needed, 50);
+                isStudioRefilling = true;
+                showToast(`Đang tự động tải bù video từ máy chủ TikTok vào bảng...`);
+                try {
+                    await loadStudioPosts(false, fetchCount);
+                } finally {
+                    isStudioRefilling = false;
                 }
             }
         }
@@ -3408,6 +3676,7 @@
                     removeStudioRowImmediately(deletedId);
                     closeConfirmDeleteModal();
                     showToast("Đã xóa vĩnh viễn video thành công khỏi kênh TikTok!");
+                    setTimeout(() => checkAndRefillStudioPosts(100), 250);
                 } else {
                     alert("Lỗi xóa video: " + (data.error || "TikTok từ chối"));
                 }
@@ -3654,6 +3923,7 @@
 
             clearStudioSelection();
             showToast(`Đã xóa vĩnh viễn thành công ${successCount}/${count} video khỏi kênh!`);
+            setTimeout(() => checkAndRefillStudioPosts(100), 250);
         }
 
     
@@ -3675,6 +3945,8 @@
         document.addEventListener('click', () => {
             closeFullChannelDropdown();
             closeNavAccountDropdown();
+            closeChannelAccountPicker();
+            closeCustomProxyDropdown();
         });
 
         async function startFullChannelAction(actionType) {
