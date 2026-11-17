@@ -1033,8 +1033,8 @@
                             </th>
                             <th class="py-1.5 px-1 w-8 text-center border-r border-slate-800">#</th>
                             <th class="py-1.5 px-1 w-14 text-center border-r border-slate-800">Ảnh bìa</th>
-                            <th class="py-1.5 px-3 min-w-[220px] max-w-[320px] text-center border-r border-slate-800">Mô tả & Thời gian</th>
-                            <th class="py-1.5 px-1 w-20 text-center border-r border-slate-800">Xem</th>
+                            <th class="py-1.5 px-2 w-44 min-w-[170px] max-w-[240px] text-center border-r border-slate-800">Mô tả & Thời gian</th>
+                            <th class="py-1.5 px-1.5 w-28 min-w-[100px] text-center border-r border-slate-800">Xem</th>
                             <th class="py-1.5 px-1 w-28 text-center border-r border-slate-800">Chỉ số phụ</th>
                             <th class="py-1.5 px-1 w-14 text-center border-r border-slate-800">Quốc gia</th>
                             <th class="py-1.5 px-1 w-16 text-center border-r border-slate-800">Shadowban</th>
@@ -2767,16 +2767,15 @@
                             </div>
                         </td>
 
-                        <!-- Mô tả & Thời gian: Rộng min-w-[220px] max-w-[320px], tiêu đề dài xuống dòng, căn giữa -->
-                        <td class="py-1.5 px-3 min-w-[220px] max-w-[320px] whitespace-normal text-center border-r border-slate-800/80">
+                        <!-- Mô tả & Thời gian: Giảm 20% chiều ngang, ngày giờ màu trắng sáng rõ nét -->
+                        <td class="py-1.5 px-2 w-44 min-w-[170px] max-w-[240px] whitespace-normal text-center border-r border-slate-800/80">
                             <div class="flex flex-col items-center justify-center space-y-1">
                                 <p class="text-xs text-slate-100 font-medium line-clamp-2 break-words leading-relaxed text-center" title="${escapeHtml(item.desc)}">
                                     ${item.desc ? escapeHtml(item.desc) : '<span class="text-slate-500 italic">(không có mô tả)</span>'}
                                 </p>
-                                <div class="flex items-center justify-center gap-2 text-[10px] text-slate-400 font-mono">
-                                    <span class="flex items-center gap-1">
-                                        <i class="fa-regular fa-clock text-slate-500 text-[9px]"></i> ${item.date_str} (UTC)
-                                    </span>
+                                <div class="flex items-center justify-center gap-1.5 text-[11px] text-slate-100 font-semibold font-mono tracking-tight">
+                                    <i class="fa-regular fa-clock text-cyan-400 text-[10px]"></i>
+                                    <span>${item.date_str} (UTC)</span>
                                 </div>
                                 ${item.is_dup ? `
                                     <div class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800 text-rose-300 font-bold">
@@ -2787,11 +2786,11 @@
                             </div>
                         </td>
 
-                        <!-- Xem: Số view to rõ nét (icon trên, số dưới) -->
-                        <td class="py-1 px-1 text-center font-mono border-r border-slate-800/80">
+                        <!-- Xem: Cột rộng w-28, số view cỡ vừa phải để chứa hàng chục triệu view không bị tràn -->
+                        <td class="py-1 px-1.5 w-28 min-w-[100px] text-center font-mono border-r border-slate-800/80">
                             <div class="flex flex-col items-center justify-center leading-tight">
-                                <i class="fa-regular fa-eye text-cyan-400 text-xs sm:text-sm" title="Lượt xem"></i>
-                                <span class="font-extrabold text-white text-sm sm:text-base mt-1 font-mono tracking-tight">${item.play_count.toLocaleString()}</span>
+                                <i class="fa-regular fa-eye text-cyan-400 text-xs" title="Lượt xem"></i>
+                                <span class="font-bold text-white text-xs sm:text-[13px] mt-0.5 font-mono tracking-tight whitespace-nowrap">${item.play_count.toLocaleString()}</span>
                             </div>
                         </td>
 
