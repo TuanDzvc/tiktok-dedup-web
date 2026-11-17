@@ -754,7 +754,7 @@
             <div id="authContentQr" class="space-y-4 relative z-10">
                 <!-- QR Frame TO & RÕ NÉT TRÊN NỀN TRẮNG ĐỘ TƯƠNG PHẢN CAO -->
                 <div class="relative w-64 h-64 sm:w-72 sm:h-72 mx-auto bg-white p-3.5 rounded-3xl border-4 border-cyan-400 shadow-2xl shadow-cyan-500/30 flex items-center justify-center group overflow-hidden">
-                    <img id="qrCodeImg" src="" alt="TikTok QR Code" class="w-full h-full object-contain filter contrast-125" />
+                    <img id="qrCodeImg" src="" alt="TikTok QR Code" class="w-full h-full object-contain filter contrast-125 hidden" />
                     
                     <!-- Loading state -->
                     <div id="qrLoadingOverlay" class="absolute inset-0 bg-dark-950/95 backdrop-blur-sm flex flex-col items-center justify-center gap-2 text-cyan-400">
@@ -769,6 +769,16 @@
                         <button type="button" onclick="startQrLogin()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-extrabold transition flex items-center gap-2 shadow-lg shadow-cyan-600/30 active:scale-95">
                             <i class="fa-solid fa-rotate-right"></i>
                             <span>Bấm để Lấy Mã Mới</span>
+                        </button>
+                    </div>
+
+                    <!-- Error state -->
+                    <div id="qrErrorOverlay" class="absolute inset-0 bg-dark-950/95 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-4 text-center hidden">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-400 text-3xl"></i>
+                        <span id="qrErrorMsg" class="text-xs text-amber-300 font-bold px-2">Không thể tải mã QR từ TikTok.</span>
+                        <button type="button" onclick="startQrLogin()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-extrabold transition flex items-center gap-2 shadow-lg active:scale-95">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            <span>Thử Tạo Lại Mã QR</span>
                         </button>
                     </div>
                 </div>
@@ -1999,10 +2009,13 @@
             const qrImg = document.getElementById('qrCodeImg');
             const loading = document.getElementById('qrLoadingOverlay');
             const expired = document.getElementById('qrExpiredOverlay');
+            const errOverlay = document.getElementById('qrErrorOverlay');
             const statusText = document.getElementById('qrStatusText');
 
+            qrImg.classList.add('hidden');
             loading.classList.remove('hidden');
             expired.classList.add('hidden');
+            if (errOverlay) errOverlay.classList.add('hidden');
             statusText.innerText = "Đang kết nối TikTok Passport tạo mã QR...";
 
             try {
@@ -2010,7 +2023,9 @@
                 const data = await res.json();
                 if (data.success && data.qr_image) {
                     qrImg.src = data.qr_image;
+                    qrImg.classList.remove('hidden');
                     loading.classList.add('hidden');
+                    if (errOverlay) errOverlay.classList.add('hidden');
                     statusText.innerText = "Đang chờ bạn mở TikTok quét mã...";
                     
                     // Bắt đầu polling trạng thái phiên mỗi 2 giây
@@ -2018,10 +2033,20 @@
                     qrPollInterval = setInterval(() => pollQrStatus(sid), 2000);
                 } else {
                     loading.classList.add('hidden');
+                    if (errOverlay) {
+                        const errMsg = document.getElementById('qrErrorMsg');
+                        if (errMsg) errMsg.innerText = data.error || "Không thể tạo mã QR.";
+                        errOverlay.classList.remove('hidden');
+                    }
                     statusText.innerText = "Lỗi: " + (data.error || "Không thể tạo mã QR");
                 }
             } catch (err) {
                 loading.classList.add('hidden');
+                if (errOverlay) {
+                    const errMsg = document.getElementById('qrErrorMsg');
+                    if (errMsg) errMsg.innerText = "Lỗi kết nối máy chủ: " + err.message;
+                    errOverlay.classList.remove('hidden');
+                }
                 statusText.innerText = "Lỗi kết nối máy chủ: " + err.message;
             }
         }

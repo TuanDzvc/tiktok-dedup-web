@@ -92,36 +92,49 @@ def _pw_qr_worker(session_id: str):
             page.goto("https://www.tiktok.com/login", timeout=25000)
             page.wait_for_timeout(2000)
 
-            # Bấm vào tùy chọn đăng nhập bằng mã QR
+            # Bấm vào tùy chọn đăng nhập bằng mã QR (Use QR code)
             try:
-                page.locator("text=QR").first.click(timeout=5000)
-                page.wait_for_timeout(2000)
+                page.get_by_text("Use QR code").click(timeout=4000)
             except Exception:
-                pass
-
-            # Trích xuất trực tiếp mã QR độ nét cao từ thẻ canvas (chuẩn 100%, không bị viền đen thu nhỏ)
-            canvas = page.locator("canvas").first
-            if canvas.is_visible():
                 try:
-                    b64_str = canvas.evaluate("c => c.toDataURL('image/png')")
+                    page.locator("text=QR, a[href*='qrcode'], div:has-text('quét mã QR')").first.click(timeout=3000)
                 except Exception:
-                    img_b = canvas.screenshot()
-                    b64_str = f"data:image/png;base64,{base64.b64encode(img_b).decode('ascii')}"
-                sess["qr_image"] = b64_str
-                sess["ready"] = True
-            else:
-                el = page.locator("img[src*='qrcode'], div[data-e2e='qr-code']").first
+                    pass
+
+            # Trích xuất trực tiếp mã QR độ nét cao từ thẻ canvas
+            qr_extracted = False
+            for _ in range(25):
+                canvas = page.locator("canvas").first
+                if canvas.is_visible():
+                    try:
+                        b64_str = canvas.evaluate("c => c.toDataURL('image/png')")
+                        if b64_str and len(b64_str) > 500:
+                            sess["qr_image"] = b64_str
+                            sess["ready"] = True
+                            qr_extracted = True
+                            break
+                    except Exception:
+                        pass
+                el = page.locator("div[data-e2e='qr-code'], img[src*='qrcode']").first
                 if el.is_visible():
-                    img_b = el.screenshot()
-                    b64_str = f"data:image/png;base64,{base64.b64encode(img_b).decode('ascii')}"
-                    sess["qr_image"] = b64_str
-                    sess["ready"] = True
-                else:
-                    sess["ready"] = True
-                    sess["status"] = "error"
-                    sess["error"] = "Không thể tải mã QR từ TikTok."
-                    browser.close()
-                    return
+                    try:
+                        img_b = el.screenshot()
+                        b64_str = f"data:image/png;base64,{base64.b64encode(img_b).decode('ascii')}"
+                        if b64_str and len(b64_str) > 500:
+                            sess["qr_image"] = b64_str
+                            sess["ready"] = True
+                            qr_extracted = True
+                            break
+                    except Exception:
+                        pass
+                page.wait_for_timeout(400)
+
+            if not qr_extracted:
+                sess["ready"] = True
+                sess["status"] = "error"
+                sess["error"] = "Không thể tải mã QR từ TikTok. Vui lòng bấm thử lại hoặc dùng nút Mở Trình Duyệt phía trên."
+                browser.close()
+                return
 
             # Chờ người dùng quét mã và bấm xác nhận trên điện thoại (tối đa 180s)
             start_ts = time.time()
@@ -186,8 +199,8 @@ def create_qr_session() -> Dict[str, Any]:
     t = threading.Thread(target=_pw_qr_worker, args=(session_id,), daemon=True)
     t.start()
 
-    # Đợi tối đa 10s cho Playwright tải xong trang và trích xuất ảnh mã QR
-    for _ in range(25):
+    # Đợi tối đa 20s cho Playwright tải xong trang và trích xuất ảnh mã QR
+    for _ in range(50):
         sess = QR_SESSIONS.get(session_id, {})
         if sess.get("ready"):
             break
