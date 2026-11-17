@@ -1266,12 +1266,10 @@
             document.getElementById('channelInput').focus();
         }
 
-        function getProxiedImage(url, fallbackName = 'Video', cookieStr = '') {
+        function getProxiedImage(url, fallbackName = 'User', cookieStr = '') {
             if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-                if (fallbackName && fallbackName !== 'Video') {
-                    return `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=0284c7&color=ffffff&bold=true`;
-                }
-                return "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2096%20128'%3E%3Crect%20width%3D'100%25'%20height%3D'100%25'%20fill%3D'%230f172a'%2F%3E%3Ctext%20x%3D'50%25'%20y%3D'50%25'%20dominant-baseline%3D'middle'%20text-anchor%3D'middle'%20font-size%3D'28'%20fill%3D'%2338bdf8'%3E%F0%9F%8E%AC%3C%2Ftext%3E%3C%2Fsvg%3E";
+                const name = fallbackName && fallbackName !== 'Video' ? fallbackName : 'User';
+                return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0284c7&color=ffffff&bold=true`;
             }
             if (url.includes('ui-avatars.com')) return url;
             const ck = cookieStr || (activeStudioSession ? activeStudioSession.cookie : '') || '';
@@ -2048,6 +2046,8 @@
         let studioSearchQuery = '';
         let selectedStudioItemIds = new Set();
         let pendingDeleteItem = null;
+        let currentLoadedStudioUid = null;
+        let studioPostsAbortController = null;
 
         // ==================== MULTI-ACCOUNT MANAGEMENT ====================
         function getSavedStudioAccounts() {
@@ -2120,9 +2120,18 @@
             };
             localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
 
+            // RESET SẠCH DỮ LIỆU BẢNG & STATS CỦA ACC CŨ ĐỂ KHÔNG BAO GIỜ BỊ DÍNH POSTS CỦA NICK TRƯỚC
+            studioPosts = [];
+            filteredStudioPosts = [];
+            studioCursor = 0;
+            currentLoadedStudioUid = null;
+            selectedStudioItemIds.clear();
+            updateBatchBar();
+
             renderAuthNav();
             renderAccountDropdown();
             updateCheckPostHeader();
+            updateStudioStats();
         }
 
         function switchStudioAccount(uid) {
@@ -2139,10 +2148,20 @@
             };
             localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
 
+            // RESET SẠCH DỮ LIỆU CŨ NGAY LẬP TỨC
+            studioPosts = [];
+            filteredStudioPosts = [];
+            studioCursor = 0;
+            currentLoadedStudioUid = null;
+            selectedStudioItemIds.clear();
+            updateBatchBar();
+
             closeAccountDropdown();
+            closeNavAccountDropdown();
             renderAuthNav();
             renderAccountDropdown();
             updateCheckPostHeader();
+            updateStudioStats();
 
             // Làm mới bảng video cho nick mới
             loadStudioPosts(true);
@@ -2167,6 +2186,7 @@
                     localStorage.removeItem('tikflow_active_uid');
                     studioPosts = [];
                     filteredStudioPosts = [];
+                    currentLoadedStudioUid = null;
                     renderAuthNav();
                     renderAccountDropdown();
                     closeCheckPostModal();
@@ -2285,7 +2305,14 @@
                         .then(res => {
                             if (res.success && res.avatar) {
                                 acc.avatar = res.avatar;
-                                saveStudioAccount(activeStudioSession);
+                                let accounts = getSavedStudioAccounts();
+                                const curUid = String(acc.uid);
+                                const idx = accounts.findIndex(a => String(a.uid) === curUid);
+                                if (idx >= 0) {
+                                    accounts[idx].avatar = res.avatar;
+                                    localStorage.setItem('tikflow_studio_accounts', JSON.stringify(accounts));
+                                }
+                                localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
                                 if (avatarEl) avatarEl.src = getProxiedImage(res.avatar, acc.nickname || acc.username);
                                 updateNavStudioButton();
                             }
@@ -2532,7 +2559,7 @@
                             saveStudioAccount(data.account, data.cookie, '');
                             closeAuthModal();
                             showToast("Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
-                            openCheckPostModal();
+                            openCheckPostModal(true);
                         } else if (data.status === 'cancelled') {
                             clearInterval(browserLoginPollInterval);
                             browserLoginPollInterval = null;
@@ -2587,7 +2614,7 @@
                     saveStudioAccount(data.account, data.cookie, proxy);
                     closeAuthModal();
                     showToast("Nạp Cookie thành công! Kênh: " + (data.account.nickname || data.account.username));
-                    openCheckPostModal();
+                    openCheckPostModal(true);
                 } else {
                     alert("Xác thực thất bại: " + (data.error || "Cookie không hợp lệ"));
                 }
@@ -2599,17 +2626,19 @@
             }
         }
 
-        function openCheckPostModal() {
+        function openCheckPostModal(forceReload = false) {
             if (!activeStudioSession || !activeStudioSession.cookie) {
                 openAuthModal();
                 return;
             }
 
+            const activeUid = String(activeStudioSession.account?.uid || '');
             updateCheckPostHeader();
             renderAccountDropdown();
             document.getElementById('checkPostModal').classList.remove('hidden');
 
-            if (studioPosts.length === 0) {
+            // Bắt buộc tải mới nếu: forceReload = true HOẶC chưa có post HOẶC UID posts khác UID nick đang active
+            if (forceReload || studioPosts.length === 0 || currentLoadedStudioUid !== activeUid) {
                 loadStudioPosts(true);
             } else {
                 filterStudioPosts();
@@ -2622,15 +2651,43 @@
         }
 
         async function loadStudioPosts(reset = false) {
-            if (isStudioLoading) return;
             if (!activeStudioSession || !activeStudioSession.cookie) return;
+
+            const targetUid = String(activeStudioSession.account?.uid || '');
+
+            // Nếu reset mà đang có một request khác đang fetch, hủy request cũ ngay lập tức
+            if (reset && studioPostsAbortController) {
+                studioPostsAbortController.abort();
+                isStudioLoading = false;
+            } else if (isStudioLoading) {
+                return;
+            }
+
+            studioPostsAbortController = new AbortController();
 
             if (reset) {
                 studioPosts = [];
+                filteredStudioPosts = [];
                 studioCursor = 0;
+                currentLoadedStudioUid = null;
                 selectedStudioItemIds.clear();
                 updateBatchBar();
-                document.getElementById('studioLoadingState').classList.remove('hidden');
+                updateStudioStats();
+
+                // Hiển thị khung chờ rõ ràng trong bảng để người dùng thấy rõ kênh mới đang nạp
+                const tbody = document.getElementById('studioTableBody');
+                if (tbody) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="10" class="py-16 text-center text-slate-400">
+                                <i class="fa-solid fa-spinner animate-spin text-2xl text-cyan-400 mb-2"></i>
+                                <div class="text-xs font-semibold text-slate-300">Đang tải video của kênh ${escapeHtml(activeStudioSession.account?.nickname || activeStudioSession.account?.username || '')}...</div>
+                            </td>
+                        </tr>
+                    `;
+                }
+                const loadingState = document.getElementById('studioLoadingState');
+                if (loadingState) loadingState.classList.remove('hidden');
             }
 
             isStudioLoading = true;
@@ -2648,6 +2705,7 @@
                 const res = await fetch('/api/studio/posts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    signal: studioPostsAbortController.signal,
                     body: JSON.stringify({
                         cookie: activeStudioSession.cookie,
                         proxy: activeStudioSession.proxy || '',
@@ -2658,7 +2716,14 @@
                 });
                 const data = await res.json();
 
+                // Kiểm tra xem trong lúc fetch, người dùng có đổi sang nick khác không
+                const activeNow = String(activeStudioSession?.account?.uid || '');
+                if (activeNow !== targetUid) {
+                    return; // Đã chuyển sang nick khác, bỏ qua dữ liệu cũ này
+                }
+
                 if (data.success) {
+                    currentLoadedStudioUid = targetUid;
                     const newItems = data.items || [];
                     if (reset) {
                         studioPosts = newItems;
@@ -2699,12 +2764,13 @@
                     showToast("Lỗi: " + (data.error || "Không thể lấy video Studio."));
                 }
             } catch (err) {
+                if (err.name === 'AbortError') return;
                 showToast("Lỗi tải video Studio: " + err.message);
             } finally {
                 isStudioLoading = false;
-                document.getElementById('studioLoadingState').classList.add('hidden');
+                const loadingState = document.getElementById('studioLoadingState');
+                if (loadingState) loadingState.classList.add('hidden');
                 if (btnRefresh) btnRefresh.classList.remove('opacity-70');
-                const btnLoadMore = document.getElementById('btnStudioLoadMore');
                 if (btnLoadMore) {
                     btnLoadMore.disabled = false;
                     btnLoadMore.innerHTML = '<i class="fa-solid fa-arrow-down"></i> <span>Tải thêm video</span>';
