@@ -166,7 +166,7 @@
                         class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/25 border border-cyan-400/40 hover:scale-105 active:scale-95 transition-all duration-200"
                         title="Đăng nhập để xem toàn bộ video kênh (kể cả video riêng tư) và thao tác Ẩn/Bạn bè/Xóa"
                     >
-                        <i class="fa-solid fa-qrcode text-amber-300"></i>
+                        <i class="fa-solid fa-key text-amber-300"></i>
                         <span>Studio / Check Post</span>
                         <span class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-cyan-950 text-cyan-300 rounded font-black border border-cyan-700/60">Mới</span>
                     </button>
@@ -681,10 +681,10 @@
     </div>
 
     <!-- ============================================================================== -->
-    <!-- MODAL ĐĂNG NHẬP STUDIO (QUÉT MÃ QR & DÁN COOKIE) -->
+    <!-- MODAL ĐĂNG NHẬP STUDIO (TRÌNH DUYỆT & DÁN COOKIE) -->
     <!-- ============================================================================== -->
     <div id="authModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-300 hidden">
-        <div class="relative max-w-lg w-full bg-dark-900 border border-slate-700/80 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6 overflow-hidden">
+        <div class="relative max-w-lg w-full bg-dark-900 border border-slate-700/80 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5 overflow-hidden">
             <!-- Glow background -->
             <div class="absolute -top-16 -right-16 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
             <div class="absolute -bottom-16 -left-16 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -705,113 +705,44 @@
                 </button>
             </div>
 
-            <!-- Nút Mở Trình Duyệt Đăng Nhập Trực Tiếp (Y hệt Tool chính) -->
-            <div class="relative z-10 p-3 rounded-2xl bg-cyan-950/60 border border-cyan-500/40 text-center space-y-2">
+            <!-- Cách 1: Mở Trình Duyệt Đăng Nhập Trực Tiếp (1-Click) -->
+            <div class="relative z-10 p-4 rounded-2xl bg-gradient-to-b from-cyan-950/70 via-slate-900/90 to-slate-950 border border-cyan-500/40 text-center space-y-2.5">
+                <div class="flex items-center justify-center gap-2 text-xs font-bold text-cyan-400 uppercase tracking-wider">
+                    <i class="fa-solid fa-bolt text-amber-400"></i>
+                    <span>Cách 1: Khuyên Dùng (1-Click Tự Động)</span>
+                </div>
                 <button 
                     type="button" 
                     id="btnBrowserLogin"
                     onclick="handleBrowserLogin()" 
-                    class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-extrabold text-sm transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2.5 active:scale-98"
+                    class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-extrabold text-sm transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2.5 active:scale-98"
                 >
                     <i class="fa-solid fa-window-maximize text-amber-300"></i>
-                    <span>Mở Cửa Sổ Trình Duyệt Đăng Nhập (1-Click Ăn Ngay)</span>
+                    <span>Mở Cửa Sổ Trình Duyệt Đăng Nhập</span>
                 </button>
-                <p class="text-[11px] text-slate-400">
-                    💡 Mở trực tiếp cửa sổ Chrome để bạn đăng nhập bằng QR / Google / Mật khẩu. Đăng nhập xong tự đóng cửa sổ và vào Check Post!
+                <p class="text-[11px] text-slate-400 leading-relaxed">
+                    💡 Cửa sổ Chrome riêng sẽ mở ra để bạn đăng nhập thoải mái bằng mã QR trên app TikTok, Google, SĐT hoặc Mật khẩu. Đăng nhập xong cửa sổ tự đóng và vào thẳng Check Post!
                 </p>
             </div>
 
-            <!-- Hoặc chọn phương thức bên dưới -->
+            <!-- Phân cách -->
             <div class="relative z-10 flex items-center justify-center gap-2 text-[11px] text-slate-500 font-bold uppercase tracking-wider">
                 <span class="h-px bg-slate-800 flex-1"></span>
-                <span>Hoặc chọn bên dưới</span>
+                <span>HOẶC CÁCH 2: DÁN COOKIE TÀI KHOẢN</span>
                 <span class="h-px bg-slate-800 flex-1"></span>
             </div>
 
-            <!-- Tabs Switcher -->
-            <div class="grid grid-cols-2 gap-2 p-1 bg-slate-950/80 rounded-2xl border border-slate-800 relative z-10">
-                <button 
-                    type="button" 
-                    id="authTabBtnQr" 
-                    onclick="switchAuthTab('qr')" 
-                    class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md"
-                >
-                    <i class="fa-solid fa-qrcode text-amber-300"></i>
-                    <span>Quét mã QR</span>
-                </button>
-                <button 
-                    type="button" 
-                    id="authTabBtnCookie" 
-                    onclick="switchAuthTab('cookie')" 
-                    class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white hover:bg-slate-900"
-                >
-                    <i class="fa-solid fa-paste"></i>
-                    <span>Dán Cookie</span>
-                </button>
-            </div>
-
-            <!-- Tab 1: QR Code Scanner -->
-            <div id="authContentQr" class="space-y-4 relative z-10">
-                <!-- QR Frame TO & RÕ NÉT TRÊN NỀN TRẮNG ĐỘ TƯƠNG PHẢN CAO -->
-                <div class="relative w-64 h-64 sm:w-72 sm:h-72 mx-auto bg-white p-3.5 rounded-3xl border-4 border-cyan-400 shadow-2xl shadow-cyan-500/30 flex items-center justify-center group overflow-hidden">
-                    <img id="qrCodeImg" src="" alt="TikTok QR Code" class="w-full h-full object-contain filter contrast-125 hidden" />
-                    
-                    <!-- Loading state -->
-                    <div id="qrLoadingOverlay" class="absolute inset-0 bg-dark-950/95 backdrop-blur-sm flex flex-col items-center justify-center gap-2 text-cyan-400">
-                        <i class="fa-solid fa-spinner animate-spin text-3xl"></i>
-                        <span class="text-xs font-semibold text-slate-300">Đang khởi tạo mã QR TikTok...</span>
-                    </div>
-
-                    <!-- Expired state -->
-                    <div id="qrExpiredOverlay" class="absolute inset-0 bg-dark-950/95 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-4 text-center hidden">
-                        <i class="fa-solid fa-clock-rotate-left text-rose-400 text-3xl"></i>
-                        <span class="text-xs text-rose-300 font-bold">Mã QR đã hết hạn!</span>
-                        <button type="button" onclick="startQrLogin()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-extrabold transition flex items-center gap-2 shadow-lg shadow-cyan-600/30 active:scale-95">
-                            <i class="fa-solid fa-rotate-right"></i>
-                            <span>Bấm để Lấy Mã Mới</span>
-                        </button>
-                    </div>
-
-                    <!-- Error state -->
-                    <div id="qrErrorOverlay" class="absolute inset-0 bg-dark-950/95 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-4 text-center hidden">
-                        <i class="fa-solid fa-triangle-exclamation text-amber-400 text-3xl"></i>
-                        <span id="qrErrorMsg" class="text-xs text-amber-300 font-bold px-2">Không thể tải mã QR từ TikTok.</span>
-                        <button type="button" onclick="startQrLogin()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-extrabold transition flex items-center gap-2 shadow-lg active:scale-95">
-                            <i class="fa-solid fa-rotate-right"></i>
-                            <span>Thử Tạo Lại Mã QR</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Status indicator -->
-                <div id="qrStatusPill" class="text-center py-2 px-3 rounded-xl bg-slate-950/70 border border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
-                    <span id="qrStatusText">Đang chờ bạn mở TikTok quét mã...</span>
-                </div>
-
-                <!-- Step guide -->
-                <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-2 text-xs text-slate-400">
-                    <div class="font-bold text-amber-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-                        <i class="fa-solid fa-circle-exclamation text-amber-400"></i> Cách bật camera quét trên app TikTok:
-                    </div>
-                    <ol class="list-decimal list-inside space-y-1.5 text-slate-300 text-[11px] leading-relaxed">
-                        <li>Mở app <b class="text-white">TikTok</b> &rarr; Vào <b class="text-white">Hồ sơ</b> &rarr; Menu <b>☰</b> &rarr; Chọn <b class="text-white">Mã QR của tôi</b>.</li>
-                        <li><span class="text-amber-300 font-bold">Quan trọng:</span> Nhìn lên <b class="text-cyan-400 font-bold">GÓC TRÊN CÙNG BÊN PHẢI</b> màn hình, nhấn vào biểu tượng <b class="text-cyan-300 font-extrabold text-xs">[ -|- ]</b> để bật máy ảnh quét!</li>
-                        <li>Hướng camera vào mã QR to ở trên &rarr; Màn hình hiện nút đỏ <b class="text-emerald-400 font-bold">[Đăng nhập]</b> &rarr; Bấm xác nhận là xong!</li>
-                    </ol>
-                </div>
-            </div>
-
-            <!-- Tab 2: Dán Cookie (Dự phòng) -->
-            <div id="authContentCookie" class="space-y-4 relative z-10 hidden">
-                <div class="space-y-2">
-                    <label class="block text-xs font-bold text-slate-300">
-                        Chuỗi Cookie tài khoản TikTok: <span class="text-rose-400">*</span>
+            <!-- Cách 2: Khu vực Dán Cookie Tài Khoản -->
+            <div id="authContentCookie" class="space-y-3.5 relative z-10">
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-bold text-slate-300 flex items-center justify-between">
+                        <span>Chuỗi Cookie tài khoản TikTok: <span class="text-rose-400">*</span></span>
+                        <span class="text-[10px] text-slate-400 font-normal">Hỗ trợ Cookie-Editor / F12 / JSON</span>
                     </label>
                     <textarea 
                         id="cookieInput" 
                         rows="4" 
-                        placeholder="Dán chuỗi Cookie từ trình duyệt hoặc Cookie-Editor (chứa sessionid=...; tt_csrf_token=...)" 
+                        placeholder="Dán chuỗi Cookie từ trình duyệt hoặc tiện ích Cookie-Editor (chứa sessionid=...; tt_csrf_token=...)" 
                         class="w-full bg-slate-950 border border-slate-700/80 rounded-2xl p-3 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500/20 placeholder-slate-500 resize-none"
                     ></textarea>
                 </div>
@@ -839,7 +770,7 @@
                 </button>
 
                 <p class="text-[11px] text-slate-500 text-center">
-                    💡 Hỗ trợ cookie xuất từ Cookie-Editor, DevTools F12 (Header Cookie) hoặc chuỗi JSON.
+                    💡 Thích hợp nạp nhanh nhiều nick hoặc khi dùng Cookie xuất từ profile máy tính khác.
                 </p>
             </div>
         </div>
@@ -1911,7 +1842,6 @@
         let isStudioLoading = false;
         let studioFilter = 'all';
         let studioSearchQuery = '';
-        let qrPollInterval = null;
         let selectedStudioItemIds = new Set();
         let pendingDeleteItem = null;
 
@@ -1965,7 +1895,7 @@
                         class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/25 border border-cyan-400/40 hover:scale-105 active:scale-95 transition-all duration-200"
                         title="Đăng nhập để xem toàn bộ video kênh (kể cả video riêng tư) và thao tác Ẩn/Bạn bè/Xóa"
                     >
-                        <i class="fa-solid fa-qrcode text-amber-300"></i>
+                        <i class="fa-solid fa-key text-amber-300"></i>
                         <span>Studio / Check Post</span>
                         <span class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-cyan-950 text-cyan-300 rounded font-black border border-cyan-700/60">Mới</span>
                     </button>
@@ -1973,123 +1903,12 @@
             }
         }
 
-        function openAuthModal(tab = 'qr') {
+        function openAuthModal() {
             document.getElementById('authModal').classList.remove('hidden');
-            switchAuthTab(tab);
         }
 
         function closeAuthModal() {
             document.getElementById('authModal').classList.add('hidden');
-            stopQrPolling();
-        }
-
-        function switchAuthTab(tab) {
-            const btnQr = document.getElementById('authTabBtnQr');
-            const btnCookie = document.getElementById('authTabBtnCookie');
-            const contentQr = document.getElementById('authContentQr');
-            const contentCookie = document.getElementById('authContentCookie');
-
-            if (tab === 'qr') {
-                btnQr.className = "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md";
-                btnCookie.className = "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white hover:bg-slate-900";
-                contentQr.classList.remove('hidden');
-                contentCookie.classList.add('hidden');
-                startQrLogin();
-            } else {
-                btnCookie.className = "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md";
-                btnQr.className = "py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white hover:bg-slate-900";
-                contentCookie.classList.remove('hidden');
-                contentQr.classList.add('hidden');
-                stopQrPolling();
-            }
-        }
-
-        async function startQrLogin() {
-            stopQrPolling();
-            const qrImg = document.getElementById('qrCodeImg');
-            const loading = document.getElementById('qrLoadingOverlay');
-            const expired = document.getElementById('qrExpiredOverlay');
-            const errOverlay = document.getElementById('qrErrorOverlay');
-            const statusText = document.getElementById('qrStatusText');
-
-            qrImg.classList.add('hidden');
-            loading.classList.remove('hidden');
-            expired.classList.add('hidden');
-            if (errOverlay) errOverlay.classList.add('hidden');
-            statusText.innerText = "Đang kết nối TikTok Passport tạo mã QR...";
-
-            try {
-                const res = await fetch('/api/studio/qr/start', { method: 'POST' });
-                const data = await res.json();
-                if (data.success && data.qr_image) {
-                    qrImg.src = data.qr_image;
-                    qrImg.classList.remove('hidden');
-                    loading.classList.add('hidden');
-                    if (errOverlay) errOverlay.classList.add('hidden');
-                    statusText.innerText = "Đang chờ bạn mở TikTok quét mã...";
-                    
-                    // Bắt đầu polling trạng thái phiên mỗi 2 giây
-                    const sid = data.session_id;
-                    qrPollInterval = setInterval(() => pollQrStatus(sid), 2000);
-                } else {
-                    loading.classList.add('hidden');
-                    if (errOverlay) {
-                        const errMsg = document.getElementById('qrErrorMsg');
-                        if (errMsg) errMsg.innerText = data.error || "Không thể tạo mã QR.";
-                        errOverlay.classList.remove('hidden');
-                    }
-                    statusText.innerText = "Lỗi: " + (data.error || "Không thể tạo mã QR");
-                }
-            } catch (err) {
-                loading.classList.add('hidden');
-                if (errOverlay) {
-                    const errMsg = document.getElementById('qrErrorMsg');
-                    if (errMsg) errMsg.innerText = "Lỗi kết nối máy chủ: " + err.message;
-                    errOverlay.classList.remove('hidden');
-                }
-                statusText.innerText = "Lỗi kết nối máy chủ: " + err.message;
-            }
-        }
-
-        function stopQrPolling() {
-            if (qrPollInterval) {
-                clearInterval(qrPollInterval);
-                qrPollInterval = null;
-            }
-        }
-
-        async function pollQrStatus(sessionId) {
-            try {
-                const res = await fetch(`/api/studio/qr/status?session_id=${encodeURIComponent(sessionId)}`);
-                const data = await res.json();
-                const statusText = document.getElementById('qrStatusText');
-                const expiredOverlay = document.getElementById('qrExpiredOverlay');
-
-                if (data.status === 'confirmed' && data.cookie) {
-                    stopQrPolling();
-                    activeStudioSession = {
-                        account: data.account,
-                        cookie: data.cookie,
-                        saved_at: Date.now()
-                    };
-                    localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
-                    statusText.innerText = "Đăng nhập thành công! Đang mở Studio...";
-                    showToast("Đăng nhập TikTok thành công!");
-                    setTimeout(() => {
-                        closeAuthModal();
-                        renderAuthNav();
-                        openCheckPostModal();
-                    }, 800);
-                } else if (data.status === 'scanned') {
-                    statusText.innerHTML = `<span class="text-sky-400 font-bold">Đã quét mã! Nhấn [Xác nhận] trên app TikTok...</span>`;
-                } else if (data.status === 'expired') {
-                    stopQrPolling();
-                    expiredOverlay.classList.remove('hidden');
-                    statusText.innerText = "Mã QR đã hết hạn. Vui lòng bấm làm mới.";
-                }
-            } catch (e) {
-                console.error("Poll QR error:", e);
-            }
         }
 
         async function handleBrowserLogin() {
@@ -2170,7 +1989,7 @@
 
         function openCheckPostModal() {
             if (!activeStudioSession || !activeStudioSession.cookie) {
-                openAuthModal('qr');
+                openAuthModal();
                 return;
             }
 

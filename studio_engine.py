@@ -646,7 +646,7 @@ def run_interactive_browser_login(timeout_sec: int = 300) -> Dict[str, Any]:
             page.goto("https://www.tiktok.com/login", timeout=30000)
             page.wait_for_timeout(1500)
             try:
-                page.locator("text=QR").first.click(timeout=3000)
+                page.locator("text=/Use QR|Dùng mã QR|Quét mã QR|QR/i").first.click(timeout=3000)
             except Exception:
                 pass
 
