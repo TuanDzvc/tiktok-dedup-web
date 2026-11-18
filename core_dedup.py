@@ -1410,6 +1410,23 @@ def fetch_channel_info_and_posts(
 
         group_id = str(it.get("group_id") or it.get("groupId") or cached_meta.get("group_id") or "")
 
+        # Mã trạng thái kiểm duyệt TikTok (Mã 141 = Khiếu nại bản quyền, 140-149 = Bị gỡ bỏ / Vi phạm)
+        st_val = it.get("status")
+        st_code = 0
+        if isinstance(st_val, (int, str)) and str(st_val).isdigit():
+            st_code = int(st_val)
+        elif isinstance(st_val, dict):
+            st_code = int(st_val.get("video_status") or 0)
+
+        # Nhận diện khiếu nại bản quyền & vi phạm tiêu chuẩn
+        is_copyright = bool(
+            st_code == 141
+            or it.get("is_copyright") is True
+            or (isinstance(it.get("desc"), str) and "bản quyền" in it["desc"].lower())
+            or (isinstance(it.get("penalty_details"), str) and "bản quyền" in it["penalty_details"].lower())
+        )
+        is_takedown = bool(st_code in (140, 141, 142, 143, 144) or it.get("is_takedown") is True)
+
         # Cờ kiểm duyệt chính sách (penaltyContext)
         penalty_ctx = it.get("penaltyContext") if isinstance(it.get("penaltyContext"), dict) else {}
         display_penalty_type = int(penalty_ctx.get("display_penalty_type") or 0)
@@ -1420,7 +1437,7 @@ def fetch_channel_info_and_posts(
         is_prohibited = bool(it.get("isProhibited", False))
 
         status_dict = it.get("status") if isinstance(it.get("status"), dict) else {}
-        is_priv = bool(status_dict.get("is_private") or it.get("is_private") or it.get("privateItem"))
+        is_priv = bool(status_dict.get("is_private") or it.get("is_private") or it.get("privateItem") or is_copyright or (it.get("visibility") == 2))
 
         dur = it.get("duration") or (it.get("video", {}).get("duration") if isinstance(it.get("video"), dict) else 0) or 0
         try:
@@ -1436,7 +1453,9 @@ def fetch_channel_info_and_posts(
         collect_cnt = int(it.get("collect_count") or it.get("favorite_count") or stats.get("collectCount") or stats.get("collect_count") or 0)
 
         has_pen = bool(
-            it.get("has_penalty", False)
+            is_copyright
+            or is_takedown
+            or it.get("has_penalty", False)
             or (display_penalty_type != 0)
             or (display_policy != 0)
             or is_prohibited
@@ -1454,7 +1473,9 @@ def fetch_channel_info_and_posts(
 
         dup_reason = ""
         dup_origin_vid = ""
-        if has_real_group_dup:
+        if is_copyright:
+            dup_reason = "Khiếu nại bản quyền (Âm thanh/Hình ảnh vi phạm - Mã 141)"
+        elif has_real_group_dup:
             dup_reason = f"Trùng lặp Group ID (Group: {group_id})"
             dup_origin_vid = group_id
         elif cached_meta.get("is_dup"):
@@ -1473,7 +1494,9 @@ def fetch_channel_info_and_posts(
         # 3. Mất FYP (is_fyp): video không đủ điều kiện vào For You feed
         # 4. Shadowban (is_shadow): hiện tượng thuật toán bóp ngầm phân phối (view kẹt 0 - 300 view)
         is_fyp = bool(
-            is_dup
+            is_copyright
+            or is_takedown
+            or is_dup
             or (can_repost is False)
             or is_prohibited
             or has_pen
@@ -1483,9 +1506,16 @@ def fetch_channel_info_and_posts(
 
         is_shadow = False
         shadow_reason = ""
-        # Shadowban & FYP restriction: Chỉ xác định khi có tín hiệu thực sự từ TikTok (item_control, penaltyContext, isProhibited)
-        # Tuyệt đối không tự ý đoán mò dựa trên lượt xem thấp (ít view không đồng nghĩa với Mất FYP hay Shadowban)
-        if can_repost is False:
+        # Shadowban & FYP restriction: Xác định khi có tín hiệu thực sự từ TikTok (status 141, item_control, penaltyContext, isProhibited)
+        if is_copyright:
+            shadow_reason = "Khiếu nại bản quyền (TikTok tự động gỡ khỏi FYP & chuyển Riêng tư)"
+            is_fyp = True
+            is_shadow = True
+        elif is_takedown:
+            shadow_reason = f"Video bị gỡ bỏ / Vi phạm tiêu chuẩn TikTok (Mã trạng thái {st_code})"
+            is_fyp = True
+            is_shadow = True
+        elif can_repost is False:
             shadow_reason = "Hạn chế phân phối Bảng tin Cho bạn (Chặn chia sẻ lại)"
             is_fyp = True
         elif is_prohibited:
@@ -1501,7 +1531,10 @@ def fetch_channel_info_and_posts(
 
         pen_details_str = str(it.get("penalty_details") or "")
         if not pen_details_str:
-            pen_details_str = dup_reason or shadow_reason or ""
+            if is_copyright:
+                pen_details_str = "Khiếu nại bản quyền (Mã 141)"
+            else:
+                pen_details_str = dup_reason or shadow_reason or ""
         if not shadow_reason and is_shadow:
             shadow_reason = pen_details_str or "Video bị hạn chế xuất hiện trên FYP"
 
@@ -1583,6 +1616,9 @@ def fetch_channel_info_and_posts(
             "is_dup": is_dup,
             "is_fyp_restricted": is_fyp,
             "has_penalty": has_pen,
+            "is_copyright": is_copyright,
+            "is_takedown": is_takedown,
+            "status_code": st_code,
             "penalty_details": pen_details_str,
             "cover_url": cover_url,
             "duration_str": duration_str,
@@ -1616,14 +1652,16 @@ def fetch_channel_info_and_posts(
 
     total_loaded = len(video_list)
     dup_count = sum(1 for v in video_list if v.get("is_dup"))
-    fyp_pen_count = sum(1 for v in video_list if v.get("is_fyp_restricted") or v.get("shadow") or v.get("has_penalty"))
-    bad_count = sum(1 for v in video_list if v.get("is_dup") or v.get("is_fyp_restricted") or v.get("shadow") or v.get("has_penalty"))
+    copyright_count = sum(1 for v in video_list if v.get("is_copyright"))
+    fyp_pen_count = sum(1 for v in video_list if v.get("is_fyp_restricted") or v.get("shadow") or v.get("has_penalty") or v.get("is_copyright"))
+    bad_count = sum(1 for v in video_list if v.get("is_dup") or v.get("is_fyp_restricted") or v.get("shadow") or v.get("has_penalty") or v.get("is_copyright"))
     clean_count = max(0, total_loaded - bad_count)
 
     stats_summary = {
         "total_videos": total_loaded,
         "duplicate_count": dup_count,
         "penalty_count": fyp_pen_count,
+        "copyright_count": copyright_count,
         "clean_count": clean_count,
         "dup_percentage": round((bad_count / total_loaded * 100), 1) if total_loaded > 0 else 0,
     }

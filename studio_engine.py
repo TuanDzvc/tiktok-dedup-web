@@ -797,15 +797,35 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
 
             # Quyền riêng tư (Visibility)
             status_dict = it.get("status") if isinstance(it.get("status"), dict) else {}
+            # Trạng thái kiểm duyệt TikTok (Mã 141 = Khiếu nại bản quyền, 140-149 = Vi phạm / Takedown)
+            st_val = it.get("status")
+            st_code = 0
+            if isinstance(st_val, (int, str)) and str(st_val).isdigit():
+                st_code = int(st_val)
+            elif isinstance(st_val, dict):
+                st_code = int(st_val.get("video_status") or 0)
+
+            is_copyright = bool(
+                st_code == 141
+                or it.get("is_copyright") is True
+                or (isinstance(it.get("desc"), str) and "bản quyền" in it["desc"].lower())
+                or (isinstance(it.get("penalty_details"), str) and "bản quyền" in it["penalty_details"].lower())
+            )
+            is_takedown = bool(st_code in (140, 141, 142, 143, 144) or it.get("is_takedown") is True)
+
             vis_val = it.get("visibility")
             if vis_val is None:
-                vis_val = status_dict.get("video_visibility") or status_dict.get("private_status") or 1
+                vis_val = status_dict.get("video_visibility") or status_dict.get("private_status") or (2 if is_copyright else 1)
             vis_type = int(vis_val or 1)
 
-            is_priv = bool(vis_type == 2 or status_dict.get("is_private") or it.get("is_private"))
+            is_priv = bool(vis_type == 2 or status_dict.get("is_private") or it.get("is_private") or is_copyright)
             is_frd = bool(vis_type in (3, 4, 5) or status_dict.get("is_friend") or it.get("is_friend"))
 
-            if is_priv:
+            if is_copyright:
+                visibility_code = 2
+                visibility_label = "Khóa Bản quyền (Ẩn)"
+                visibility_badge = "bg-rose-950 text-rose-300 border-rose-800"
+            elif is_priv:
                 visibility_code = 2
                 visibility_label = "Riêng tư (Ẩn)"
                 visibility_badge = "bg-rose-950 text-rose-300 border-rose-800"
@@ -824,7 +844,9 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
             in_rev = bool(it.get("in_review"))
             penalty_ctx = it.get("penaltyContext") if isinstance(it.get("penaltyContext"), dict) else {}
             has_penalty = bool(
-                int(penalty_ctx.get("display_penalty_type") or 0) != 0
+                is_copyright
+                or is_takedown
+                or int(penalty_ctx.get("display_penalty_type") or 0) != 0
                 or int(penalty_ctx.get("display_policy") or 0) != 0
                 or bool(it.get("isProhibited"))
                 or in_rev
@@ -847,6 +869,9 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 "visibility_label": visibility_label,
                 "visibility_badge": visibility_badge,
                 "is_dup": is_dup,
+                "is_copyright": is_copyright,
+                "is_takedown": is_takedown,
+                "status_code": st_code,
                 "group_id": group_id,
                 "origin_url": f"https://www.tiktok.com/@tiktok/video/{group_id}" if is_dup else "",
                 "has_penalty": has_penalty,

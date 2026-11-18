@@ -1375,7 +1375,7 @@
                 return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0284c7&color=ffffff&bold=true`;
             }
             if (url.includes('ui-avatars.com')) return url;
-            const ck = cookieStr || (activeStudioSession ? activeStudioSession.cookie : '') || '';
+            const ck = cookieStr || currentCheckCookie || (activeStudioSession ? activeStudioSession.cookie : '') || '';
             let apiUrl = `/api/proxy/image?url=${encodeURIComponent(url)}`;
             if (ck) {
                 apiUrl += `&cookie=${encodeURIComponent(ck)}`;
@@ -1645,12 +1645,23 @@
             const dupVideos = currentVideos.filter(v => Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null')));
             const dupCount = dupVideos.length;
 
-            // 2. Video kẹt phân phối / mất FYP / shadowban
-            const penVideos = currentVideos.filter(v => Boolean(v.is_fyp_restricted || v.shadow || v.has_penalty));
+            // 2. Video kẹt phân phối / mất FYP / shadowban / bản quyền
+            const copyVideos = currentVideos.filter(v => Boolean(v.is_copyright || v.status_code === 141 || (v.penalty_details && v.penalty_details.toLowerCase().includes('bản quyền'))));
+            const copyCount = copyVideos.length;
+            const penVideos = currentVideos.filter(v => Boolean(v.is_fyp_restricted || v.shadow || v.has_penalty || v.is_copyright || v.status_code === 141));
             const penCount = penVideos.length;
 
-            // 3. Video sạch hoàn toàn: Không trùng và không bị phạt
-            const cleanCount = Math.max(0, total - dupCount);
+            // 3. Video sạch hoàn toàn: Không trùng và không bị phạt / hạn chế
+            const badVideos = currentVideos.filter(v => Boolean(
+                v.is_dup
+                || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null')
+                || v.is_fyp_restricted
+                || v.shadow
+                || v.has_penalty
+                || v.is_copyright
+                || v.status_code === 141
+            ));
+            const cleanCount = Math.max(0, total - badVideos.length);
 
             document.getElementById('statTotal').innerText = total;
             const sub = document.getElementById('statTotalSub');
@@ -1661,7 +1672,15 @@
             document.getElementById('statDup').innerText = dupCount;
             document.getElementById('statDupPercent').innerText = `${total > 0 ? ((dupCount / total) * 100).toFixed(0) : 0}%`;
             document.getElementById('statPenalty').innerText = penCount;
+            const penSub = document.getElementById('statPenaltySub');
+            if (penSub) {
+                penSub.innerHTML = copyCount > 0 ? `<span class="text-rose-400 font-bold">${copyCount} bản quyền</span>` : 'hạn chế';
+            }
             document.getElementById('statClean').innerText = cleanCount;
+            const cleanSub = document.getElementById('statCleanPercent');
+            if (cleanSub) {
+                cleanSub.innerText = `an toàn ${total > 0 ? ((cleanCount / total) * 100).toFixed(0) : 100}%`;
+            }
 
             document.getElementById('countTabAll').innerText = total;
             document.getElementById('countTabDup').innerText = dupCount;
@@ -1746,7 +1765,7 @@
 
             filteredVideos = currentVideos.filter(v => {
                 const isDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
-                const isFyp = Boolean(v.is_fyp_restricted || v.shadow || v.has_penalty);
+                const isFyp = Boolean(v.is_fyp_restricted || v.shadow || v.has_penalty || v.is_copyright || v.status_code === 141);
                 const isClean = !isDup && !isFyp;
 
                 if (currentFilter === 'dup' && !isDup) return false;
@@ -1829,8 +1848,15 @@
                 }
 
                 const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
+                const isCopyright = Boolean(v.is_copyright || v.status_code === 141 || (v.penalty_details && v.penalty_details.toLowerCase().includes('bản quyền')));
                 let dupBadge = '';
-                if (v.is_fyp_restricted && isThisDup) {
+                if (isCopyright) {
+                    dupBadge = `
+                        <div class="relative inline-flex items-center justify-center h-7">
+                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm" title="${penTitle || 'Khiếu nại bản quyền (Mã 141)'}"><i class="fa-solid fa-copyright text-rose-400"></i> Bản quyền</span>
+                        </div>
+                    `;
+                } else if (v.is_fyp_restricted && isThisDup) {
                     dupBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
                             <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
@@ -1848,7 +1874,7 @@
                     dupBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
                             <span class="h-7 px-2.5 rounded-lg bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}">🚨 Mất FYP</span>
-                                                    </div>
+                        </div>
                     `;
                 } else {
                     dupBadge = `
@@ -1859,7 +1885,13 @@
                 }
 
                 let sbBadge = '';
-                if (v.shadow) {
+                if (isCopyright) {
+                    sbBadge = `
+                        <div class="relative inline-flex items-center justify-center h-7">
+                            <span class="h-7 px-2.5 rounded-lg bg-rose-950/90 text-rose-400 border border-rose-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle || 'Khiếu nại bản quyền - Bị gỡ khỏi Bảng tin Cho bạn'}"><i class="fa-solid fa-ban text-[9px] text-rose-400"></i> Mất FYP</span>
+                        </div>
+                    `;
+                } else if (v.shadow) {
                     sbBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
                             <span class="h-7 px-2.5 rounded-lg bg-red-950/90 text-red-400 border border-red-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}">⛔ Có</span>
@@ -1873,14 +1905,18 @@
                     `;
                 }
 
-                const coverProxied = getProxiedImage(v.cover_url);
+                const coverProxied = getProxiedImage(v.cover_url, 'Video', currentCheckCookie);
 
                 tr.innerHTML = `
                     <td class="p-3 text-center text-slate-500 font-mono font-bold">${index + 1}</td>
                     <td class="p-3 text-center">
                         <div onclick="openModal('${v.aweme_id}')" class="relative group cursor-pointer inline-block rounded-lg overflow-hidden border border-slate-700">
-                            <img src="${coverProxied}" alt="Thumb" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-12 h-16 object-cover group-hover:scale-110 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = '/api/proxy/image?url=' + encodeURIComponent('${v.cover_url}'); } else { this.src='https://placehold.co/120x160/111726/38bdf8?text=TikTok'; }" />
-                            ${v.duration_str ? `<span class="absolute bottom-1 right-1 px-1 rounded bg-black/80 text-[9px] text-white font-mono">${v.duration_str}</span>` : ''}
+                            <img src="${coverProxied}" alt="Thumb" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-12 h-16 object-cover group-hover:scale-110 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = getProxiedImage('${v.cover_url}', 'Video', currentCheckCookie); } else { this.src='https://placehold.co/120x160/111726/38bdf8?text=TikTok'; }" />
+                            ${isCopyright ? `
+                                <div class="absolute inset-x-0 bottom-0 py-0.5 bg-rose-950/95 border-t border-rose-700/80 text-[8px] font-black text-rose-200 text-center tracking-tighter leading-none shadow">
+                                    Bản quyền
+                                </div>
+                            ` : (v.duration_str ? `<span class="absolute bottom-1 right-1 px-1 rounded bg-black/80 text-[9px] text-white font-mono">${v.duration_str}</span>` : '')}
                             <div class="absolute inset-0 bg-black/30 group-hover:bg-black/10 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition">
                                 <i class="fa-solid fa-play text-xs"></i>
                             </div>
@@ -1895,6 +1931,11 @@
                             <span>${v.date_local || v.date_utc || '—'}</span>
                         </div>
                         <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
+                            ${isCopyright ? `
+                                <span class="px-1.5 py-0.5 rounded font-bold bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1 shadow-sm" title="Video bị khiếu nại bản quyền âm thanh / hình ảnh (Mã 141)">
+                                    <i class="fa-solid fa-copyright text-rose-400"></i> Khiếu nại bản quyền
+                                </span>
+                            ` : ''}
                             <span class="px-1.5 py-0.5 rounded font-medium bg-slate-800/90 text-slate-200 border border-slate-700/80 flex items-center gap-1" title="Thiết bị đăng">
                                 <i class="fa-solid ${v.source_icon || 'fa-mobile-screen'} text-cyan-400 text-[10px]"></i>
                                 <span>${v.source || 'Mobile'}</span>
@@ -1986,23 +2027,29 @@
 
             filteredVideos.forEach(v => {
                 const card = document.createElement('div');
-                const isFyp = Boolean(v.is_fyp_restricted);
-                const isDup = Boolean(v.is_dup);
+                const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
+                const isCopyright = Boolean(v.is_copyright || v.status_code === 141 || (v.penalty_details && v.penalty_details.toLowerCase().includes('bản quyền')));
+                const isFyp = Boolean(v.is_fyp_restricted || v.shadow || v.has_penalty || isCopyright);
+                const isDup = isThisDup;
 
                 // Yêu cầu: "cái nào mất fyp làm viền màu đỏ"
                 let borderClass = 'border border-slate-700/80 bg-slate-900/70 hover:border-slate-500';
-                if (isFyp) {
+                if (isCopyright) {
+                    borderClass = 'border-2 border-rose-600 ring-2 ring-rose-600/50 shadow-xl shadow-rose-600/25 bg-rose-950/30';
+                } else if (isFyp) {
                     borderClass = 'border-2 border-red-500 ring-2 ring-red-500/50 shadow-xl shadow-red-500/25 bg-red-950/25';
                 } else if (isDup) {
                     borderClass = 'border-2 border-rose-500/80 bg-rose-950/15';
                 }
                 card.className = `glass-card rounded-2xl overflow-hidden flex flex-col justify-between group transition-all duration-200 ${borderClass}`;
 
-                const coverProxied = getProxiedImage(v.cover_url);
+                const coverProxied = getProxiedImage(v.cover_url, 'Video', currentCheckCookie);
 
                 // Yêu cầu: "các trạng thái như sạch, mất fyp làm to lên cho ra giữa thumb"
                 let centerBadge = '';
-                if (isFyp && isDup) {
+                if (isCopyright) {
+                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-700/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-300 drop-shadow flex items-center gap-1 backdrop-blur-md animate-pulse"><i class="fa-solid fa-copyright"></i> BẢN QUYỀN</span>`;
+                } else if (isFyp && isDup) {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md animate-pulse">🔴 TRÙNG / MẤT FYP</span>`;
                 } else if (isFyp) {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-amber-500/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-amber-200 drop-shadow flex items-center gap-1 backdrop-blur-md animate-pulse">🚨 MẤT FYP</span>`;
@@ -2014,7 +2061,7 @@
 
                 card.innerHTML = `
                     <div class="relative aspect-[3/4] bg-black overflow-hidden cursor-pointer" onclick="openModal('${v.aweme_id}')">
-                        <img src="${coverProxied}" alt="Cover" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = '/api/proxy/image?url=' + encodeURIComponent('${v.cover_url}'); } else { this.src='https://placehold.co/300x400/111726/38bdf8?text=TikTok'; }" />
+                        <img src="${coverProxied}" alt="Cover" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = getProxiedImage('${v.cover_url}', 'Video', currentCheckCookie); } else { this.src='https://placehold.co/300x400/111726/38bdf8?text=TikTok'; }" />
                         
                         <!-- Top-left Region Flag Badge -->
                         <span class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded bg-black/80 flex items-center gap-1 text-[10px] text-white font-bold backdrop-blur-sm border border-slate-700/60 shadow">
@@ -3410,14 +3457,15 @@
 
         function filterStudioPosts() {
             filteredStudioPosts = studioPosts.filter(v => {
-                // Khi ở tab "Tất cả": Ẩn các video riêng tư (ẩn), chỉ hiện các video còn lại (công khai / bạn bè)
-                if (studioFilter === 'all' && v.visibility_code === 2) return false;
+                const isCopy = Boolean(v.is_copyright || v.status_code === 141 || (v.penalty_details && v.penalty_details.toLowerCase().includes('bản quyền')));
+                // Khi ở tab "Tất cả": Ẩn các video riêng tư thông thường, NHƯNG các video bản quyền/án phạt phải hiển thị để người dùng thấy!
+                if (studioFilter === 'all' && v.visibility_code === 2 && !isCopy && !v.has_penalty) return false;
 
                 // Filter tab
                 if (studioFilter === 'public' && v.visibility_code !== 1) return false;
                 if (studioFilter === 'private' && v.visibility_code !== 2) return false;
                 if (studioFilter === 'friends' && v.visibility_code !== 3) return false;
-                if (studioFilter === 'dup' && !v.is_dup && !v.has_penalty) return false;
+                if (studioFilter === 'dup' && !v.is_dup && !v.has_penalty && !isCopy) return false;
 
                 // Search query
                 if (studioSearchQuery) {
@@ -3480,12 +3528,16 @@
                         <!-- Ảnh bìa: Bấm mở trực tiếp link @username/video chuẩn không bị 404 -->
                         <td class="py-1 px-1 text-center border-r border-slate-800/80">
                             <div class="relative w-12 h-16 rounded-md overflow-hidden bg-slate-950 border border-slate-700/80 group inline-block cursor-pointer shadow-sm" onclick="openStudioVideoLink('${item.item_id}', '${item.share_url}')">
-                                <img src="${cover}" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" onerror="this.onerror=null; this.src='data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D\'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg\'%20viewBox%3D\'0%200%2096%20128\'%3E%3Crect%20width%3D\'100%25\'%20height%3D\'100%25\'%20fill%3D\'%230f172a\'/><text%20x%3D\'50%25\'%20y%3D\'50%25\'%20dominant-baseline%3D\'middle\'%20text-anchor%3D\'middle\'%20font-size%3D\'28\'%20fill%3D\'%2338bdf8\'>%F0%9F%8E%AC%3C%2Ftext%3E%3C%2Fsvg%3E'" referrerpolicy="no-referrer" />
-                                ${item.duration_str ? `
+                                <img src="${cover}" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = getProxiedImage('${item.cover_url}', 'Video', (activeStudioSession ? activeStudioSession.cookie : '')); } else { this.src='data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D\'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg\'%20viewBox%3D\'0%200%2096%20128\'%3E%3Crect%20width%3D\'100%25\'%20height%3D\'100%25\'%20fill%3D\'%230f172a\'/><text%20x%3D\'50%25\'%20y%3D\'50%25\'%20dominant-baseline%3D\'middle\'%20text-anchor%3D\'middle\'%20font-size%3D\'28\'%20fill%3D\'%2338bdf8\'>%F0%9F%8E%AC%3C%2Ftext%3E%3C%2Fsvg%3E'; }" referrerpolicy="no-referrer" />
+                                ${(item.is_copyright || item.status_code === 141) ? `
+                                    <div class="absolute inset-x-0 bottom-0 py-0.5 bg-rose-950/95 border-t border-rose-700/80 text-[8px] font-black text-rose-200 text-center tracking-tighter leading-none shadow">
+                                        Bản quyền
+                                    </div>
+                                ` : (item.duration_str ? `
                                     <span class="absolute bottom-0.5 right-0.5 px-1 py-0 rounded text-[9px] font-bold text-white font-mono bg-black/85 backdrop-blur-sm">
                                         ${item.duration_str}
                                     </span>
-                                ` : ''}
+                                ` : '')}
                                 <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition">
                                     <i class="fa-solid fa-play text-[10px]"></i>
                                 </div>
@@ -3502,12 +3554,17 @@
                                     <i class="fa-regular fa-clock text-cyan-400 text-[10px]"></i>
                                     <span>${item.date_str} (UTC)</span>
                                 </div>
-                                ${item.is_dup ? `
+                                ${(item.is_copyright || item.status_code === 141) ? `
+                                    <div class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-rose-950/90 border border-rose-700/80 text-rose-300 font-bold shadow-sm">
+                                        <i class="fa-solid fa-copyright text-rose-400 text-[8px]"></i>
+                                        <span>Khiếu nại bản quyền</span>
+                                    </div>
+                                ` : (item.is_dup ? `
                                     <div class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800 text-rose-300 font-bold">
                                         <i class="fa-solid fa-triangle-exclamation text-[8px]"></i>
                                         <span>Trùng (#${item.group_id})</span>
                                     </div>
-                                ` : ''}
+                                ` : '')}
                             </div>
                         </td>
 
@@ -3551,7 +3608,11 @@
 
                         <!-- Shadowban -->
                         <td class="py-1 px-1 text-center border-r border-slate-800/80">
-                            ${(item.has_penalty && !item.is_dup) ? `
+                            ${(item.is_copyright || item.status_code === 141) ? `
+                                <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1 shadow-sm">
+                                    <i class="fa-solid fa-ban text-[8px] text-rose-400"></i> Mất FYP
+                                </span>
+                            ` : ((item.has_penalty && !item.is_dup) ? `
                                 <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1">
                                     <i class="fa-solid fa-ban text-[8px]"></i> Có
                                 </span>
@@ -3559,12 +3620,16 @@
                                 <span class="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800 text-[10px] font-bold inline-flex items-center gap-1">
                                     <i class="fa-solid fa-check text-[8px]"></i> Không
                                 </span>
-                            `}
+                            `)}
                         </td>
 
                         <!-- Án phạt -->
                         <td class="py-1 px-1 text-center border-r border-slate-800/80">
-                            ${item.has_penalty ? `
+                            ${(item.is_copyright || item.status_code === 141) ? `
+                                <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1 shadow-sm">
+                                    <i class="fa-solid fa-copyright text-[8px] text-rose-400"></i> Bản quyền
+                                </span>
+                            ` : (item.has_penalty ? `
                                 <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1">
                                     <i class="fa-solid fa-triangle-exclamation text-[8px]"></i> Mất FYP
                                 </span>
@@ -3572,13 +3637,19 @@
                                 <span class="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800 text-[10px] font-bold inline-flex items-center gap-1">
                                     <i class="fa-solid fa-check text-[8px]"></i> Không
                                 </span>
-                            `}
+                            `)}
                         </td>
 
                         <!-- Trạng thái: Thêm icon Khóa cho Riêng tư, căn giữa rõ nét -->
                         <td class="py-1 px-1 text-center border-r border-slate-800/80">
                             <div class="flex flex-col items-center justify-center leading-tight">
-                                ${isPriv ? `
+                                ${(item.is_copyright || item.status_code === 141) ? `
+                                    <span id="visBadge_${item.item_id}" class="text-[11px] font-bold text-rose-400 inline-flex items-center justify-center gap-1">
+                                        <i class="fa-solid fa-lock text-[10px] text-rose-400"></i>
+                                        <span>Khóa Bản quyền</span>
+                                    </span>
+                                    <span class="text-[9px] text-rose-400/80 font-medium">(Ẩn)</span>
+                                ` : (isPriv ? `
                                     <span id="visBadge_${item.item_id}" class="text-[11px] font-bold text-rose-400 inline-flex items-center justify-center gap-1">
                                         <i class="fa-solid fa-lock text-[10px] text-rose-400"></i>
                                         <span>Riêng tư</span>
@@ -3594,7 +3665,7 @@
                                         <i class="fa-solid fa-globe text-[10px] text-emerald-400"></i>
                                         <span>Công khai</span>
                                     </span>
-                                `)}
+                                `))}
                                 ${(item.has_penalty && isPub) ? '<span class="text-[9px] text-rose-400 font-mono font-semibold">[Chưa kháng]</span>' : ''}
                             </div>
                         </td>

@@ -414,8 +414,29 @@ def proxy_image(
         return Response(content=content, media_type=media_type, headers={"Cache-Control": "public, max-age=604800, immutable"})
 
     # 2. Tải qua Connection Pool dùng chung
+    target_cookie = cookie.strip() if cookie else ""
+    if not target_cookie:
+        # Thử trích xuất UID từ query parameter policy của TikTok Private CDN
+        try:
+            import urllib.parse, base64, json
+            parsed_u = urllib.parse.urlparse(url)
+            qs = urllib.parse.parse_qs(parsed_u.query)
+            policy_val = qs.get("policy", [""])[0]
+            if policy_val:
+                pad = len(policy_val) % 4
+                if pad:
+                    policy_val += "=" * (4 - pad)
+                pj = json.loads(base64.b64decode(policy_val).decode("utf-8", "ignore"))
+                target_uid = str(pj.get("uid") or "").strip()
+                if target_uid and target_uid in studio_engine.ACTIVE_STUDIO_ACCOUNTS:
+                    target_cookie = studio_engine.ACTIVE_STUDIO_ACCOUNTS[target_uid].get("cookie", "")
+        except Exception:
+            pass
+
     b_cookie, b_ua, _ = get_borrowed_cookie()
-    target_cookie = cookie.strip() if cookie else b_cookie
+    if not target_cookie:
+        target_cookie = b_cookie
+
     headers = {
         "User-Agent": b_ua or DEFAULT_UA,
         "Referer": "https://www.tiktok.com/",
@@ -432,7 +453,19 @@ def proxy_image(
             _put_image_cache(url, r.content, content_type)
             return Response(content=r.content, media_type=content_type, headers={"Cache-Control": "public, max-age=604800, immutable"})
         else:
-            # Thử lại không dùng Cookie (nếu CDN public) hoặc dùng Cookie thay thế
+            # Thử lần lượt các cookie tài khoản studio đã nạp trong bộ nhớ
+            if studio_engine.ACTIVE_STUDIO_ACCOUNTS:
+                for acc_k, acc_v in studio_engine.ACTIVE_STUDIO_ACCOUNTS.items():
+                    cand_ck = acc_v.get("cookie", "")
+                    if cand_ck and cand_ck != target_cookie:
+                        headers["Cookie"] = cand_ck
+                        r_cand = PROXY_SESSION.get(url, headers=headers, timeout=5)
+                        if r_cand.status_code == 200 and r_cand.content:
+                            content_type = r_cand.headers.get("Content-Type", "image/jpeg")
+                            _put_image_cache(url, r_cand.content, content_type)
+                            return Response(content=r_cand.content, media_type=content_type, headers={"Cache-Control": "public, max-age=604800, immutable"})
+
+            # Thử lại không dùng Cookie (nếu CDN public)
             if target_cookie:
                 headers.pop("Cookie", None)
                 r2 = PROXY_SESSION.get(url, headers=headers, timeout=6)
@@ -441,12 +474,12 @@ def proxy_image(
                     _put_image_cache(url, r2.content, content_type)
                     return Response(content=r2.content, media_type=content_type, headers={"Cache-Control": "public, max-age=604800, immutable"})
             
-            # Trả về ảnh placeholder SVG màu tối nếu TikTok CDN từ chối
+            # Trả về ảnh placeholder SVG màu tối nếu TikTok CDN từ chối (không lưu cache để cho phép thử lại)
             fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#38bdf8">🎬</text></svg>'
-            return Response(content=fallback_svg.encode("utf-8"), media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"})
+            return Response(content=fallback_svg.encode("utf-8"), media_type="image/svg+xml", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     except Exception as e:
         fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#38bdf8">🎬</text></svg>'
-        return Response(content=fallback_svg.encode("utf-8"), media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"})
+        return Response(content=fallback_svg.encode("utf-8"), media_type="image/svg+xml", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 @app.get("/api/debug_worker")
 def debug_worker():
