@@ -991,6 +991,8 @@ _BROWSER_LOGIN_STATE: Dict[str, Any] = {
     "account": None,
     "cookie": "",
     "proxy": "",
+    "qr_image": "",
+    "message": "",
     "error": "",
     "updated_at": 0
 }
@@ -998,18 +1000,19 @@ _BROWSER_LOGIN_LOCK = threading.Lock()
 _BROWSER_STOP_EVENT = threading.Event()
 
 
-def start_interactive_browser_login(timeout_sec: int = 300, proxy: str = "") -> Dict[str, Any]:
-    """Khởi động luồng chạy trình duyệt đăng nhập nền (hỗ trợ HTTP & SOCKS5) và phản hồi ngay lập tức để không bao giờ bị timeout."""
+def start_interactive_browser_login(timeout_sec: int = 300, proxy: str = "", force: bool = False) -> Dict[str, Any]:
+    """Khởi động luồng chạy Playwright Chromium chạy ngầm (Headless) bắt mã QR TikTok và phản hồi ngay lập tức."""
     global _BROWSER_LOGIN_STATE, _BROWSER_STOP_EVENT
     with _BROWSER_LOGIN_LOCK:
         current_status = _BROWSER_LOGIN_STATE.get("status", "idle")
         updated_at = _BROWSER_LOGIN_STATE.get("updated_at", 0)
-        # Nếu đang mở sẵn và vừa cập nhật trong vòng 45 giây gần đây
-        if current_status in ("starting", "waiting") and (time.time() - updated_at < 45):
+        # Nếu đang mở sẵn và vừa cập nhật trong vòng 45 giây gần đây và không yêu cầu làm mới
+        if not force and current_status in ("starting", "waiting", "qr_ready") and (time.time() - updated_at < 45):
             return {
                 "success": True,
                 "status": current_status,
-                "message": "Trình duyệt đang mở sẵn trên màn hình, vui lòng quét mã QR hoặc đăng nhập!"
+                "qr_image": _BROWSER_LOGIN_STATE.get("qr_image", ""),
+                "message": _BROWSER_LOGIN_STATE.get("message", "Mã QR đã sẵn sàng, hãy dùng app TikTok để quét!")
             }
 
         # Báo hiệu dừng phiên cũ nếu có
@@ -1021,6 +1024,8 @@ def start_interactive_browser_login(timeout_sec: int = 300, proxy: str = "") -> 
             "account": None,
             "cookie": "",
             "proxy": proxy,
+            "qr_image": "",
+            "message": "Đang kết nối TikTok & tạo mã QR...",
             "error": "",
             "updated_at": time.time()
         }
@@ -1035,7 +1040,7 @@ def start_interactive_browser_login(timeout_sec: int = 300, proxy: str = "") -> 
         return {
             "success": True,
             "status": "starting",
-            "message": "Đang mở cửa sổ trình duyệt Chrome..."
+            "message": "Đang kết nối TikTok và tạo mã QR đăng nhập..."
         }
 
 
@@ -1052,13 +1057,14 @@ def cancel_interactive_browser_login() -> Dict[str, Any]:
     _BROWSER_STOP_EVENT.set()
     with _BROWSER_LOGIN_LOCK:
         _BROWSER_LOGIN_STATE["status"] = "cancelled"
+        _BROWSER_LOGIN_STATE["qr_image"] = ""
         _BROWSER_LOGIN_STATE["error"] = "Đã hủy phiên đăng nhập."
         _BROWSER_LOGIN_STATE["updated_at"] = time.time()
     return {"success": True, "status": "cancelled"}
 
 
 def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: str = ""):
-    """Luồng worker chạy Playwright Chromium/Chrome mở cửa sổ thực tế trên desktop (hỗ trợ HTTP & SOCKS5 chống leak IP)."""
+    """Luồng worker chạy Playwright Chromium chạy ngầm (Headless) bắt mã QR TikTok và truyền về web client."""
     global _BROWSER_LOGIN_STATE
     browser = None
     bridge = None
@@ -1066,7 +1072,7 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
             launch_kwargs = {
-                "headless": False,
+                "headless": True,
                 "args": [
                     "--disable-blink-features=AutomationControlled",
                     "--no-sandbox",
@@ -1089,7 +1095,6 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                 browser = p.chromium.launch(**launch_kwargs)
 
             # Tự động đồng bộ Múi giờ (Timezone) và Ngôn ngữ (Locale) theo quốc gia Proxy
-            # để TikTok nhận diện 100% chuẩn thiết bị bản địa, không bị leak múi giờ Việt Nam (GMT+7)
             tz = "America/Los_Angeles"
             loc = "en-US"
             if proxy:
@@ -1133,10 +1138,10 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
 
             with _BROWSER_LOGIN_LOCK:
                 _BROWSER_LOGIN_STATE["status"] = "waiting"
+                _BROWSER_LOGIN_STATE["message"] = "Đang kết nối TikTok..."
                 _BROWSER_LOGIN_STATE["updated_at"] = time.time()
 
             try:
-                # Dùng wait_until="domcontentloaded" để cửa sổ bật lên ngay tức thì trong 1-2s
                 page.goto("https://www.tiktok.com/login", wait_until="domcontentloaded", timeout=25000)
             except Exception:
                 pass
@@ -1146,6 +1151,10 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
             except Exception:
                 pass
 
+            qr_captured = False
+            last_qr_ts = 0
+
+            # Vòng lặp chờ mã QR và theo dõi đăng nhập
             start_ts = time.time()
             while time.time() - start_ts < timeout_sec:
                 if stop_event.is_set():
@@ -1155,13 +1164,41 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                         pass
                     return
 
+                # Bắt mã QR từ thẻ canvas hoặc ảnh QR của TikTok
+                if (not qr_captured) or (time.time() - last_qr_ts > 15):
+                    try:
+                        # Kiểm tra xem mã QR có bị hết hạn cần click tải lại không
+                        reload_btn = page.locator("text=/Click to refresh|Nhấp để làm mới|Refresh|Tải lại/i").first
+                        if reload_btn.is_visible(timeout=200):
+                            try:
+                                reload_btn.click()
+                                time.sleep(0.8)
+                            except Exception:
+                                pass
+
+                        canvas = page.query_selector("canvas")
+                        if canvas:
+                            box = canvas.bounding_box()
+                            if box and box["width"] > 40 and box["height"] > 40:
+                                qr_url = canvas.evaluate("el => el.toDataURL()")
+                                if qr_url and qr_url.startswith("data:image"):
+                                    with _BROWSER_LOGIN_LOCK:
+                                        _BROWSER_LOGIN_STATE["status"] = "qr_ready"
+                                        _BROWSER_LOGIN_STATE["qr_image"] = qr_url
+                                        _BROWSER_LOGIN_STATE["message"] = "Mã QR đã sẵn sàng! Mở app TikTok để quét."
+                                        _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+                                    qr_captured = True
+                                    last_qr_ts = time.time()
+                    except Exception:
+                        pass
+
+                # Kiểm tra cookie sessionid khi người dùng quét mã xong trên điện thoại
                 try:
                     cookies = context.cookies()
                 except Exception:
-                    # Người dùng đã tắt cửa sổ trình duyệt bằng nút X đỏ
                     with _BROWSER_LOGIN_LOCK:
                         _BROWSER_LOGIN_STATE["status"] = "cancelled"
-                        _BROWSER_LOGIN_STATE["error"] = "Bạn đã đóng cửa sổ trình duyệt."
+                        _BROWSER_LOGIN_STATE["error"] = "Phiên đăng nhập đã kết thúc."
                         _BROWSER_LOGIN_STATE["updated_at"] = time.time()
                     try:
                         browser.close()
@@ -1173,7 +1210,6 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                 if sid:
                     cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies if c.get('name') and c.get('value'))
                     acc_info = get_account_info(cookie_str, proxy=proxy)
-                    # Trích xuất trực tiếp Avatar của kênh từ trình duyệt đang mở
                     try:
                         page.wait_for_timeout(1000)
                         av_found = page.evaluate("""() => {
@@ -1204,6 +1240,7 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                         _BROWSER_LOGIN_STATE["account"] = acc_info
                         _BROWSER_LOGIN_STATE["cookie"] = cookie_str
                         _BROWSER_LOGIN_STATE["proxy"] = proxy
+                        _BROWSER_LOGIN_STATE["message"] = "Đăng nhập thành công!"
                         _BROWSER_LOGIN_STATE["updated_at"] = time.time()
 
                     u_key = (acc_info.get("uniqueId") or acc_info.get("username", "")).lstrip("@").strip().lower()
@@ -1233,7 +1270,7 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                 pass
             with _BROWSER_LOGIN_LOCK:
                 _BROWSER_LOGIN_STATE["status"] = "timeout"
-                _BROWSER_LOGIN_STATE["error"] = "Đã hết thời gian chờ đăng nhập (5 phút)."
+                _BROWSER_LOGIN_STATE["error"] = "Đã hết thời gian chờ quét mã (5 phút)."
                 _BROWSER_LOGIN_STATE["updated_at"] = time.time()
 
     except Exception as e:
@@ -1244,7 +1281,7 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                 pass
         with _BROWSER_LOGIN_LOCK:
             _BROWSER_LOGIN_STATE["status"] = "error"
-            _BROWSER_LOGIN_STATE["error"] = f"Lỗi mở trình duyệt: {str(e)}"
+            _BROWSER_LOGIN_STATE["error"] = f"Lỗi tạo mã QR: {str(e)}"
             _BROWSER_LOGIN_STATE["updated_at"] = time.time()
     finally:
         if bridge:

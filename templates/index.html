@@ -820,24 +820,86 @@
                 </div>
             </div>
 
-            <!-- Cách 1: Mở Trình Duyệt Đăng Nhập Trực Tiếp (1-Click) -->
-            <div class="relative z-10 p-3.5 rounded-2xl bg-gradient-to-b from-cyan-950/70 via-slate-900/90 to-slate-950 border border-cyan-500/40 text-center space-y-2">
-                <div class="flex items-center justify-center gap-2 text-xs font-bold text-cyan-400 uppercase tracking-wider">
-                    <i class="fa-solid fa-bolt text-amber-400"></i>
-                    <span>Cách 1: Khuyên Dùng (1-Click Tự Động)</span>
+            <!-- Cách 1: Quét Mã QR TikTok (Trực Tiếp Trên Màn Hình Web - 1-Click) -->
+            <div id="qrLoginSection" class="relative z-10 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-b from-cyan-950/70 via-slate-900/90 to-slate-950 border border-cyan-500/40 text-center space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 text-xs font-bold text-cyan-400 uppercase tracking-wider">
+                        <i class="fa-solid fa-qrcode text-amber-400"></i>
+                        <span>Cách 1: Quét Mã QR TikTok (Khuyên Dùng)</span>
+                    </div>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-700/60 text-cyan-300 font-bold whitespace-nowrap">
+                        1-Click Tự Động
+                    </span>
                 </div>
-                <button 
-                    type="button" 
-                    id="btnBrowserLogin"
-                    onclick="handleBrowserLogin()" 
-                    class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-extrabold text-sm transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2.5 active:scale-98"
-                >
-                    <i class="fa-solid fa-window-maximize text-amber-300"></i>
-                    <span>Mở Cửa Sổ Trình Duyệt Đăng Nhập</span>
-                </button>
-                <p class="text-[11px] text-slate-400 leading-relaxed">
-                    💡 Cửa sổ Chrome riêng sẽ mở ra để bạn đăng nhập thoải mái bằng mã QR trên app TikTok, Google, SĐT hoặc Mật khẩu. Đăng nhập xong cửa sổ tự đóng và vào thẳng Check Post!
-                </p>
+
+                <!-- Khung ban đầu trước khi bấm nút -->
+                <div id="qrInitialContainer" class="space-y-2">
+                    <button 
+                        type="button" 
+                        id="btnBrowserLogin"
+                        onclick="handleBrowserLogin(false)" 
+                        class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-extrabold text-sm transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2.5 active:scale-98"
+                    >
+                        <i class="fa-solid fa-qrcode text-amber-300 text-base"></i>
+                        <span>Hiện Mã QR Đăng Nhập Kênh</span>
+                    </button>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">
+                        💡 Bấm để hiện mã QR trực tiếp trên màn hình, mở app TikTok trên điện thoại quét là xong ngay trong 3s! (Hỗ trợ chuẩn Proxy SOCKS5/HTTP đã chọn).
+                    </p>
+                </div>
+
+                <!-- Khung hiển thị mã QR khi đang tạo hoặc đã sẵn sàng -->
+                <div id="qrDisplayContainer" class="hidden flex flex-col items-center justify-center p-3 rounded-2xl bg-black/60 border border-cyan-500/30 space-y-3">
+                    <!-- Trạng thái chờ/loading -->
+                    <div id="qrLoadingState" class="py-6 flex flex-col items-center justify-center space-y-2.5">
+                        <div class="w-10 h-10 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
+                        <p class="text-xs text-cyan-300 font-bold animate-pulse">Đang kết nối TikTok & tạo mã QR...</p>
+                        <p class="text-[10px] text-slate-400">Đang đồng bộ địa chỉ IP & Múi giờ Proxy...</p>
+                    </div>
+
+                    <!-- Khung ảnh QR khi đã sẵn sàng -->
+                    <div id="qrReadyState" class="hidden flex flex-col items-center justify-center space-y-2.5 w-full">
+                        <div class="relative p-2.5 bg-white rounded-2xl shadow-[0_0_25px_rgba(34,211,238,0.35)] border-2 border-cyan-400 inline-block">
+                            <img id="qrImageElement" src="" alt="Mã QR TikTok" class="w-48 h-48 sm:w-52 sm:h-52 object-contain rounded-lg" />
+                            <div id="qrSuccessOverlay" class="hidden absolute inset-0 bg-emerald-950/95 rounded-2xl flex flex-col items-center justify-center text-emerald-300 p-2 space-y-1">
+                                <i class="fa-solid fa-circle-check text-4xl text-emerald-400 animate-bounce"></i>
+                                <span class="font-extrabold text-sm">Đã quét thành công!</span>
+                                <span class="text-[10px] text-slate-300">Đang nạp nick vào tool...</span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1 text-center">
+                            <p class="text-xs font-bold text-white flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-mobile-screen-button text-cyan-400 animate-bounce"></i>
+                                <span>Mở app TikTok trên điện thoại & quét mã trên</span>
+                            </p>
+                            <p class="text-[11px] text-slate-300">
+                                <b>Bước 1:</b> Mở app TikTok > <b>Hồ sơ</b> > Menu <b>☰</b> > <b>Mã QR của tôi</b><br/>
+                                <b>Bước 2:</b> Bấm biểu tượng <b>Quét</b> ở góc phải trên cùng > Quét mã này > <b>Xác nhận</b>
+                            </p>
+                        </div>
+
+                        <div class="flex items-center gap-2 pt-1 w-full max-w-xs justify-center">
+                            <button 
+                                type="button" 
+                                onclick="handleBrowserLogin(true)" 
+                                class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition active:scale-95"
+                                title="Bấm nếu mã QR bị hết hạn hoặc lỗi kết nối"
+                            >
+                                <i class="fa-solid fa-arrows-rotate text-[10px] text-cyan-400"></i>
+                                <span>Lấy mã mới</span>
+                            </button>
+                            <button 
+                                type="button" 
+                                onclick="cancelQrLogin()" 
+                                class="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 text-xs font-bold border border-rose-800/80 flex items-center gap-1.5 transition active:scale-95"
+                            >
+                                <i class="fa-solid fa-xmark text-[10px]"></i>
+                                <span>Hủy</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Phân cách -->
@@ -3049,18 +3111,37 @@
 
         let browserLoginPollInterval = null;
 
-        function closeAuthModal() {
-            document.getElementById('authModal').classList.add('hidden');
+        function cancelQrLogin() {
             if (browserLoginPollInterval) {
                 clearInterval(browserLoginPollInterval);
                 browserLoginPollInterval = null;
-                fetch('/api/studio/browser/login/cancel', { method: 'POST' }).catch(() => {});
             }
+            fetch('/api/studio/browser/login/cancel', { method: 'POST' }).catch(() => {});
+            
+            const initialEl = document.getElementById('qrInitialContainer');
+            const displayEl = document.getElementById('qrDisplayContainer');
+            const loadState = document.getElementById('qrLoadingState');
+            const readyState = document.getElementById('qrReadyState');
+            const qrImg = document.getElementById('qrImageElement');
+            const overlay = document.getElementById('qrSuccessOverlay');
+            
+            if (initialEl) initialEl.classList.remove('hidden');
+            if (displayEl) displayEl.classList.add('hidden');
+            if (loadState) loadState.classList.remove('hidden');
+            if (readyState) readyState.classList.add('hidden');
+            if (overlay) overlay.classList.add('hidden');
+            if (qrImg) qrImg.src = '';
+
             const btn = document.getElementById('btnBrowserLogin');
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = `<i class="fa-solid fa-window-maximize text-amber-300"></i> <span>Mở Cửa Sổ Trình Duyệt Đăng Nhập</span>`;
+                btn.innerHTML = `<i class="fa-solid fa-qrcode text-amber-300 text-base"></i> <span>Hiện Mã QR Đăng Nhập Kênh</span>`;
             }
+        }
+
+        function closeAuthModal() {
+            document.getElementById('authModal').classList.add('hidden');
+            cancelQrLogin();
             // Khôi phục lại bảng Check Post nếu người dùng đóng bảng đăng nhập mà chưa thêm nick
             if (wasCheckPostOpenBeforeAuth && activeStudioSession) {
                 wasCheckPostOpenBeforeAuth = false;
@@ -3068,37 +3149,38 @@
             }
         }
 
-        async function handleBrowserLogin() {
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            if (isMobile) {
-                alert("Tính năng [Mở Cửa Sổ Trình Duyệt] hoạt động trên máy tính (PC/Laptop).\n\nVì bạn đang mở web trên điện thoại, vui lòng kéo xuống dùng [Cách 2: Dán Cookie Tài Khoản] để nạp nick nhé!");
-                return;
-            }
-
+        async function handleBrowserLogin(force = false) {
             const proxy = (document.getElementById('loginProxyInput')?.value || '').trim();
             if (proxy) {
                 localStorage.setItem('tikflow_last_proxy', proxy);
             }
-            const btn = document.getElementById('btnBrowserLogin');
-            const origHtml = `<i class="fa-solid fa-window-maximize text-amber-300"></i> <span>Mở Cửa Sổ Trình Duyệt Đăng Nhập</span>`;
-            btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-amber-300"></i> <span>Đang khởi động Chrome...</span>`;
-            if (proxy) {
-                showToast("Đang kết nối qua Proxy: " + proxy + " và mở Chrome...");
-            } else {
-                showToast("Đang mở cửa sổ trình duyệt Chrome để đăng nhập...");
-            }
+
+            const initialEl = document.getElementById('qrInitialContainer');
+            const displayEl = document.getElementById('qrDisplayContainer');
+            const loadState = document.getElementById('qrLoadingState');
+            const readyState = document.getElementById('qrReadyState');
+            const qrImg = document.getElementById('qrImageElement');
+            const overlay = document.getElementById('qrSuccessOverlay');
+
+            if (initialEl) initialEl.classList.add('hidden');
+            if (displayEl) displayEl.classList.remove('hidden');
+            if (loadState) loadState.classList.remove('hidden');
+            if (readyState) readyState.classList.add('hidden');
+            if (overlay) overlay.classList.add('hidden');
+            if (qrImg) qrImg.src = '';
 
             if (browserLoginPollInterval) {
                 clearInterval(browserLoginPollInterval);
                 browserLoginPollInterval = null;
             }
 
+            showToast(proxy ? `Đang kết nối qua Proxy: ${proxy} & tạo mã QR...` : "Đang kết nối TikTok & tạo mã QR...");
+
             try {
                 const startRes = await fetch('/api/studio/browser/login/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ proxy: proxy })
+                    body: JSON.stringify({ proxy: proxy, force: force })
                 });
                 const text = await startRes.text();
                 let startData = null;
@@ -3109,24 +3191,25 @@
                 }
 
                 if (!startData || !startData.success) {
-                    alert(startData && startData.error ? startData.error : "Không thể khởi động trình duyệt.");
-                    btn.disabled = false;
-                    btn.innerHTML = origHtml;
+                    alert(startData && startData.error ? startData.error : "Không thể khởi động kết nối TikTok.");
+                    cancelQrLogin();
                     return;
                 }
 
-                showToast("Cửa sổ Chrome đang bật lên trên màn hình! Hãy quét mã QR...");
+                // Nếu đã có mã QR sẵn trong bộ nhớ đệm
+                if (startData.qr_image) {
+                    if (qrImg) qrImg.src = startData.qr_image;
+                    if (loadState) loadState.classList.add('hidden');
+                    if (readyState) readyState.classList.remove('hidden');
+                }
 
-                // Bắt đầu chu kỳ Polling an toàn không bao giờ bị Cloudflare Timeout
+                // Bắt đầu chu kỳ Polling
                 let pollCount = 0;
                 browserLoginPollInterval = setInterval(async () => {
                     pollCount++;
-                    if (pollCount > 200) { // 200 * 1.5s = 300s (5 phút)
-                        clearInterval(browserLoginPollInterval);
-                        browserLoginPollInterval = null;
-                        btn.disabled = false;
-                        btn.innerHTML = origHtml;
-                        alert("Đã hết thời gian chờ đăng nhập (5 phút).");
+                    if (pollCount > 250) { // 250 * 1.2s = 300s (5 phút)
+                        cancelQrLogin();
+                        alert("Đã hết thời gian chờ quét mã (5 phút). Vui lòng thử lại!");
                         return;
                     }
 
@@ -3137,51 +3220,43 @@
                         try {
                             data = JSON.parse(statusText);
                         } catch (err) {
-                            return; // Bỏ qua nếu có ngắt quãng mạng ngắn
+                            return; // Bỏ qua ngắt quãng mạng ngắn
                         }
 
                         if (!data) return;
 
-                        if (data.status === 'starting') {
-                            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-amber-300"></i> <span>Đang khởi động Chrome...</span>`;
-                        } else if (data.status === 'waiting') {
-                            btn.innerHTML = `<i class="fa-solid fa-qrcode animate-pulse text-emerald-400"></i> <span>Cửa sổ đã mở! Hãy quét mã QR...</span>`;
+                        if (data.status === 'qr_ready' && data.qr_image) {
+                            if (qrImg && qrImg.src !== data.qr_image) {
+                                qrImg.src = data.qr_image;
+                            }
+                            if (loadState) loadState.classList.add('hidden');
+                            if (readyState) readyState.classList.remove('hidden');
                         } else if (data.status === 'success' && data.account) {
                             clearInterval(browserLoginPollInterval);
                             browserLoginPollInterval = null;
-                            btn.disabled = false;
-                            btn.innerHTML = origHtml;
+                            if (overlay) overlay.classList.remove('hidden');
                             const finalProxy = data.proxy || proxy || '';
                             saveStudioAccount(data.account, data.cookie, finalProxy);
-                            wasCheckPostOpenBeforeAuth = false;
-                            closeAuthModal();
-                            showToast("Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
-                            openCheckPostModal(true);
+                            showToast("🎉 Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
+                            setTimeout(() => {
+                                wasCheckPostOpenBeforeAuth = false;
+                                closeAuthModal();
+                                openCheckPostModal(true);
+                            }, 1200);
                         } else if (data.status === 'cancelled') {
-                            clearInterval(browserLoginPollInterval);
-                            browserLoginPollInterval = null;
-                            btn.disabled = false;
-                            btn.innerHTML = origHtml;
-                            showToast("Bạn đã đóng cửa sổ trình duyệt.");
+                            cancelQrLogin();
+                            showToast("Đã hủy phiên đăng nhập.");
                         } else if (data.status === 'error' || data.status === 'timeout') {
-                            clearInterval(browserLoginPollInterval);
-                            browserLoginPollInterval = null;
-                            btn.disabled = false;
-                            btn.innerHTML = origHtml;
+                            cancelQrLogin();
                             alert(data.error || "Đăng nhập không thành công.");
                         }
                     } catch (pollErr) {
-                        // Lỗi mạng tạm thời, lượt sau thử tiếp
+                        // Bỏ qua lỗi ngắt quãng mạng tạm thời
                     }
-                }, 1500);
+                }, 1200);
 
             } catch (e) {
-                if (browserLoginPollInterval) {
-                    clearInterval(browserLoginPollInterval);
-                    browserLoginPollInterval = null;
-                }
-                btn.disabled = false;
-                btn.innerHTML = origHtml;
+                cancelQrLogin();
                 alert("Lỗi kết nối: " + e.message);
             }
         }
