@@ -715,11 +715,20 @@
                 <p id="modalDesc" class="text-sm text-slate-200 line-clamp-3 font-medium"></p>
                 <div class="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
                     <span id="modalDate"></span>
-                    <a id="modalExternalLink" href="#" target="_blank" class="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition flex items-center gap-1.5">
-                        <span>Mở trên TikTok</span>
-                        <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
-                    </a>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="copyText(document.getElementById('modalExternalLink').href); showToast('Đã sao chép link video TikTok!');" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition flex items-center gap-1.5 border border-slate-700">
+                            <i class="fa-regular fa-copy text-xs"></i>
+                            <span>Copy link</span>
+                        </button>
+                        <a id="modalExternalLink" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition flex items-center gap-1.5 shadow-md">
+                            <span>Mở trên TikTok</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                        </a>
+                    </div>
                 </div>
+                <p class="text-[10px] text-slate-500 text-center italic pt-1">
+                    💡 Mẹo: Nếu mở web TikTok báo lỗi HTTP 403, đó là do TikTok chặn IP Việt Nam xem trực tiếp; hãy dùng VPN/Proxy hoặc mở trên app TikTok.
+                </p>
             </div>
         </div>
     </div>
@@ -1379,6 +1388,22 @@
             img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=0284c7&color=ffffff&bold=true`;
         }
 
+        let currentCheckCookie = '';
+        let currentCheckProxy = '';
+        let currentCheckSecUid = '';
+
+        async function safeParseJson(response) {
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (err) {
+                if (text.includes("<!DOCTYPE") || text.includes("<html") || response.status >= 500) {
+                    throw new Error(`Máy chủ đang bận hoặc phản hồi chậm (HTTP ${response.status} Timeout). Vui lòng thử lại sau giây lát!`);
+                }
+                throw new Error("Phản hồi không hợp lệ từ máy chủ: " + text.slice(0, 100));
+            }
+        }
+
         function extractCleanHandle(input) {
             if (!input) return '';
             let val = String(input).trim();
@@ -1387,10 +1412,10 @@
                 val = val.split('tiktok.com/@')[1].split('?')[0].split('#')[0].split('/')[0];
             } else if (val.includes('tiktok.com/')) {
                 let part = val.split('tiktok.com/')[1].split('?')[0].split('#')[0].split('/')[0];
-                val = part.startsWith('@') ? part.slice(1) : part;
+                val = part.replace(/^@+/, '');
             }
             val = val.split('?')[0].split('#')[0].replace(/\/+$/, '').trim();
-            if (val.startsWith('@')) val = val.slice(1);
+            val = val.replace(/^@+/, '');
             return val ? '@' + val : '';
         }
 
@@ -1427,7 +1452,8 @@
         }
 
         async function runCheckQuery(inputVal) {
-            currentQuery = inputVal;
+            const cleanHandle = extractCleanHandle(inputVal);
+            currentQuery = cleanHandle;
             currentMaxCursor = 0;
             currentVideos = [];
             hasMoreVideos = false;
@@ -1442,14 +1468,47 @@
 
             const limit = parseInt(document.getElementById('scanLimitSelect')?.value || 24);
 
+            // Tự động kiểm tra xem kênh này có trong kho tài khoản Studio đã lưu hay không
+            const queryCleanName = cleanHandle.replace(/^@+/, '').toLowerCase();
+            const savedAccounts = getSavedStudioAccounts();
+            currentCheckCookie = '';
+            currentCheckProxy = '';
+            currentCheckSecUid = '';
+
+            const matchedAcc = savedAccounts.find(a => {
+                const aU = String(a.uniqueId || a.username || '').replace(/^@+/, '').toLowerCase();
+                const aN = String(a.nickname || '').toLowerCase();
+                return aU === queryCleanName || aN === queryCleanName || String(a.uid) === queryCleanName;
+            });
+
+            if (matchedAcc && matchedAcc.cookie) {
+                currentCheckCookie = matchedAcc.cookie;
+                currentCheckProxy = matchedAcc.proxy || '';
+                currentCheckSecUid = matchedAcc.sec_uid || '';
+            } else if (activeStudioSession && activeStudioSession.cookie) {
+                const activeU = String(activeStudioSession.account?.uniqueId || activeStudioSession.account?.username || '').replace(/^@+/, '').toLowerCase();
+                if (activeU === queryCleanName) {
+                    currentCheckCookie = activeStudioSession.cookie;
+                    currentCheckProxy = activeStudioSession.proxy || '';
+                    currentCheckSecUid = activeStudioSession.account?.sec_uid || '';
+                }
+            }
+
             try {
                 const response = await fetch('/api/check', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: inputVal, max_cursor: 0, max_videos: limit })
+                    body: JSON.stringify({
+                        query: cleanHandle,
+                        max_cursor: 0,
+                        max_videos: limit,
+                        cookie: currentCheckCookie,
+                        proxy: currentCheckProxy,
+                        sec_uid: currentCheckSecUid
+                    })
                 });
 
-                const data = await response.json();
+                const data = await safeParseJson(response);
                 if (!data.success) {
                     showError(data.error || "Không tìm thấy thông tin kênh TikTok.");
                     return;
@@ -1492,11 +1551,25 @@
                     body: JSON.stringify({
                         query: currentQuery,
                         max_cursor: currentMaxCursor,
-                        max_videos: 24
+                        max_videos: 24,
+                        cookie: currentCheckCookie,
+                        proxy: currentCheckProxy,
+                        sec_uid: currentCheckSecUid
                     })
                 });
 
-                const data = await response.json();
+                const data = await safeParseJson(response);
+                if (data.success && data.list && data.list.length > 0) {
+                    currentVideos.push(...data.list);
+                    currentMaxCursor = data.maxCursor || (currentMaxCursor + data.list.length);
+                    hasMoreVideos = Boolean(data.hasMore);
+
+                    updateSummaryStats();
+                    filterVideos();
+                    showToast(`Đã tải thêm ${data.list.length} video mới!`);
+                } else {
+                    hasMoreVideos = false;
+                }
                 if (data.success && data.list && data.list.length > 0) {
                     currentVideos.push(...data.list);
                     currentMaxCursor = data.maxCursor || (currentMaxCursor + data.list.length);
@@ -1600,11 +1673,14 @@
             const ch = data.channel || {};
             const ui = data.user_info || {};
 
+            const rawUniqueId = String(ch.uniqueId || '').replace(/^@+/, '').trim();
+            const cleanHandle = rawUniqueId ? `@${rawUniqueId}` : '';
+
             // 1. Channel header card (Left)
-            document.getElementById('chNickname').innerText = ch.nickname || ch.uniqueId || 'Kênh TikTok';
-            document.getElementById('chUniqueId').innerText = `@${ch.uniqueId || ''}`;
-            document.getElementById('chAvatar').src = getProxiedImage(ch.avatar);
-            document.getElementById('chProfileLink').href = `https://www.tiktok.com/@${ch.uniqueId}`;
+            document.getElementById('chNickname').innerText = ch.nickname || rawUniqueId || 'Kênh TikTok';
+            document.getElementById('chUniqueId').innerText = cleanHandle;
+            document.getElementById('chAvatar').src = getProxiedImage(ch.avatar, ch.nickname || rawUniqueId);
+            document.getElementById('chProfileLink').href = rawUniqueId ? `https://www.tiktok.com/@${rawUniqueId}` : '#';
             document.getElementById('chCreateDate').innerText = ch.createDate || '—';
             const regCode = (ch.region || 'US').replace('_TTP', '');
             document.getElementById('chCountryText').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${ch.region_display || regCode}</span></span>`;
@@ -1612,13 +1688,14 @@
             document.getElementById('chFollowers').innerText = ch.followers_fmt || (ch.followers ? ch.followers.toLocaleString() : '0');
 
             // 2. Check user Panel (Right - Image 3)
-            document.getElementById('cuHeaderHandle').innerText = `@${ch.uniqueId || ''}`;
+            document.getElementById('cuHeaderHandle').innerText = cleanHandle;
             const folFmt = ch.followers_fmt || (ch.followers ? ch.followers.toLocaleString() : '0');
             const cuHeaderFol = document.getElementById('cuHeaderFollowers');
             if (cuHeaderFol) cuHeaderFol.innerText = folFmt;
 
             document.getElementById('cuScreenName').innerText = ui.screen_name || ch.nickname || '—';
-            document.getElementById('cuUsername').innerText = ui.username || `@${ch.uniqueId || ''}`;
+            const rawUiUser = String(ui.username || '').replace(/^@+/, '').trim();
+            document.getElementById('cuUsername').innerText = rawUiUser ? `@${rawUiUser}` : cleanHandle;
 
             document.getElementById('cuCreateDate').innerText = ui.create_date || ch.createDate || '—';
             document.getElementById('cuPhone').innerText = (ui.mobile && ui.mobile !== 'chưa gắn') ? ui.mobile : '—';
@@ -1628,7 +1705,7 @@
             document.getElementById('cuLastNickChange').innerText = ui.last_nickname_change || '—';
             document.getElementById('cuStatusBadge').innerText = ui.is_self ? '⭐ Nick trong Tool' : '🌐 Kênh công khai';
             const qInput = document.getElementById('quickCheckInput');
-            if (qInput) qInput.value = ch.uniqueId ? `@${ch.uniqueId}` : '';
+            if (qInput) qInput.value = cleanHandle;
 
             // 3. Stats & Videos
             updateSummaryStats();
@@ -2008,7 +2085,28 @@
         }
 
         function openModal(awemeId) {
-            const video = currentVideos.find(v => v.aweme_id === awemeId);
+            let video = currentVideos.find(v => String(v.aweme_id) === String(awemeId));
+            if (!video && studioPosts && studioPosts.length > 0) {
+                const sItem = studioPosts.find(v => String(v.item_id) === String(awemeId) || String(v.aweme_id) === String(awemeId));
+                if (sItem) {
+                    let curUsername = '';
+                    if (activeStudioSession && activeStudioSession.account) {
+                        curUsername = (activeStudioSession.account.uniqueId || activeStudioSession.account.username || '').replace(/^@+/, '').trim();
+                    }
+                    const sUrl = curUsername ? `https://www.tiktok.com/@${curUsername}/video/${sItem.item_id}` : `https://www.tiktok.com/@tiktok/video/${sItem.item_id}`;
+                    video = {
+                        aweme_id: sItem.item_id,
+                        cover_url: sItem.cover_url,
+                        desc: sItem.desc,
+                        date_local: sItem.date_str,
+                        share_url: sUrl,
+                        origin_url: sItem.origin_url,
+                        group_id: sItem.group_id,
+                        is_dup: sItem.is_dup,
+                        shadowReason: sItem.has_penalty ? 'Video có dấu hiệu án phạt hoặc vi phạm chính sách' : ''
+                    };
+                }
+            }
             if (!video) return;
 
             document.getElementById('modalCoverImg').src = getProxiedImage(video.cover_url);
@@ -2146,45 +2244,67 @@
 
         // ==================== MULTI-ACCOUNT MANAGEMENT ====================
         function getSavedStudioAccounts() {
+            let list = [];
             try {
                 const raw = localStorage.getItem('tikflow_studio_accounts');
                 if (raw) {
-                    const list = JSON.parse(raw);
-                    if (Array.isArray(list) && list.length > 0) return list;
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) list = parsed;
                 }
             } catch (e) {
                 console.error("Lỗi đọc danh sách tài khoản:", e);
             }
-            // Fallback sang tài khoản đơn lẻ cũ nếu có
-            try {
-                const single = localStorage.getItem('tikflow_studio_session');
-                if (single) {
-                    const parsed = JSON.parse(single);
-                    if (parsed && parsed.cookie && parsed.account) {
-                        const acc = {
-                            ...parsed.account,
-                            cookie: parsed.cookie,
-                            proxy: parsed.proxy || '',
-                            last_active: parsed.saved_at || Date.now()
-                        };
-                        return [acc];
+            if (list.length === 0) {
+                try {
+                    const single = localStorage.getItem('tikflow_studio_session');
+                    if (single) {
+                        const parsed = JSON.parse(single);
+                        if (parsed && parsed.cookie && parsed.account) {
+                            list = [{
+                                ...parsed.account,
+                                cookie: parsed.cookie,
+                                proxy: parsed.proxy || '',
+                                last_active: parsed.saved_at || Date.now()
+                            }];
+                        }
                     }
+                } catch (e) {}
+            }
+
+            // Tự động làm sạch triệt để mọi lỗi dấu @@ trong localStorage
+            let modified = false;
+            list.forEach(a => {
+                const rawU = String(a.uniqueId || a.username || '').replace(/^@+/, '').trim();
+                const cleanU = rawU ? `@${rawU}` : '';
+                if (a.username !== cleanU) {
+                    a.username = cleanU;
+                    modified = true;
                 }
-            } catch (e) {}
-            return [];
+                if (a.uniqueId !== rawU) {
+                    a.uniqueId = rawU;
+                    modified = true;
+                }
+            });
+            if (modified) {
+                try {
+                    localStorage.setItem('tikflow_studio_accounts', JSON.stringify(list));
+                } catch (e) {}
+            }
+            return list;
         }
 
         function saveStudioAccount(accountInfo, cookie, proxy = '') {
             if (!accountInfo || !cookie) return;
             let accounts = getSavedStudioAccounts();
-            const uid = String(accountInfo.uid || accountInfo.uniqueId || accountInfo.username || Date.now());
+            const rawUname = String(accountInfo.uniqueId || accountInfo.username || '').replace(/^@+/, '').trim();
+            const uid = String(accountInfo.uid || rawUname || Date.now());
             
-            const existingIdx = accounts.findIndex(a => String(a.uid) === uid || String(a.uniqueId) === String(accountInfo.uniqueId));
+            const existingIdx = accounts.findIndex(a => String(a.uid) === uid || (rawUname && String(a.uniqueId).toLowerCase() === rawUname.toLowerCase()));
             const newAcc = {
                 uid: uid,
-                uniqueId: accountInfo.uniqueId || (accountInfo.username || '').replace('@', ''),
-                username: accountInfo.username || `@${accountInfo.uniqueId}`,
-                nickname: accountInfo.nickname || accountInfo.username || 'User',
+                uniqueId: rawUname,
+                username: rawUname ? `@${rawUname}` : '',
+                nickname: accountInfo.nickname || rawUname || 'User',
                 avatar: accountInfo.avatar || '',
                 country: (accountInfo.country || 'US').toUpperCase(),
                 create_date: accountInfo.create_date || '-',
@@ -2385,8 +2505,9 @@
                 avatarEl.src = avatar;
                 avatarEl.dataset.fallbackName = acc.nickname || acc.username || 'User';
             }
-            document.getElementById('studioNickname').innerText = acc.nickname || acc.username || 'Channel Name';
-            document.getElementById('studioUsername').innerText = acc.username || '@user';
+            const hCleanUser = String(acc.uniqueId || acc.username || '').replace(/^@+/, '').trim();
+            document.getElementById('studioNickname').innerText = acc.nickname || hCleanUser || 'Channel Name';
+            document.getElementById('studioUsername').innerText = hCleanUser ? `@${hCleanUser}` : '@user';
             document.getElementById('studioCountryFlag').innerHTML = getCountryFlag(acc.country);
             document.getElementById('studioUid').innerText = `UID: ${acc.uid || '-'}`;
             document.getElementById('studioCreatedDate').innerText = `Tạo: ${acc.create_date || '-'}`;
@@ -2474,7 +2595,7 @@
                                 <span class="whitespace-nowrap">${escapeHtml(acc.nickname || 'User')}</span>
                                 ${flag}
                             </div>
-                            <div class="text-[10px] text-cyan-400 font-mono leading-tight whitespace-nowrap">${escapeHtml(acc.username || '')}</div>
+                            <div class="text-[10px] text-cyan-400 font-mono leading-tight whitespace-nowrap">${escapeHtml(acc.username ? ('@' + acc.username.replace(/^@+/, '')) : '')}</div>
                         </div>
 
                         <!-- Dropdown chuyển đổi nick nhanh trên Navbar -->
@@ -2512,7 +2633,7 @@
                                                             <span class="truncate max-w-[120px]">${escapeHtml(a.nickname || 'User')}</span>
                                                             ${aFlag}
                                                         </div>
-                                                        <div class="text-[10px] text-cyan-400 font-mono truncate">${escapeHtml(a.username || '')}</div>
+                                                        <div class="text-[10px] text-cyan-400 font-mono truncate">${escapeHtml(a.username ? ('@' + a.username.replace(/^@+/, '')) : '')}</div>
                                                     </div>
                                                 </div>
                                                 <div class="flex items-center gap-1.5 flex-shrink-0 pl-1">
@@ -2587,7 +2708,7 @@
         }
 
         function selectAccountForCheck(username) {
-            const clean = username.startsWith('@') ? username : '@' + username;
+            const clean = extractCleanHandle(username);
             const input = document.getElementById('channelInput');
             if (input) input.value = clean;
             const qInput = document.getElementById('quickCheckInput');
@@ -2624,7 +2745,8 @@
                         ? getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '') 
                         : `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nickname || a.username || 'User')}&background=0284c7&color=ffffff&bold=true`;
                     const aFlag = getCountryFlag(a.country);
-                    const handle = a.username ? `@${a.username}` : (a.nickname || 'User');
+                    const rawUser = String(a.uniqueId || a.username || '').replace(/^@+/, '').trim();
+                    const handle = rawUser ? `@${rawUser}` : (a.nickname || 'User');
                     return `
                         <div onclick="selectAccountForCheck('${escapeHtml(handle)}')" class="flex items-center justify-between p-2 rounded-xl hover:bg-slate-800/90 cursor-pointer transition border border-transparent hover:border-cyan-500/40">
                             <div class="flex items-center gap-2 overflow-hidden">
@@ -2650,7 +2772,8 @@
                         ? getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '') 
                         : `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nickname || a.username || 'User')}&background=0284c7&color=ffffff&bold=true`;
                     const aFlag = getCountryFlag(a.country);
-                    const handle = a.username ? `@${a.username}` : (a.nickname || 'User');
+                    const rawUser = String(a.uniqueId || a.username || '').replace(/^@+/, '').trim();
+                    const handle = rawUser ? `@${rawUser}` : (a.nickname || 'User');
                     return `
                         <button type="button" onclick="selectAccountForCheck('${escapeHtml(handle)}')" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-cyan-950/80 border border-slate-700/80 hover:border-cyan-500/60 text-slate-200 text-xs font-medium transition active:scale-95 shadow-sm">
                             <img src="${aAv}" class="w-4 h-4 rounded-full object-cover flex-shrink-0" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(a.nickname || a.username || 'User')}" />
@@ -3035,7 +3158,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ cookie: rawCookie, proxy: proxy })
                 });
-                const data = await res.json();
+                const data = await safeParseJson(res);
 
                 if (data.success && data.account) {
                     if (proxy) localStorage.setItem('tikflow_last_proxy', proxy);
@@ -3144,7 +3267,7 @@
                         sec_uid: secUid
                     })
                 });
-                const data = await res.json();
+                const data = await safeParseJson(res);
 
                 // Kiểm tra xem trong lúc fetch, người dùng có đổi sang nick khác không
                 const activeNow = String(activeStudioSession?.account?.uid || '');
@@ -3592,7 +3715,7 @@
                         proxy: activeStudioSession.proxy || ''
                     })
                 });
-                const data = await res.json();
+                const data = await safeParseJson(res);
 
                 if (data.success) {
                     item.visibility_code = newVis;
@@ -3672,7 +3795,7 @@
                         proxy: activeStudioSession.proxy || ''
                     })
                 });
-                const data = await res.json();
+                const data = await safeParseJson(res);
 
                 if (data.success) {
                     const deletedId = pendingDeleteItem.item_id;
@@ -3693,25 +3816,8 @@
 
 
         function openStudioVideoLink(itemId, itemShareUrl) {
-            let curUsername = '';
-            if (activeStudioSession && activeStudioSession.account) {
-                curUsername = (activeStudioSession.account.uniqueId || activeStudioSession.account.username || '').replace('@', '').trim();
-            }
-            let targetUrl = itemShareUrl || '';
-            if (curUsername && itemId) {
-                targetUrl = `https://www.tiktok.com/@${curUsername}/video/${itemId}`;
-            } else if (!targetUrl || !targetUrl.includes('/@')) {
-                targetUrl = `https://www.tiktok.com/@tiktok/video/${itemId}`;
-            }
-            // Mở link an toàn bằng thẻ <a> ảo với noreferrer noopener để TikTok không từ chối HTTP 403 do dính Referer
-            const a = document.createElement('a');
-            a.href = targetUrl;
-            a.target = '_blank';
-            a.rel = 'noreferrer noopener';
-            a.referrerPolicy = 'no-referrer';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            // Mở modal xem chi tiết video an toàn ngay trong web, tránh lỗi HTTP 403 do TikTok chặn IP Việt Nam
+            openModal(itemId);
         }
 
         function copyStudioVideoLink(itemId, itemShareUrl) {
@@ -4028,7 +4134,7 @@
                             sec_uid: secUid
                         })
                     });
-                    const data = await res.json();
+                    const data = await safeParseJson(res);
                     if (!data.success || !data.items || data.items.length === 0) {
                         studioHasMore = false;
                         break;
@@ -4102,7 +4208,7 @@
                                         proxy: activeStudioSession.proxy || ''
                                     })
                                 });
-                                const delData = await delRes.json();
+                                const delData = await safeParseJson(delRes);
                                 if (delData.success) {
                                     successCount++;
                                     removeStudioRowImmediately(vidId);
@@ -4121,7 +4227,7 @@
                                         proxy: activeStudioSession.proxy || ''
                                     })
                                 });
-                                const visData = await visRes.json();
+                                const visData = await safeParseJson(visRes);
                                 if (visData.success) {
                                     successCount++;
                                     v.visibility_code = actionType;

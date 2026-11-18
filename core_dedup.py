@@ -852,10 +852,10 @@ def fetch_channel_info_and_posts(
         username = query.split("tiktok.com/@")[-1].split("?")[0].split("#")[0].split("/")[0]
     elif "tiktok.com/" in query:
         p = query.split("tiktok.com/")[-1].split("?")[0].split("#")[0].split("/")[0]
-        username = p[1:] if p.startswith("@") else p
-    elif query.startswith("@"):
-        username = query[1:]
-    username = username.split("?")[0].split("#")[0].rstrip("/").strip()
+        username = p.lstrip("@")
+    else:
+        username = query.lstrip("@")
+    username = username.split("?")[0].split("#")[0].rstrip("/").strip().lstrip("@")
 
     channel_info = {
         "uniqueId": username,
@@ -871,7 +871,7 @@ def fetch_channel_info_and_posts(
     # Đối tượng thông tin Check User bên phải (SĐT mặc định là —)
     check_user_info = {
         "screen_name": username,
-        "username": f"@{username}".replace("@@", "@"),
+        "username": f"@{username}",
         "create_date": "—",
         "mobile": "—",
         "country": "United States",
@@ -977,9 +977,21 @@ def fetch_channel_info_and_posts(
                     check_user_info["screen_name"] = p_name
                     channel_info["nickname"] = p_name
 
-                    p_uname = p_data.get("username") or username
-                    check_user_info["username"] = f"@{p_uname}".replace("@@", "@")
+                    p_uname = str(p_data.get("username") or username).lstrip("@").strip()
+                    check_user_info["username"] = f"@{p_uname}"
                     channel_info["uniqueId"] = p_uname
+
+                    p_av = (
+                        p_data.get("avatar_url")
+                        or p_data.get("avatar_larger")
+                        or p_data.get("avatar_medium")
+                        or p_data.get("avatar_thumb")
+                        or p_data.get("avatar_300x300")
+                        or p_data.get("avatar_168x168")
+                        or p_data.get("avatar")
+                    )
+                    if p_av and not channel_info.get("avatar"):
+                        channel_info["avatar"] = p_av
 
                     if p_data.get("mobile"):
                         check_user_info["mobile"] = p_data["mobile"]
@@ -1005,6 +1017,17 @@ def fetch_channel_info_and_posts(
                         if sf:
                             check_user_info["create_date"] = sf
                             channel_info["createDate"] = sf
+        except Exception:
+            pass
+
+    # Nếu là nick trong tool mà chưa có Avatar, tự động lấy qua SSR Profile
+    if is_self_account and not channel_info.get("avatar"):
+        try:
+            import studio_engine
+            target_uname = (channel_info.get("uniqueId") or username).lstrip("@").strip()
+            av_res = studio_engine.fetch_user_avatar(target_uname, cookie_str=effective_cookie, proxy=matched_acc_proxy)
+            if av_res:
+                channel_info["avatar"] = av_res
         except Exception:
             pass
 
@@ -1043,8 +1066,9 @@ def fetch_channel_info_and_posts(
                         st = u_info.get("stats", {})
 
                         if u.get("uniqueId"):
-                            channel_info["uniqueId"] = u["uniqueId"]
-                            check_user_info["username"] = f"@{u['uniqueId']}"
+                            raw_u = str(u["uniqueId"]).lstrip("@").strip()
+                            channel_info["uniqueId"] = raw_u
+                            check_user_info["username"] = f"@{raw_u}"
                         if u.get("nickname"):
                             channel_info["nickname"] = u["nickname"]
                             check_user_info["screen_name"] = u["nickname"]
@@ -1136,15 +1160,30 @@ def fetch_channel_info_and_posts(
                 sec_uid=sec_uid, max_cursor=max_cursor, count=50
             ) or {}
             all_studio_items = posts_res.get("items") or []
+            if not all_studio_items:
+                try:
+                    import studio_engine
+                    st_res = studio_engine.get_studio_post_list(
+                        effective_cookie, proxy=matched_acc_proxy, count=50, max_cursor=max_cursor, sec_uid=sec_uid
+                    )
+                    if st_res.get("items"):
+                        all_studio_items = st_res["items"]
+                        if st_res.get("author_avatar") and not channel_info.get("avatar"):
+                            channel_info["avatar"] = st_res["author_avatar"]
+                except Exception:
+                    pass
+
             if all_studio_items:
                 offset = int(max_cursor) if max_cursor > 0 else 0
                 raw_items = all_studio_items[offset:offset + max_videos]
                 next_cursor = offset + len(raw_items)
                 total_vids = int(channel_info.get("videoCount") or 0)
-                if total_vids > 0:
-                    has_more = next_cursor < total_vids
-                else:
-                    has_more = len(all_studio_items) > next_cursor or bool(posts_res.get("has_more"))
+                if total_vids <= 0:
+                    total_vids = len(all_studio_items)
+                    channel_info["videoCount"] = total_vids
+                has_more = next_cursor < total_vids
+                if posts_res.get("author_avatar") and not channel_info.get("avatar"):
+                    channel_info["avatar"] = posts_res["author_avatar"]
 
                 if sync_items_penalty_data and raw_items:
                     try:
@@ -1218,8 +1257,9 @@ def fetch_channel_info_and_posts(
                     channel_info["nickname"] = auth["nickname"]
                     check_user_info["screen_name"] = auth["nickname"]
                 if auth.get("uniqueId") and not channel_info.get("uniqueId"):
-                    channel_info["uniqueId"] = auth["uniqueId"]
-                    check_user_info["username"] = f"@{auth['uniqueId']}"
+                    raw_auth_u = str(auth["uniqueId"]).lstrip("@").strip()
+                    channel_info["uniqueId"] = raw_auth_u
+                    check_user_info["username"] = f"@{raw_auth_u}"
                 break
 
     if not channel_info.get("videoCount") and raw_items:

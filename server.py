@@ -40,6 +40,7 @@ import requests
 
 # Import engine trích xuất
 from core_dedup import fetch_channel_info_and_posts, DEFAULT_UA, get_borrowed_cookie
+import studio_engine
 
 # Cấu hình Google Sheet Webhook lưu vết người dùng
 SHEET_WEBHOOK_URL = os.getenv(
@@ -127,18 +128,16 @@ def get_client_ip(req: Request) -> str:
     return "Unknown"
 
 def extract_clean_username(query: str) -> str:
-    """Trích xuất username TikTok chuẩn từ query hoặc link."""
+    """Trích xuất username TikTok chuẩn từ query hoặc link (loại bỏ sạch sẽ mọi tiền tố @)."""
     q = str(query or "").strip()
     if "tiktok.com/@" in q:
         u = q.split("tiktok.com/@")[-1].split("?")[0].split("#")[0].split("/")[0]
     elif "tiktok.com/" in q:
         p = q.split("tiktok.com/")[-1].split("?")[0].split("#")[0].split("/")[0]
-        u = p[1:] if p.startswith("@") else p
-    elif q.startswith("@"):
-        u = q[1:]
+        u = p.lstrip("@")
     else:
-        u = q
-    return u.split("?")[0].split("#")[0].rstrip("/").strip().lower()
+        u = q.lstrip("@")
+    return u.split("?")[0].split("#")[0].rstrip("/").strip().lstrip("@").lower()
 
 def record_user_check_async(user: str, ip: str):
     """Gửi dữ liệu kiểm tra ngầm về Google Sheet không làm chậm trải nghiệm của khách."""
@@ -354,17 +353,39 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
 
     max_cursor = int(body.get("max_cursor") or 0)
     max_videos = int(body.get("max_videos") or 18)
+    cookie = str(body.get("cookie") or "").strip()
+    proxy = str(body.get("proxy") or "").strip()
+    sec_uid = str(body.get("sec_uid") or "").strip()
+
+    clean_user = extract_clean_username(query)
+
+    # Nếu client chưa truyền cookie, tự động tra cứu trong ACTIVE_STUDIO_ACCOUNTS
+    if not cookie and clean_user:
+        acc_entry = studio_engine.ACTIVE_STUDIO_ACCOUNTS.get(clean_user.lower())
+        if acc_entry:
+            cookie = acc_entry.get("cookie", "")
+            if not proxy and acc_entry.get("proxy"):
+                proxy = acc_entry["proxy"]
+            if not sec_uid and acc_entry.get("account", {}).get("sec_uid"):
+                sec_uid = acc_entry["account"]["sec_uid"]
 
     # Ghi nhận người dùng kiểm tra ngầm về Google Sheet (chỉ ghi nhận ở lần quét đầu tiên max_cursor == 0)
     if max_cursor == 0:
-        clean_user = extract_clean_username(query)
         client_ip = get_client_ip(req)
         if clean_user:
             record_user_check_async(clean_user, client_ip)
 
     # Chạy phân tích trong thread riêng tránh xung đột Playwright sync với asyncio loop
     import asyncio
-    res = await asyncio.to_thread(fetch_channel_info_and_posts, query, max_cursor=max_cursor, max_videos=max_videos)
+    res = await asyncio.to_thread(
+        fetch_channel_info_and_posts,
+        clean_user,
+        sec_uid=sec_uid,
+        max_cursor=max_cursor,
+        cookie_str=cookie,
+        proxy_str=proxy,
+        max_videos=max_videos
+    )
     
     # Kích hoạt tải trước ảnh bìa vào RAM cache song song trong nền (0.001s khi trình duyệt yêu cầu)
     v_list = res.get("list", [])
@@ -481,7 +502,24 @@ async def api_studio_cookie_import(req: Request):
     acc_info = studio_engine.get_account_info(cookie_str, proxy=proxy)
     if not acc_info.get("valid"):
         return JSONResponse(content={"success": False, "error": acc_info.get("error", "Cookie không hợp lệ hoặc đã hết hạn.")})
-    
+
+    u_name = str(acc_info.get("uniqueId") or acc_info.get("username") or "").lstrip("@").strip().lower()
+    if u_name:
+        studio_engine.ACTIVE_STUDIO_ACCOUNTS[u_name] = {
+            "account": acc_info,
+            "cookie": cookie_str,
+            "proxy": proxy,
+            "updated_at": time.time()
+        }
+    uid_key = str(acc_info.get("uid") or "").strip()
+    if uid_key:
+        studio_engine.ACTIVE_STUDIO_ACCOUNTS[uid_key] = {
+            "account": acc_info,
+            "cookie": cookie_str,
+            "proxy": proxy,
+            "updated_at": time.time()
+        }
+
     return JSONResponse(content={
         "success": True,
         "account": acc_info,

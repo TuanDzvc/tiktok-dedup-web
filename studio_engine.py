@@ -577,14 +577,15 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
                 sec_uid = str(data.get("sec_user_id") or data.get("sec_uid") or "")
 
                 # Lấy Avatar chất lượng cao từ SSR profile TikTok với Cookie vừa nạp
-                if not avatar and u_name:
-                    avatar = fetch_user_avatar(u_name, cookie_str=cookie_str, proxy=proxy)
+                clean_u = str(u_name or "").lstrip("@").strip()
+                if not avatar and clean_u:
+                    avatar = fetch_user_avatar(clean_u, cookie_str=cookie_str, proxy=proxy)
 
                 return {
                     "valid": True,
                     "uid": user_id,
-                    "username": f"@{u_name}".replace("@@", "@"),
-                    "uniqueId": u_name,
+                    "username": f"@{clean_u}",
+                    "uniqueId": clean_u,
                     "nickname": nick,
                     "avatar": avatar,
                     "country": country,
@@ -1179,6 +1180,23 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                         _BROWSER_LOGIN_STATE["cookie"] = cookie_str
                         _BROWSER_LOGIN_STATE["proxy"] = proxy
                         _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+
+                    u_key = (acc_info.get("uniqueId") or acc_info.get("username", "")).lstrip("@").strip().lower()
+                    if u_key:
+                        ACTIVE_STUDIO_ACCOUNTS[u_key] = {
+                            "account": acc_info,
+                            "cookie": cookie_str,
+                            "proxy": proxy,
+                            "updated_at": time.time()
+                        }
+                    uid_key = str(acc_info.get("uid") or "").strip()
+                    if uid_key:
+                        ACTIVE_STUDIO_ACCOUNTS[uid_key] = {
+                            "account": acc_info,
+                            "cookie": cookie_str,
+                            "proxy": proxy,
+                            "updated_at": time.time()
+                        }
                     return
 
                 time.sleep(1)
