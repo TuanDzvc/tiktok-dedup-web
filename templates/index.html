@@ -3233,6 +3233,9 @@
                         if (descEl) descEl.innerText = 'Máy tính của bạn chưa cài Google Chrome hoặc Microsoft Edge. Vui lòng cài đặt và thử lại.';
                         if (reopenBox) reopenBox.classList.add('hidden');
                         if (spinner) spinner.classList.add('hidden');
+                    } else if (data.status === 'waiting') {
+                        if (reopenBox) reopenBox.classList.add('hidden');
+                        if (spinner) spinner.classList.remove('hidden');
                     } else if (data.status === 'success' && data.account) {
                         clearInterval(batLoginPollInterval);
                         batLoginPollInterval = null;
@@ -3284,9 +3287,8 @@
                 localStorage.setItem('tikflow_last_proxy', proxy);
             }
 
-            if (!isRetry || !currentBatSyncId) {
-                currentBatSyncId = 'tikflow_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-            }
+            // Luôn tạo mới phiên đồng bộ mỗi lần bấm tải file để đảm bảo liên kết chính xác 100%
+            currentBatSyncId = 'tikflow_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
             localStorage.setItem('tikflow_active_bat_sync', currentBatSyncId);
 
             const initialEl = document.getElementById('batDownloadInitial');

