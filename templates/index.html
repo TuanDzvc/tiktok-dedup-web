@@ -736,293 +736,191 @@
     <!-- ============================================================================== -->
     <!-- MODAL ĐĂNG NHẬP STUDIO (TRÌNH DUYỆT & DÁN COOKIE) -->
     <!-- ============================================================================== -->
-    <div id="authModal" class="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-300 hidden">
-        <div class="relative max-w-xl w-full bg-dark-900 border border-slate-700/80 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-4 overflow-hidden">
-            <!-- Glow background -->
+    <!-- ============================================================================== -->
+    <!-- MODAL ĐĂNG NHẬP QUẢN LÝ KÊNH (BẢN GỌN GÀNG CHUẨN MỌI MÀN HÌNH - KHÔNG BỊ TRÀN) -->
+    <!-- ============================================================================== -->
+    <div id="authModal" class="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 transition-all duration-300 hidden">
+        <div class="relative max-w-lg w-full max-h-[92vh] flex flex-col bg-dark-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden">
+            <!-- Glow background decor -->
             <div class="absolute -top-16 -right-16 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
             <div class="absolute -bottom-16 -left-16 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-            <!-- Header -->
-            <div class="flex items-start justify-between gap-4 border-b border-slate-800 pb-3 relative z-10">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-2xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400 text-lg shadow-inner">
+            <!-- Header cố định -->
+            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 bg-dark-950/80 relative z-10 flex-shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400 text-sm shadow-inner">
                         <i class="fa-solid fa-key"></i>
                     </div>
                     <div>
-                        <h3 class="text-lg font-extrabold text-white">Đăng Nhập Quản Lý Kênh</h3>
-                        <p class="text-xs text-slate-400">Xem video riêng tư & thao tác Ẩn/Bạn bè/Xóa trực tiếp</p>
+                        <h3 class="text-sm sm:text-base font-extrabold text-white">Đăng Nhập Quản Lý Kênh</h3>
+                        <p class="text-[11px] text-slate-400">Mở Chrome trên máy tính để đăng nhập tài khoản</p>
                     </div>
                 </div>
-                <button type="button" onclick="closeAuthModal()" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800/80 transition">
-                    <i class="fa-solid fa-xmark text-lg"></i>
+                <button type="button" onclick="closeAuthModal()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800/80 transition">
+                    <i class="fa-solid fa-xmark text-base"></i>
                 </button>
             </div>
 
-            <!-- Cài đặt Proxy chung cho cả Trình Duyệt & Cookie (Hỗ trợ SOCKS5 & HTTP) -->
-            <div class="relative z-10 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2.5">
-                <div class="flex items-center justify-between gap-2 flex-nowrap">
-                    <label class="text-xs font-bold text-slate-200 flex items-center gap-1.5 whitespace-nowrap">
-                        <i class="fa-solid fa-shield-halved text-cyan-400"></i>
-                        <span>Proxy Kênh (Tùy chọn - Kênh US/Ngoại):</span>
-                    </label>
-                    <span class="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-600/60 text-emerald-300 font-bold whitespace-nowrap flex-shrink-0">
-                        Hỗ trợ SOCKS5 & HTTP
-                    </span>
-                </div>
-
-                <!-- Bộ chọn Proxy PIA có sẵn & Tùy chọn -->
-                <div class="space-y-1.5">
-                    <div class="relative" id="customProxySelectContainer">
-                        <!-- Custom Select Button with Real Flag -->
-                        <button 
-                            type="button" 
-                            id="customProxyBtn"
-                            onclick="toggleCustomProxyDropdown(event)"
-                            class="w-full bg-dark-900 border border-cyan-500/50 rounded-xl px-3 py-2 text-xs text-white font-medium flex items-center justify-between cursor-pointer shadow-sm hover:border-cyan-400 transition"
-                        >
-                            <div class="flex items-center gap-2 truncate pr-2" id="customProxyBtnDisplay">
-                                <img id="customProxyBtnFlag" src="https://flagcdn.com/24x18/us.png" class="w-5 h-3.5 object-cover rounded shadow-sm flex-shrink-0" alt="Flag" onerror="this.outerHTML='🌐'" />
-                                <span id="customProxyBtnText" class="truncate font-semibold text-slate-100">⚡ [Mặc định] California (Los Angeles) (11101)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-down text-slate-400 text-xs flex-shrink-0"></i>
+            <!-- Body cuộn mượt mà không bao giờ bị cắt xén hay lẹm ra ngoài -->
+            <div class="p-3.5 sm:p-4 space-y-3 overflow-y-auto relative z-10 custom-scrollbar flex-grow">
+                <!-- Cài đặt Proxy gọn gàng -->
+                <div class="p-2.5 sm:p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <label class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+                            <span>Proxy Kênh (Tùy chọn - Kênh US/Ngoại):</span>
+                        </label>
+                        <button type="button" onclick="loadPiaProxiesFromBackend()" class="text-cyan-400 hover:text-cyan-300 font-bold text-[10px] transition flex items-center gap-1">
+                            <i class="fa-solid fa-arrows-rotate text-[9px]"></i> Cập nhật PIA
                         </button>
+                    </div>
 
-                        <!-- Custom Dropdown Menu with Real Country Flags -->
-                        <div 
-                            id="customProxyMenu" 
-                            class="hidden absolute left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-2xl p-2 z-[999999] shadow-[0_20px_50px_rgba(0,0,0,0.95)] border border-cyan-500/40 divide-y divide-slate-800/80" 
-                            style="background-color: #0b1329 !important;"
-                        >
-                            <!-- Populated dynamically by JS with real country flags -->
+                    <div class="space-y-1.5">
+                        <div class="relative" id="customProxySelectContainer">
+                            <button 
+                                type="button" 
+                                id="customProxyBtn"
+                                onclick="toggleCustomProxyDropdown(event)"
+                                class="w-full bg-dark-900 border border-cyan-500/50 rounded-xl px-3 py-1.5 text-xs text-white font-medium flex items-center justify-between cursor-pointer shadow-sm hover:border-cyan-400 transition"
+                            >
+                                <div class="flex items-center gap-2 truncate pr-2" id="customProxyBtnDisplay">
+                                    <img id="customProxyBtnFlag" src="https://flagcdn.com/24x18/us.png" class="w-4 h-3 object-cover rounded shadow-sm flex-shrink-0" alt="Flag" onerror="this.outerHTML='🌐'" />
+                                    <span id="customProxyBtnText" class="truncate font-semibold text-slate-100 text-xs">⚡ [Mặc định] California (Los Angeles) (11101)</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] flex-shrink-0"></i>
+                            </button>
+
+                            <div 
+                                id="customProxyMenu" 
+                                class="hidden absolute left-0 right-0 mt-1 max-h-52 overflow-y-auto rounded-xl p-1.5 z-[999999] shadow-2xl border border-cyan-500/40 divide-y divide-slate-800/80" 
+                                style="background-color: #0b1329 !important;"
+                            ></div>
+
+                            <select id="piaProxySelect" onchange="handlePiaProxySelectChange(this.value)" class="hidden">
+                                <option value="socks5://192.168.2.101:11101" selected>California (Los Angeles) (11101)</option>
+                            </select>
                         </div>
 
-                        <!-- Giữ lại thẻ select ẩn để tương thích 100% -->
-                        <select id="piaProxySelect" onchange="handlePiaProxySelectChange(this.value)" class="hidden">
-                            <option value="socks5://192.168.2.101:11101" selected>California (Los Angeles) (11101)</option>
-                        </select>
+                        <input 
+                            type="text" 
+                            id="loginProxyInput" 
+                            value="socks5://192.168.2.101:11101"
+                            placeholder="socks5://user:pass@ip:port hoặc ip:port:user:pass" 
+                            class="w-full bg-dark-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-500"
+                            oninput="handleCustomProxyInput(this.value)"
+                        />
                     </div>
-
-                    <input 
-                        type="text" 
-                        id="loginProxyInput" 
-                        value="socks5://192.168.2.101:11101"
-                        placeholder="socks5://user:pass@ip:port hoặc ip:port:user:pass" 
-                        class="w-full bg-dark-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-500"
-                        oninput="handleCustomProxyInput(this.value)"
-                    />
                 </div>
 
-                <div class="flex items-center justify-between text-[10px] text-slate-400 px-0.5">
-                    <span>💡 Đã gắn sẵn các cổng SOCKS5 PIA đang chạy ngầm trên máy.</span>
-                    <button type="button" onclick="loadPiaProxiesFromBackend()" class="text-cyan-400 hover:text-cyan-300 font-bold transition flex items-center gap-1">
-                        <i class="fa-solid fa-arrows-rotate text-[9px]"></i> Cập nhật PIA
-                    </button>
-                </div>
-            </div>
-
-            <!-- CÁCH 1: 1-CLICK TỰ ĐỘNG BẰNG FILE .BAT (KHUYÊN DÙNG CHO MÁY KHÁCH & MÁY Ở XA) -->
-            <div id="batDownloadSection" class="relative z-10 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-b from-cyan-950/80 via-slate-900/90 to-slate-950 border border-cyan-400/60 shadow-lg shadow-cyan-950/40 text-center space-y-3">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-1.5 text-xs font-black text-cyan-300 uppercase tracking-wider">
-                        <i class="fa-solid fa-bolt-lightning text-amber-400 animate-pulse"></i>
-                        <span>Cách 1: Tự Động 1-Click (Mở Chrome Trên Máy Bạn)</span>
-                    </div>
-                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-900/90 border border-cyan-500/60 text-cyan-200 font-bold whitespace-nowrap">
-                        Khuyên Dùng
-                    </span>
-                </div>
-
-                <!-- Khung bấm tải -->
-                <div id="batDownloadInitial" class="space-y-2">
-                    <button 
-                        type="button" 
-                        id="btnDownloadLoginBat"
-                        onclick="handleDownloadLoginBat()" 
-                        class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-sm transition shadow-xl shadow-cyan-500/30 flex items-center justify-center gap-2.5 active:scale-98"
-                    >
-                        <i class="fa-solid fa-cloud-arrow-down text-amber-300 text-lg"></i>
-                        <span>Tải File Đăng Nhập 1-Click (tikflow_login.bat)</span>
-                    </button>
-
-                    <div class="text-[11px] text-slate-300 leading-relaxed text-left bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 space-y-1">
-                        <div class="text-cyan-300 font-bold flex items-center gap-1.5">
-                            <i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
-                            <span>Dành cho máy khách / máy ở xa (Không cần cài bất kỳ phần mềm nào)</span>
+                <!-- CÁCH 1: MỞ TRÌNH DUYỆT CHROME ĐĂNG NHẬP -->
+                <div class="p-3 sm:p-3.5 rounded-xl bg-gradient-to-b from-cyan-950/70 via-slate-900/90 to-slate-950 border border-cyan-400/50 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5 text-xs font-black text-cyan-300 uppercase tracking-wider">
+                            <i class="fa-solid fa-bolt-lightning text-amber-400"></i>
+                            <span>Cách 1: Mở Trình Duyệt Đăng Nhập (Khuyên Dùng)</span>
                         </div>
-                        <p class="text-slate-400">
-                            1. Bấm nút tải file &rarr; Mở file <b class="text-white">tikflow_login.bat</b> vừa tải ở góc trình duyệt.<br/>
-                            2. Cửa sổ Chrome trên chính máy bạn sẽ tự bật lên để đăng nhập (Hỗ trợ quét QR, nhập mật khẩu, mã email, giải captcha 100%).<br/>
-                            3. Đăng nhập xong, trang Web này <b>tự động lưu nick trong 2 giây</b>!
-                        </p>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-900/80 border border-cyan-500/60 text-cyan-200 font-bold">
+                            Tự Động 100%
+                        </span>
                     </div>
-                </div>
 
-                <!-- Khung chờ sau khi đã bấm tải -->
-                <div id="batDownloadWaiting" class="hidden flex flex-col items-center justify-center p-4 rounded-2xl bg-black/70 border border-cyan-500/40 space-y-3 text-center">
-                    <div class="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
-                    <div class="space-y-1">
-                        <p class="text-sm font-black text-cyan-300">Đã tải file tikflow_login.bat!</p>
-                        <p class="text-xs text-slate-200">Hãy bấm mở file <b class="text-amber-300 font-mono">tikflow_login.bat</b> ở thanh tải xuống trình duyệt.</p>
-                        <p class="text-[11px] text-slate-400">Chrome trên máy bạn sẽ tự mở lên. Web đang tự động chờ bạn đăng nhập...</p>
-                    </div>
-                    <div class="flex items-center gap-2 pt-1">
+                    <!-- Khung bấm chọn cách mở Chrome -->
+                    <div id="batDownloadInitial" class="space-y-2">
+                        <!-- Nút 1: Tải file .bat chạy trên máy khách -->
                         <button 
                             type="button" 
-                            onclick="handleDownloadLoginBat(true)" 
-                            class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition active:scale-95"
-                            title="Tải lại file nếu bạn lỡ xóa hoặc chưa mở"
+                            id="btnDownloadLoginBat"
+                            onclick="handleDownloadLoginBat()" 
+                            class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-xs transition shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-98"
                         >
-                            <i class="fa-solid fa-arrows-rotate text-[10px] text-cyan-400"></i>
-                            <span>Tải lại file</span>
-                        </button>
-                        <button 
-                            type="button" 
-                            onclick="cancelBatDownloadLogin()" 
-                            class="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 text-xs font-bold border border-rose-800/80 flex items-center gap-1.5 transition active:scale-95"
-                        >
-                            <i class="fa-solid fa-xmark text-[10px]"></i>
-                            <span>Hủy</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Phân cách -->
-            <div class="relative z-10 flex items-center justify-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                <span class="h-px bg-slate-800 flex-1"></span>
-                <span>HOẶC CÁCH 2: QUÉT MÃ QR BẰNG APP / MỞ DESKTOP SERVER</span>
-                <span class="h-px bg-slate-800 flex-1"></span>
-            </div>
-
-            <!-- Cách 2: Quét Mã QR TikTok (Trực Tiếp Trên Màn Hình Web) -->
-            <div id="qrLoginSection" class="relative z-10 p-3 sm:p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-2.5">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-                        <i class="fa-solid fa-qrcode text-emerald-400"></i>
-                        <span>Quét Mã QR Bằng App TikTok Điện Thoại</span>
-                    </div>
-                </div>
-
-                <!-- Khung ban đầu trước khi bấm nút -->
-                <div id="qrInitialContainer" class="space-y-2">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <button 
-                            type="button" 
-                            id="btnBrowserLogin"
-                            onclick="handleBrowserLogin(false, 'qr')" 
-                            class="py-2.5 px-3 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/70 text-emerald-300 hover:text-white font-bold text-xs border border-emerald-700/60 flex items-center justify-center gap-2 transition active:scale-95"
-                        >
-                            <i class="fa-solid fa-qrcode text-emerald-400"></i>
-                            <span>Hiện QR Quét Bằng App</span>
+                            <i class="fa-solid fa-cloud-arrow-down text-amber-300 text-base"></i>
+                            <span>Tải File Đăng Nhập 1-Click (Mở Chrome Trên Máy Khách)</span>
                         </button>
 
+                        <!-- Nút 2: Mở Chrome trên máy host dev -->
                         <button 
                             type="button" 
                             id="btnNativeWindowLogin"
-                            onclick="handleBrowserLogin(false, 'window')" 
-                            class="py-2.5 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700/80 flex items-center justify-center gap-2 transition active:scale-95"
-                            title="Chỉ mở được trên máy tính đang đặt server chạy file Python của Tool"
+                            onclick="handleServerBrowserLogin()" 
+                            class="w-full py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs border border-slate-700/80 flex items-center justify-center gap-2 transition active:scale-95"
+                            title="Mở Chrome trực tiếp trên màn hình máy tính đang đặt Server"
                         >
-                            <i class="fa-solid fa-window-maximize text-cyan-400"></i>
-                            <span>Mở Chrome Desktop (Server)</span>
+                            <i class="fa-brands fa-chrome text-cyan-400 text-xs"></i>
+                            <span>Hoặc Mở Chrome Trực Tiếp (Chỉ Máy Chủ Dev)</span>
                         </button>
+
+                        <div class="text-[11px] text-slate-400 leading-relaxed bg-slate-950/70 p-2 rounded-xl border border-slate-800/80 space-y-0.5">
+                            <p>👉 <b>Máy khách ở xa:</b> Bấm nút xanh tải file <code class="text-cyan-300 font-mono">tikflow_login.bat</code> &rarr; Click mở file để Chrome trên máy bạn tự bật lên đăng nhập (nhập pass, mã email, giải captcha thoải mái &rarr; Web tự nhận nick).</p>
+                            <p>👉 <b>Máy chủ Dev:</b> Bấm nút xám để mở bung Chrome ngay ngoài màn hình máy tính này.</p>
+                        </div>
                     </div>
 
-                    <p class="text-[11px] text-slate-400 leading-relaxed pt-0.5">
-                        💡 Bấm <b>Hiện QR Quét Bằng App</b> để mở mã QR và dùng app TikTok trên điện thoại quét là xong.<br/>
-                        💡 Bấm <b>Mở Chrome Desktop</b> nếu bạn đang ngồi trực tiếp trước máy tính chạy file tool.
-                    </p>
-                </div>
-
-                <!-- Khung hiển thị mã QR khi đang tạo hoặc đã sẵn sàng -->
-                <div id="qrDisplayContainer" class="hidden flex flex-col items-center justify-center p-3 rounded-2xl bg-black/60 border border-cyan-500/30 space-y-3">
-                    <!-- Trạng thái chờ/loading -->
-                    <div id="qrLoadingState" class="py-6 flex flex-col items-center justify-center space-y-2.5">
-                        <div class="w-10 h-10 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
-                        <p class="text-xs text-cyan-300 font-bold animate-pulse">Đang kết nối TikTok & tạo mã QR...</p>
-                        <p class="text-[10px] text-slate-400">Đang đồng bộ địa chỉ IP & Múi giờ Proxy...</p>
-                    </div>
-
-                    <!-- Khung ảnh QR khi đã sẵn sàng -->
-                    <div id="qrReadyState" class="hidden flex flex-col items-center justify-center space-y-2.5 w-full">
-                        <div class="relative p-2.5 bg-white rounded-2xl shadow-[0_0_25px_rgba(34,211,238,0.35)] border-2 border-cyan-400 inline-block">
-                            <img id="qrImageElement" src="" alt="Mã QR TikTok" class="w-48 h-48 sm:w-52 sm:h-52 object-contain rounded-lg" />
-                            <div id="qrSuccessOverlay" class="hidden absolute inset-0 bg-emerald-950/95 rounded-2xl flex flex-col items-center justify-center text-emerald-300 p-2 space-y-1">
-                                <i class="fa-solid fa-circle-check text-4xl text-emerald-400 animate-bounce"></i>
-                                <span class="font-extrabold text-sm">Đã quét thành công!</span>
-                                <span class="text-[10px] text-slate-300">Đang nạp nick vào tool...</span>
-                            </div>
+                    <!-- Khung chờ sau khi đã kích hoạt -->
+                    <div id="batDownloadWaiting" class="hidden flex flex-col items-center justify-center p-3.5 rounded-xl bg-black/75 border border-cyan-500/40 space-y-2 text-center">
+                        <div class="w-8 h-8 border-3 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
+                        <div class="space-y-0.5">
+                            <p id="batWaitingTitle" class="text-xs font-black text-cyan-300">Đã kích hoạt trình duyệt!</p>
+                            <p id="batWaitingDesc" class="text-[11px] text-slate-200">Vui lòng đăng nhập trên cửa sổ Chrome vừa bật lên...</p>
+                            <p class="text-[10px] text-slate-400">Đăng nhập xong, trang Web sẽ tự động nhận nick trong 2 giây.</p>
                         </div>
-
-                        <div class="space-y-1 text-center">
-                            <p class="text-xs font-bold text-white flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-mobile-screen-button text-cyan-400 animate-bounce"></i>
-                                <span>Mở app TikTok trên điện thoại & quét mã trên</span>
-                            </p>
-                            <p class="text-[11px] text-slate-300">
-                                <b>Bước 1:</b> Mở app TikTok > <b>Hồ sơ</b> > Menu <b>☰</b> > <b>Mã QR của tôi</b><br/>
-                                <b>Bước 2:</b> Bấm biểu tượng <b>Quét</b> ở góc phải trên cùng > Quét mã này > <b>Xác nhận</b>
-                            </p>
-                        </div>
-
-                        <div class="flex items-center gap-2 pt-1 w-full max-w-xs justify-center">
+                        <div class="flex items-center gap-2 pt-1">
                             <button 
                                 type="button" 
-                                onclick="handleBrowserLogin(true)" 
-                                class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition active:scale-95"
-                                title="Bấm nếu mã QR bị hết hạn hoặc lỗi kết nối"
+                                id="btnBatRetry"
+                                onclick="handleDownloadLoginBat(true)" 
+                                class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold border border-slate-700 flex items-center gap-1 transition active:scale-95"
                             >
-                                <i class="fa-solid fa-arrows-rotate text-[10px] text-cyan-400"></i>
-                                <span>Lấy mã mới</span>
+                                <i class="fa-solid fa-arrows-rotate text-[9px] text-cyan-400"></i>
+                                <span>Tải lại</span>
                             </button>
                             <button 
                                 type="button" 
-                                onclick="cancelQrLogin()" 
-                                class="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 text-xs font-bold border border-rose-800/80 flex items-center gap-1.5 transition active:scale-95"
+                                onclick="cancelBatDownloadLogin()" 
+                                class="px-3 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 text-[11px] font-bold border border-rose-800/80 flex items-center gap-1 transition active:scale-95"
                             >
-                                <i class="fa-solid fa-xmark text-[10px]"></i>
+                                <i class="fa-solid fa-xmark text-[9px]"></i>
                                 <span>Hủy</span>
                             </button>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Phân cách -->
-            <div class="relative z-10 flex items-center justify-center gap-2 text-[11px] text-slate-500 font-bold uppercase tracking-wider">
-                <span class="h-px bg-slate-800 flex-1"></span>
-                <span>HOẶC CÁCH 3: DÁN COOKIE TÀI KHOẢN</span>
-                <span class="h-px bg-slate-800 flex-1"></span>
-            </div>
-
-            <!-- Cách 2: Khu vực Dán Cookie Tài Khoản -->
-            <div id="authContentCookie" class="space-y-3 relative z-10">
-                <div class="space-y-1.5">
-                    <label class="block text-xs font-bold text-slate-300 flex items-center justify-between">
-                        <span>Chuỗi Cookie tài khoản TikTok: <span class="text-rose-400">*</span></span>
-                        <span class="text-[10px] text-slate-400 font-normal">Hỗ trợ Cookie-Editor / F12 / JSON</span>
-                    </label>
-                    <textarea 
-                        id="cookieInput" 
-                        rows="3" 
-                        placeholder="Dán chuỗi Cookie từ trình duyệt hoặc tiện ích Cookie-Editor (chứa sessionid=...; tt_csrf_token=...)" 
-                        class="w-full bg-slate-950 border border-slate-700/80 rounded-2xl p-3 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500/20 placeholder-slate-500 resize-none"
-                    ></textarea>
+                <!-- Phân cách -->
+                <div class="flex items-center justify-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    <span class="h-px bg-slate-800 flex-1"></span>
+                    <span>HOẶC CÁCH 2: DÁN COOKIE TÀI KHOẢN</span>
+                    <span class="h-px bg-slate-800 flex-1"></span>
                 </div>
 
-                <button 
-                    type="button" 
-                    id="btnImportCookie" 
-                    onclick="handleCookieImport()" 
-                    class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-sm transition shadow-xl shadow-cyan-600/25 flex items-center justify-center gap-2 active:scale-98"
-                >
-                    <i class="fa-solid fa-cloud-arrow-up"></i>
-                    <span>Xác Thực Cookie & Mở Check Post</span>
-                </button>
+                <!-- CÁCH 2: Dán Cookie thủ công -->
+                <div id="authContentCookie" class="space-y-2">
+                    <div class="space-y-1">
+                        <label class="block text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                            <span>Chuỗi Cookie tài khoản TikTok: <span class="text-rose-400">*</span></span>
+                            <span class="text-[10px] text-slate-400 font-normal">Hỗ trợ Cookie-Editor / F12 / JSON</span>
+                        </label>
+                        <textarea 
+                            id="cookieInput" 
+                            rows="2" 
+                            placeholder="Dán chuỗi Cookie từ trình duyệt hoặc tiện ích Cookie-Editor (chứa sessionid=...)" 
+                            class="w-full bg-slate-950 border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-500 resize-none"
+                        ></textarea>
+                    </div>
 
-                <p class="text-[11px] text-slate-500 text-center">
-                    💡 Thích hợp nạp nhanh nhiều nick hoặc khi dùng Cookie xuất từ profile máy tính khác.
-                </p>
+                    <button 
+                        type="button" 
+                        id="btnImportCookie" 
+                        onclick="handleCookieImport()" 
+                        class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs transition shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 active:scale-98"
+                    >
+                        <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                        <span>Xác Thực Cookie & Mở Check Post</span>
+                    </button>
+
+                    <p class="text-[10px] text-slate-500 text-center">
+                        💡 Thích hợp nạp nhanh nhiều nick hoặc khi dùng Cookie xuất từ profile máy tính khác.
+                    </p>
+                </div>
             </div>
         </div>
     </div>
@@ -3205,11 +3103,33 @@
                 clearInterval(batLoginPollInterval);
                 batLoginPollInterval = null;
             }
+            if (browserLoginPollInterval) {
+                clearInterval(browserLoginPollInterval);
+                browserLoginPollInterval = null;
+            }
+            fetch('/api/studio/browser/login/cancel', { method: 'POST' }).catch(() => {});
             currentBatSyncId = null;
+
             const initialEl = document.getElementById('batDownloadInitial');
             const waitingEl = document.getElementById('batDownloadWaiting');
+            const retryBtn = document.getElementById('btnBatRetry');
             if (initialEl) initialEl.classList.remove('hidden');
             if (waitingEl) waitingEl.classList.add('hidden');
+            if (retryBtn) retryBtn.classList.remove('hidden');
+        }
+
+        function cancelQrLogin() {
+            cancelBatDownloadLogin();
+        }
+
+        function closeAuthModal() {
+            document.getElementById('authModal').classList.add('hidden');
+            cancelBatDownloadLogin();
+            // Khôi phục lại bảng Check Post nếu người dùng đóng bảng đăng nhập mà chưa thêm nick
+            if (wasCheckPostOpenBeforeAuth && activeStudioSession) {
+                wasCheckPostOpenBeforeAuth = false;
+                document.getElementById('checkPostModal').classList.remove('hidden');
+            }
         }
 
         async function handleDownloadLoginBat(isRetry = false) {
@@ -3224,8 +3144,15 @@
 
             const initialEl = document.getElementById('batDownloadInitial');
             const waitingEl = document.getElementById('batDownloadWaiting');
+            const titleEl = document.getElementById('batWaitingTitle');
+            const descEl = document.getElementById('batWaitingDesc');
+            const retryBtn = document.getElementById('btnBatRetry');
+
             if (initialEl) initialEl.classList.add('hidden');
             if (waitingEl) waitingEl.classList.remove('hidden');
+            if (titleEl) titleEl.innerText = "Đã tải file tikflow_login.bat!";
+            if (descEl) descEl.innerHTML = 'Hãy bấm mở file <b class="text-amber-300 font-mono">tikflow_login.bat</b> ở thanh tải xuống trình duyệt để bắt đầu.';
+            if (retryBtn) retryBtn.classList.remove('hidden');
 
             // Kích hoạt tải file .bat về máy khách
             const origin = window.location.origin || 'https://checktiktok.site';
@@ -3279,126 +3206,59 @@
             }, 1500);
         }
 
-        function cancelQrLogin() {
-            if (browserLoginPollInterval) {
-                clearInterval(browserLoginPollInterval);
-                browserLoginPollInterval = null;
-            }
-            fetch('/api/studio/browser/login/cancel', { method: 'POST' }).catch(() => {});
-            
-            const initialEl = document.getElementById('qrInitialContainer');
-            const displayEl = document.getElementById('qrDisplayContainer');
-            const loadState = document.getElementById('qrLoadingState');
-            const readyState = document.getElementById('qrReadyState');
-            const qrImg = document.getElementById('qrImageElement');
-            const overlay = document.getElementById('qrSuccessOverlay');
-            
-            if (initialEl) initialEl.classList.remove('hidden');
-            if (displayEl) displayEl.classList.add('hidden');
-            if (loadState) loadState.classList.remove('hidden');
-            if (readyState) readyState.classList.add('hidden');
-            if (overlay) overlay.classList.add('hidden');
-            if (qrImg) qrImg.src = '';
-
-            const btn = document.getElementById('btnBrowserLogin');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = `<i class="fa-solid fa-qrcode text-amber-300 text-base"></i> <span>Hiện Mã QR Đăng Nhập Kênh</span>`;
-            }
-        }
-
-        function closeAuthModal() {
-            document.getElementById('authModal').classList.add('hidden');
-            cancelQrLogin();
-            cancelBatDownloadLogin();
-            // Khôi phục lại bảng Check Post nếu người dùng đóng bảng đăng nhập mà chưa thêm nick
-            if (wasCheckPostOpenBeforeAuth && activeStudioSession) {
-                wasCheckPostOpenBeforeAuth = false;
-                document.getElementById('checkPostModal').classList.remove('hidden');
-            }
-        }
-
-        async function handleBrowserLogin(force = false, mode = 'qr') {
+        async function handleServerBrowserLogin() {
             const proxy = (document.getElementById('loginProxyInput')?.value || '').trim();
             if (proxy) {
                 localStorage.setItem('tikflow_last_proxy', proxy);
             }
 
-            const initialEl = document.getElementById('qrInitialContainer');
-            const displayEl = document.getElementById('qrDisplayContainer');
-            const loadState = document.getElementById('qrLoadingState');
-            const readyState = document.getElementById('qrReadyState');
-            const qrImg = document.getElementById('qrImageElement');
-            const overlay = document.getElementById('qrSuccessOverlay');
+            cancelBatDownloadLogin();
+
+            const initialEl = document.getElementById('batDownloadInitial');
+            const waitingEl = document.getElementById('batDownloadWaiting');
+            const titleEl = document.getElementById('batWaitingTitle');
+            const descEl = document.getElementById('batWaitingDesc');
+            const retryBtn = document.getElementById('btnBatRetry');
 
             if (initialEl) initialEl.classList.add('hidden');
-            if (displayEl) displayEl.classList.remove('hidden');
-            if (loadState) {
-                loadState.classList.remove('hidden');
-                if (mode === 'window') {
-                    loadState.innerHTML = `
-                        <div class="w-10 h-10 border-4 border-amber-500/30 border-t-amber-400 rounded-full animate-spin"></div>
-                        <p class="text-xs text-amber-300 font-bold">Cửa sổ Chrome đang mở trên màn hình máy Server!</p>
-                        <p class="text-[11px] text-slate-300">Vui lòng đăng nhập trên cửa sổ Chrome vừa bật lên...</p>
-                        <button type="button" onclick="cancelQrLogin()" class="mt-2 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700">Đóng / Hủy</button>
-                    `;
-                } else {
-                    loadState.innerHTML = `
-                        <div class="w-10 h-10 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
-                        <p class="text-xs text-cyan-300 font-bold animate-pulse">Đang kết nối TikTok & tạo mã QR...</p>
-                        <p class="text-[10px] text-slate-400">Đang đồng bộ địa chỉ IP & Múi giờ Proxy...</p>
-                    `;
-                }
-            }
-            if (readyState) readyState.classList.add('hidden');
-            if (overlay) overlay.classList.add('hidden');
-            if (qrImg) qrImg.src = '';
+            if (waitingEl) waitingEl.classList.remove('hidden');
+            if (titleEl) titleEl.innerText = "Cửa sổ Chrome đang mở trên Desktop Server!";
+            if (descEl) descEl.innerText = "Vui lòng thao tác đăng nhập trên cửa sổ Chrome vừa bật lên...";
+            if (retryBtn) retryBtn.classList.add('hidden');
 
-            if (browserLoginPollInterval) {
-                clearInterval(browserLoginPollInterval);
-                browserLoginPollInterval = null;
-            }
-
-            if (mode === 'window') {
-                showToast("Đang mở cửa sổ trình duyệt Chrome trên Desktop máy Server...");
-            } else {
-                showToast(proxy ? `Đang kết nối qua Proxy: ${proxy} & tạo mã QR...` : "Đang kết nối TikTok & tạo mã QR...");
-            }
+            showToast("Đang mở Chrome trên Desktop máy Server...");
 
             try {
                 const startRes = await fetch('/api/studio/browser/login/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ proxy: proxy, force: force, mode: mode })
+                    body: JSON.stringify({ proxy: proxy, force: false, mode: 'window' })
                 });
                 const text = await startRes.text();
                 let startData = null;
                 try {
                     startData = JSON.parse(text);
                 } catch (pe) {
-                    throw new Error("Máy chủ phản hồi không đúng định dạng. Vui lòng thử lại sau vài giây.");
+                    throw new Error("Máy chủ phản hồi không đúng định dạng.");
                 }
 
                 if (!startData || !startData.success) {
-                    alert(startData && startData.error ? startData.error : "Không thể khởi động kết nối TikTok.");
-                    cancelQrLogin();
+                    alert(startData && startData.error ? startData.error : "Không thể khởi động Chrome trên server.");
+                    cancelBatDownloadLogin();
                     return;
                 }
 
-                // Nếu đã có mã QR sẵn trong bộ nhớ đệm
-                if (startData.qr_image && mode === 'qr') {
-                    if (qrImg) qrImg.src = startData.qr_image;
-                    if (loadState) loadState.classList.add('hidden');
-                    if (readyState) readyState.classList.remove('hidden');
+                if (browserLoginPollInterval) {
+                    clearInterval(browserLoginPollInterval);
+                    browserLoginPollInterval = null;
                 }
 
-                // Bắt đầu chu kỳ Polling
                 let pollCount = 0;
                 browserLoginPollInterval = setInterval(async () => {
                     pollCount++;
-                    if (pollCount > 250) { // 250 * 1.2s = 300s (5 phút)
-                        cancelQrLogin();
-                        alert("Đã hết thời gian chờ quét mã (5 phút). Vui lòng thử lại!");
+                    if (pollCount > 250) {
+                        cancelBatDownloadLogin();
+                        alert("Đã hết thời gian chờ đăng nhập (5 phút). Vui lòng thử lại!");
                         return;
                     }
 
@@ -3409,21 +3269,14 @@
                         try {
                             data = JSON.parse(statusText);
                         } catch (err) {
-                            return; // Bỏ qua ngắt quãng mạng ngắn
+                            return;
                         }
 
                         if (!data) return;
 
-                        if (data.status === 'qr_ready' && data.qr_image) {
-                            if (qrImg && qrImg.src !== data.qr_image) {
-                                qrImg.src = data.qr_image;
-                            }
-                            if (loadState) loadState.classList.add('hidden');
-                            if (readyState) readyState.classList.remove('hidden');
-                        } else if (data.status === 'success' && data.account) {
+                        if (data.status === 'success' && data.account) {
                             clearInterval(browserLoginPollInterval);
                             browserLoginPollInterval = null;
-                            if (overlay) overlay.classList.remove('hidden');
                             const finalProxy = data.proxy || proxy || '';
                             saveStudioAccount(data.account, data.cookie, finalProxy);
                             showToast("🎉 Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
@@ -3433,19 +3286,17 @@
                                 openCheckPostModal(true);
                             }, 1200);
                         } else if (data.status === 'cancelled') {
-                            cancelQrLogin();
+                            cancelBatDownloadLogin();
                             showToast("Đã hủy phiên đăng nhập.");
                         } else if (data.status === 'error' || data.status === 'timeout') {
-                            cancelQrLogin();
+                            cancelBatDownloadLogin();
                             alert(data.error || "Đăng nhập không thành công.");
                         }
-                    } catch (pollErr) {
-                        // Bỏ qua lỗi ngắt quãng mạng tạm thời
-                    }
+                    } catch (pollErr) {}
                 }, 1200);
 
             } catch (e) {
-                cancelQrLogin();
+                cancelBatDownloadLogin();
                 alert("Lỗi kết nối: " + e.message);
             }
         }
