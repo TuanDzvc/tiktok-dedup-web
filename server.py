@@ -26,6 +26,8 @@ except Exception:
 import re
 import time
 import json
+import base64
+import secrets
 import threading
 import subprocess
 from typing import Optional
@@ -643,6 +645,327 @@ def api_studio_browser_login_cancel():
     """Hủy phiên đăng nhập trình duyệt và đóng cửa sổ."""
     res = studio_engine.cancel_interactive_browser_login()
     return JSONResponse(content=res)
+
+# ==============================================================================
+# HỖ TRỢ ĐĂNG NHẬP 1-CLICK TỰ ĐỘNG BẰNG FILE .BAT TRÊN MÁY KHÁCH
+# ==============================================================================
+EXTERNAL_LOGIN_SESSIONS: dict = {}
+EXTERNAL_LOGIN_LOCK = threading.Lock()
+
+def _cleanup_external_sessions():
+    now = time.time()
+    with EXTERNAL_LOGIN_LOCK:
+        expired = [k for k, v in EXTERNAL_LOGIN_SESSIONS.items() if now - v.get("created_at", 0) > 600]
+        for k in expired:
+            EXTERNAL_LOGIN_SESSIONS.pop(k, None)
+
+@app.get("/api/studio/external-login/status")
+def api_studio_external_login_status(id: str = ""):
+    """Kiểm tra trạng thái đăng nhập từ file .bat chạy trên máy khách."""
+    _cleanup_external_sessions()
+    sync_id = str(id or "").strip()
+    with EXTERNAL_LOGIN_LOCK:
+        sess = EXTERNAL_LOGIN_SESSIONS.get(sync_id)
+        if not sess:
+            return JSONResponse(content={"success": False, "status": "not_found"})
+        if sess.get("status") == "success":
+            return JSONResponse(content={
+                "success": True,
+                "status": "success",
+                "account": sess.get("account"),
+                "cookie": sess.get("cookie"),
+                "proxy": sess.get("proxy", "")
+            })
+        return JSONResponse(content={"success": False, "status": "waiting"})
+
+@app.post("/api/studio/external-login/sync")
+async def api_studio_external_login_sync(req: Request):
+    """File .bat trên máy khách gửi cookie về sau khi đăng nhập thành công trên Chrome."""
+    try:
+        body = await req.json()
+        sync_id = str(body.get("id") or "").strip()
+        cookie_str = str(body.get("cookie") or "").strip()
+        proxy = str(body.get("proxy") or "").strip()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+
+    if not sync_id or not cookie_str:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Thiếu id hoặc cookie."})
+
+    acc_info = studio_engine.get_account_info(cookie_str, proxy=proxy)
+    if not acc_info or not (acc_info.get("uid") or acc_info.get("uniqueId") or acc_info.get("username")):
+        # Thử lại không qua proxy phòng trường hợp proxy server bị nghẽn
+        if proxy:
+            acc_info = studio_engine.get_account_info(cookie_str, proxy="")
+    if not acc_info or not (acc_info.get("uid") or acc_info.get("uniqueId") or acc_info.get("username")):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Cookie không hợp lệ hoặc đã hết hạn."})
+
+    with EXTERNAL_LOGIN_LOCK:
+        EXTERNAL_LOGIN_SESSIONS[sync_id] = {
+            "status": "success",
+            "account": acc_info,
+            "cookie": cookie_str,
+            "proxy": proxy,
+            "created_at": time.time()
+        }
+
+    # Lưu vào bộ nhớ cache studio server
+    u_key = (acc_info.get("uniqueId") or acc_info.get("username", "")).lstrip("@").strip().lower()
+    if u_key:
+        studio_engine.ACTIVE_STUDIO_ACCOUNTS[u_key] = {
+            "account": acc_info,
+            "cookie": cookie_str,
+            "proxy": proxy,
+            "updated_at": time.time()
+        }
+    uid_key = str(acc_info.get("uid") or "").strip()
+    if uid_key:
+        studio_engine.ACTIVE_STUDIO_ACCOUNTS[uid_key] = {
+            "account": acc_info,
+            "cookie": cookie_str,
+            "proxy": proxy,
+            "updated_at": time.time()
+        }
+
+    return JSONResponse(content={"success": True, "account": acc_info})
+
+
+@app.get("/api/studio/download-login-bat")
+def api_studio_download_login_bat(id: str = "", proxy: str = "", origin: str = ""):
+    """Tạo và tải về file .bat chạy 1-click tự động trên máy khách (không cần cài Python)."""
+    sync_id = str(id or "").strip()
+    if not sync_id:
+        sync_id = f"tikflow_{int(time.time())}_{secrets.token_hex(4)}"
+
+    with EXTERNAL_LOGIN_LOCK:
+        EXTERNAL_LOGIN_SESSIONS[sync_id] = {
+            "status": "waiting",
+            "created_at": time.time()
+        }
+
+    clean_origin = str(origin or "").strip().rstrip("/")
+    if not clean_origin:
+        clean_origin = "https://checktiktok.site"
+
+    clean_proxy = str(proxy or "").strip()
+
+    # Mã PowerShell nhúng trong file .bat
+    ps_code = f'''[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$Host.UI.RawUI.WindowTitle = "TIKFLOW - DANG NHAP TIKTOK 1-CLICK"
+Write-Host "======================================================================" -ForegroundColor Cyan
+Write-Host "               TIKFLOW - DANG NHAP TIKTOK 1-CLICK TU DONG              " -ForegroundColor Yellow
+Write-Host "======================================================================" -ForegroundColor Cyan
+Write-Host "[*] May chu web: {clean_origin}" -ForegroundColor DarkGray
+if ("{clean_proxy}" -ne "") {{
+    Write-Host "[*] Proxy kenh:  {clean_proxy}" -ForegroundColor Cyan
+}}
+Write-Host "[*] Dang tim kiem Google Chrome tren may tinh cua ban..." -ForegroundColor DarkGray
+
+$chromePaths = @(
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    ($env:LOCALAPPDATA + "\\Google\\Chrome\\Application\\chrome.exe"),
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
+)
+
+$browser = $null
+foreach ($p in $chromePaths) {{
+    if (Test-Path $p) {{ $browser = $p; break }}
+}}
+
+if (-not $browser) {{
+    Write-Host "[-] Khong tim thay Google Chrome hoac Microsoft Edge tren may tinh!" -ForegroundColor Red
+    Write-Host "[!] Vui long cai dat Google Chrome roi chay lai file nay." -ForegroundColor Yellow
+    Read-Host "Nhan Enter de thoat..."
+    exit 1
+}}
+
+$port = Get-Random -Minimum 9300 -Maximum 9800
+$tmpDir = Join-Path $env:TEMP ("tikflow_profile_" + (Get-Random))
+
+$argList = @(
+    "--remote-debugging-port=$port",
+    "--user-data-dir=`"$tmpDir`"",
+    "--no-first-run",
+    "--no-default-browser-check"
+)
+if ("{clean_proxy}" -ne "") {{
+    $proxyVal = "{clean_proxy}".Trim()
+    $pHost = ""
+    $pPort = 0
+    try {{
+        $pUri = [System.Uri]$proxyVal
+        $pHost = $pUri.Host
+        $pPort = $pUri.Port
+        if ($pPort -le 0) {{ $pPort = 1080 }}
+    }} catch {{
+        if ($proxyVal -match "://([^:/]+):([0-9]+)") {{
+            $pHost = $matches[1]
+            $pPort = [int]$matches[2]
+        }}
+    }}
+    $proxyOk = $false
+    if ($pHost -and $pPort -gt 0) {{
+        try {{
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            $ar = $tcp.BeginConnect($pHost, $pPort, $null, $null)
+            $wait = $ar.AsyncWaitHandle.WaitOne(1500, $false)
+            if ($wait -and $tcp.Connected) {{
+                $tcp.EndConnect($ar)
+                $tcp.Close()
+                $proxyOk = $true
+                Write-Host "[+] Ket noi Proxy thanh cong: $proxyVal" -ForegroundColor Green
+            }} else {{
+                $tcp.Close()
+                Write-Host "[!] Proxy khong phan hoi tu duong truyen nay, Chrome se mo bang mang truc tiep." -ForegroundColor Yellow
+            }}
+        }} catch {{
+            Write-Host "[!] Khong the ket noi Proxy, mo Chrome bang mang truc tiep." -ForegroundColor Yellow
+        }}
+    }}
+    if ($proxyOk) {{
+        $argList += "--proxy-server=$proxyVal"
+    }}
+}}
+$argList += "https://www.tiktok.com/login"
+
+Write-Host "[+] Dang khoi dong trinh duyet tren man hinh cua ban..." -ForegroundColor Green
+$proc = Start-Process -FilePath $browser -ArgumentList $argList -PassThru
+Start-Sleep -Seconds 2
+
+# Cho ket noi CDP
+$wsUrl = $null
+for ($i = 0; $i -lt 15; $i++) {{
+    try {{
+        $ver = Invoke-RestMethod -Uri "http://127.0.0.1:$port/json/version" -TimeoutSec 2
+        if ($ver.webSocketDebuggerUrl) {{
+            $wsUrl = $ver.webSocketDebuggerUrl
+            break
+        }}
+    }} catch {{}}
+    Start-Sleep -Milliseconds 600
+}}
+
+if (-not $wsUrl) {{
+    Write-Host "[-] Khong the ket noi cong dieu khien Chrome." -ForegroundColor Red
+    exit 1
+}}
+
+Write-Host "======================================================================" -ForegroundColor Cyan
+Write-Host "[+] Trinh duyet da mo thanh cong!" -ForegroundColor Green
+Write-Host "[*] Vui long dang nhap tren cua so Chrome vua bat len:" -ForegroundColor Yellow
+Write-Host "    - Ban co the quet ma QR, nhap mat khau hoac ma code email thoai mai." -ForegroundColor White
+Write-Host "[*] He thong dang tu dong doi ban dang nhap xong..." -ForegroundColor Cyan
+Write-Host "======================================================================" -ForegroundColor Cyan
+
+$ws = New-Object System.Net.WebSockets.ClientWebSocket
+$ct = New-Object System.Threading.CancellationToken
+$task = $ws.ConnectAsync([System.Uri]$wsUrl, $ct)
+$task.Wait(5000)
+
+$startTs = [DateTime]::UtcNow
+$synced = $false
+
+while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 300) {{
+    if ($proc.HasExited) {{
+        Write-Host "[-] Cua so trinh duyet da bi dong." -ForegroundColor Yellow
+        break
+    }}
+
+    try {{
+        $msg = '{{"id":1,"method":"Storage.getCookies"}}'
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
+        $seg = New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)
+        $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct).Wait(2000)
+
+        $memStream = New-Object System.IO.MemoryStream
+        do {{
+            $buffer = New-Object byte[] 65536
+            $recSeg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buffer)
+            $recTask = $ws.ReceiveAsync($recSeg, $ct)
+            $recTask.Wait(3000)
+            if ($recTask.Result.Count -gt 0) {{
+                $memStream.Write($buffer, 0, $recTask.Result.Count)
+            }}
+        }} while (-not $recTask.Result.EndOfMessage)
+
+        $respStr = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
+        $json = $respStr | ConvertFrom-Json
+        $cookies = $null
+        if ($json.result -and $json.result.cookies) {{
+            $cookies = $json.result.cookies
+        }}
+
+        if ($cookies) {{
+            $sidCookie = $cookies | Where-Object {{ $_.name -eq "sessionid" -and $_.value }} | Select-Object -First 1
+            if ($sidCookie) {{
+                Write-Host ""
+                Write-Host "======================================================================" -ForegroundColor Green
+                Write-Host "[+] DA DANG NHAP THANH CONG TREN CHROME!" -ForegroundColor Green
+                Write-Host "[*] Dang dong bo tai khoan len trang web TikFlow..." -ForegroundColor Yellow
+
+            $cookiePairs = @()
+            foreach ($c in $cookies) {{
+                if ($c.name -and $c.value) {{
+                    $cookiePairs += ($c.name + "=" + $c.value)
+                }}
+            }}
+            $fullCookieStr = $cookiePairs -join "; "
+
+            $syncBody = @{{
+                id = "{sync_id}"
+                cookie = $fullCookieStr
+                proxy = "{clean_proxy}"
+            }} | ConvertTo-Json
+
+            try {{
+                $syncRes = Invoke-RestMethod -Uri "{clean_origin}/api/studio/external-login/sync" -Method Post -ContentType "application/json; charset=utf-8" -Body $syncBody -TimeoutSec 10
+                if ($syncRes.success) {{
+                    Write-Host "[+] THANH CONG 100%! Tai khoan da duoc nap vao web TikFlow!" -ForegroundColor Green
+                    Write-Host "[+] Ban co the quay lai man hinh Web de xem danh sach video." -ForegroundColor Cyan
+                    $synced = $true
+                }}
+            }} catch {{
+                Write-Host "[-] Loi dong bo len server: " $_ -ForegroundColor Red
+            }}
+
+            break
+        }}
+    }} catch {{}}
+
+    Start-Sleep -Seconds 1
+}}
+
+try {{
+    $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "done", $ct).Wait(1000)
+}} catch {{}}
+
+if ($synced) {{
+    Write-Host ""
+    Write-Host "[*] Cua so nay se tu dong dong sau 3 giay..." -ForegroundColor DarkGray
+    Start-Sleep -Seconds 3
+}} else {{
+    Read-Host "Nhan Enter de thoat..."
+}}
+'''
+
+    b64_ps = base64.b64encode(ps_code.encode("utf-16le")).decode("ascii")
+    bat_content = f'''@echo off
+chcp 65001 >nul
+title TIKFLOW - DANG NHAP TIKTOK 1-CLICK
+powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand {b64_ps}
+exit /b
+'''
+
+    return Response(
+        content=bat_content,
+        media_type="application/x-bat",
+        headers={
+            "Content-Disposition": 'attachment; filename="tikflow_login.bat"',
+            "Cache-Control": "no-cache, no-store, must-revalidate"
+        }
+    )
 
 @app.get("/api/studio/pia/proxies")
 def api_studio_pia_proxies():

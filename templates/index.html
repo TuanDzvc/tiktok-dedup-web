@@ -820,44 +820,117 @@
                 </div>
             </div>
 
-            <!-- Cách 1: Quét Mã QR TikTok (Trực Tiếp Trên Màn Hình Web - 1-Click) -->
-            <div id="qrLoginSection" class="relative z-10 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-b from-cyan-950/70 via-slate-900/90 to-slate-950 border border-cyan-500/40 text-center space-y-2.5">
+            <!-- CÁCH 1: 1-CLICK TỰ ĐỘNG BẰNG FILE .BAT (KHUYÊN DÙNG CHO MÁY KHÁCH & MÁY Ở XA) -->
+            <div id="batDownloadSection" class="relative z-10 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-b from-cyan-950/80 via-slate-900/90 to-slate-950 border border-cyan-400/60 shadow-lg shadow-cyan-950/40 text-center space-y-3">
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-1.5 text-xs font-bold text-cyan-400 uppercase tracking-wider">
-                        <i class="fa-solid fa-qrcode text-amber-400"></i>
-                        <span>Cách 1: Quét Mã QR TikTok (Khuyên Dùng)</span>
+                    <div class="flex items-center gap-1.5 text-xs font-black text-cyan-300 uppercase tracking-wider">
+                        <i class="fa-solid fa-bolt-lightning text-amber-400 animate-pulse"></i>
+                        <span>Cách 1: Tự Động 1-Click (Mở Chrome Trên Máy Bạn)</span>
                     </div>
-                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-700/60 text-cyan-300 font-bold whitespace-nowrap">
-                        1-Click Tự Động
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-900/90 border border-cyan-500/60 text-cyan-200 font-bold whitespace-nowrap">
+                        Khuyên Dùng
                     </span>
+                </div>
+
+                <!-- Khung bấm tải -->
+                <div id="batDownloadInitial" class="space-y-2">
+                    <button 
+                        type="button" 
+                        id="btnDownloadLoginBat"
+                        onclick="handleDownloadLoginBat()" 
+                        class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-sm transition shadow-xl shadow-cyan-500/30 flex items-center justify-center gap-2.5 active:scale-98"
+                    >
+                        <i class="fa-solid fa-cloud-arrow-down text-amber-300 text-lg"></i>
+                        <span>Tải File Đăng Nhập 1-Click (tikflow_login.bat)</span>
+                    </button>
+
+                    <div class="text-[11px] text-slate-300 leading-relaxed text-left bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 space-y-1">
+                        <div class="text-cyan-300 font-bold flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
+                            <span>Dành cho máy khách / máy ở xa (Không cần cài bất kỳ phần mềm nào)</span>
+                        </div>
+                        <p class="text-slate-400">
+                            1. Bấm nút tải file &rarr; Mở file <b class="text-white">tikflow_login.bat</b> vừa tải ở góc trình duyệt.<br/>
+                            2. Cửa sổ Chrome trên chính máy bạn sẽ tự bật lên để đăng nhập (Hỗ trợ quét QR, nhập mật khẩu, mã email, giải captcha 100%).<br/>
+                            3. Đăng nhập xong, trang Web này <b>tự động lưu nick trong 2 giây</b>!
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Khung chờ sau khi đã bấm tải -->
+                <div id="batDownloadWaiting" class="hidden flex flex-col items-center justify-center p-4 rounded-2xl bg-black/70 border border-cyan-500/40 space-y-3 text-center">
+                    <div class="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
+                    <div class="space-y-1">
+                        <p class="text-sm font-black text-cyan-300">Đã tải file tikflow_login.bat!</p>
+                        <p class="text-xs text-slate-200">Hãy bấm mở file <b class="text-amber-300 font-mono">tikflow_login.bat</b> ở thanh tải xuống trình duyệt.</p>
+                        <p class="text-[11px] text-slate-400">Chrome trên máy bạn sẽ tự mở lên. Web đang tự động chờ bạn đăng nhập...</p>
+                    </div>
+                    <div class="flex items-center gap-2 pt-1">
+                        <button 
+                            type="button" 
+                            onclick="handleDownloadLoginBat(true)" 
+                            class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition active:scale-95"
+                            title="Tải lại file nếu bạn lỡ xóa hoặc chưa mở"
+                        >
+                            <i class="fa-solid fa-arrows-rotate text-[10px] text-cyan-400"></i>
+                            <span>Tải lại file</span>
+                        </button>
+                        <button 
+                            type="button" 
+                            onclick="cancelBatDownloadLogin()" 
+                            class="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 text-xs font-bold border border-rose-800/80 flex items-center gap-1.5 transition active:scale-95"
+                        >
+                            <i class="fa-solid fa-xmark text-[10px]"></i>
+                            <span>Hủy</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Phân cách -->
+            <div class="relative z-10 flex items-center justify-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                <span class="h-px bg-slate-800 flex-1"></span>
+                <span>HOẶC CÁCH 2: QUÉT MÃ QR BẰNG APP / MỞ DESKTOP SERVER</span>
+                <span class="h-px bg-slate-800 flex-1"></span>
+            </div>
+
+            <!-- Cách 2: Quét Mã QR TikTok (Trực Tiếp Trên Màn Hình Web) -->
+            <div id="qrLoginSection" class="relative z-10 p-3 sm:p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                        <i class="fa-solid fa-qrcode text-emerald-400"></i>
+                        <span>Quét Mã QR Bằng App TikTok Điện Thoại</span>
+                    </div>
                 </div>
 
                 <!-- Khung ban đầu trước khi bấm nút -->
                 <div id="qrInitialContainer" class="space-y-2">
-                    <button 
-                        type="button" 
-                        id="btnBrowserLogin"
-                        onclick="handleBrowserLogin(false, 'qr')" 
-                        class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-extrabold text-sm transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2.5 active:scale-98"
-                    >
-                        <i class="fa-solid fa-qrcode text-amber-300 text-base"></i>
-                        <span>Hiện Mã QR Đăng Nhập (Khuyên Dùng Cho Mọi Máy)</span>
-                    </button>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button 
+                            type="button" 
+                            id="btnBrowserLogin"
+                            onclick="handleBrowserLogin(false, 'qr')" 
+                            class="py-2.5 px-3 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/70 text-emerald-300 hover:text-white font-bold text-xs border border-emerald-700/60 flex items-center justify-center gap-2 transition active:scale-95"
+                        >
+                            <i class="fa-solid fa-qrcode text-emerald-400"></i>
+                            <span>Hiện QR Quét Bằng App</span>
+                        </button>
 
-                    <button 
-                        type="button" 
-                        id="btnNativeWindowLogin"
-                        onclick="handleBrowserLogin(false, 'window')" 
-                        class="w-full py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700/80 flex items-center justify-center gap-2 transition active:scale-95"
-                        title="Chỉ mở được trên máy tính đang đặt server chạy file Python của Tool"
-                    >
-                        <i class="fa-solid fa-window-maximize text-cyan-400 text-xs"></i>
-                        <span>Hoặc Mở Cửa Sổ Trình Duyệt Desktop (Chỉ máy chủ Tool)</span>
-                    </button>
+                        <button 
+                            type="button" 
+                            id="btnNativeWindowLogin"
+                            onclick="handleBrowserLogin(false, 'window')" 
+                            class="py-2.5 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700/80 flex items-center justify-center gap-2 transition active:scale-95"
+                            title="Chỉ mở được trên máy tính đang đặt server chạy file Python của Tool"
+                        >
+                            <i class="fa-solid fa-window-maximize text-cyan-400"></i>
+                            <span>Mở Chrome Desktop (Server)</span>
+                        </button>
+                    </div>
 
                     <p class="text-[11px] text-slate-400 leading-relaxed pt-0.5">
-                        💡 <b>Quét mã QR:</b> Hoạt động 100% cho cả máy khách ở xa, laptop lẫn điện thoại (vào nick trong 3s).<br/>
-                        💡 <b>Mở cửa sổ Desktop:</b> Cửa sổ Chrome chỉ có thể mở ngoài màn hình trên máy chủ đang chạy file tool.
+                        💡 Bấm <b>Hiện QR Quét Bằng App</b> để mở mã QR và dùng app TikTok trên điện thoại quét là xong.<br/>
+                        💡 Bấm <b>Mở Chrome Desktop</b> nếu bạn đang ngồi trực tiếp trước máy tính chạy file tool.
                     </p>
                 </div>
 
@@ -918,7 +991,7 @@
             <!-- Phân cách -->
             <div class="relative z-10 flex items-center justify-center gap-2 text-[11px] text-slate-500 font-bold uppercase tracking-wider">
                 <span class="h-px bg-slate-800 flex-1"></span>
-                <span>HOẶC CÁCH 2: DÁN COOKIE TÀI KHOẢN</span>
+                <span>HOẶC CÁCH 3: DÁN COOKIE TÀI KHOẢN</span>
                 <span class="h-px bg-slate-800 flex-1"></span>
             </div>
 
@@ -3119,10 +3192,92 @@
                 handleCustomProxyInput(savedProxy);
             }
             loadPiaProxiesFromBackend();
+            cancelBatDownloadLogin();
             document.getElementById('authModal').classList.remove('hidden');
         }
 
         let browserLoginPollInterval = null;
+        let batLoginPollInterval = null;
+        let currentBatSyncId = null;
+
+        function cancelBatDownloadLogin() {
+            if (batLoginPollInterval) {
+                clearInterval(batLoginPollInterval);
+                batLoginPollInterval = null;
+            }
+            currentBatSyncId = null;
+            const initialEl = document.getElementById('batDownloadInitial');
+            const waitingEl = document.getElementById('batDownloadWaiting');
+            if (initialEl) initialEl.classList.remove('hidden');
+            if (waitingEl) waitingEl.classList.add('hidden');
+        }
+
+        async function handleDownloadLoginBat(isRetry = false) {
+            const proxy = (document.getElementById('loginProxyInput')?.value || '').trim();
+            if (proxy) {
+                localStorage.setItem('tikflow_last_proxy', proxy);
+            }
+
+            if (!isRetry || !currentBatSyncId) {
+                currentBatSyncId = 'tikflow_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+            }
+
+            const initialEl = document.getElementById('batDownloadInitial');
+            const waitingEl = document.getElementById('batDownloadWaiting');
+            if (initialEl) initialEl.classList.add('hidden');
+            if (waitingEl) waitingEl.classList.remove('hidden');
+
+            // Kích hoạt tải file .bat về máy khách
+            const origin = window.location.origin || 'https://checktiktok.site';
+            const downloadUrl = `/api/studio/download-login-bat?id=${encodeURIComponent(currentBatSyncId)}&proxy=${encodeURIComponent(proxy)}&origin=${encodeURIComponent(origin)}`;
+            
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = 'tikflow_login.bat';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            showToast("Đã tải file tikflow_login.bat. Hãy bấm mở file ở góc trình duyệt để đăng nhập!");
+
+            if (batLoginPollInterval) {
+                clearInterval(batLoginPollInterval);
+                batLoginPollInterval = null;
+            }
+
+            let pollCount = 0;
+            const targetSyncId = currentBatSyncId;
+            batLoginPollInterval = setInterval(async () => {
+                pollCount++;
+                if (pollCount > 350) { // 350 * 1.5s = 525s (~8.7 phút)
+                    cancelBatDownloadLogin();
+                    showToast("Đã hết thời gian chờ đăng nhập file .bat. Vui lòng bấm thử lại!");
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`/api/studio/external-login/status?id=${encodeURIComponent(targetSyncId)}&t=${Date.now()}`);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (data && data.success && data.status === 'success' && data.account) {
+                        clearInterval(batLoginPollInterval);
+                        batLoginPollInterval = null;
+                        currentBatSyncId = null;
+
+                        const finalProxy = data.proxy || proxy || '';
+                        saveStudioAccount(data.account, data.cookie, finalProxy);
+                        showToast("🎉 Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
+                        setTimeout(() => {
+                            wasCheckPostOpenBeforeAuth = false;
+                            closeAuthModal();
+                            openCheckPostModal(true);
+                        }, 1200);
+                    }
+                } catch (e) {
+                    // Bỏ qua ngắt quãng tạm thời
+                }
+            }, 1500);
+        }
 
         function cancelQrLogin() {
             if (browserLoginPollInterval) {
@@ -3155,6 +3310,7 @@
         function closeAuthModal() {
             document.getElementById('authModal').classList.add('hidden');
             cancelQrLogin();
+            cancelBatDownloadLogin();
             // Khôi phục lại bảng Check Post nếu người dùng đóng bảng đăng nhập mà chưa thêm nick
             if (wasCheckPostOpenBeforeAuth && activeStudioSession) {
                 wasCheckPostOpenBeforeAuth = false;
