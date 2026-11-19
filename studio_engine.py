@@ -1142,18 +1142,18 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                 _BROWSER_LOGIN_STATE["message"] = "Đang kết nối TikTok..."
                 _BROWSER_LOGIN_STATE["updated_at"] = time.time()
 
-            # Nếu ở chế độ QR stream, đi thẳng vào URL qrcode để tải cực nhanh (~2s)
-            target_login_url = "https://www.tiktok.com/login/qrcode" if mode == "qr" else "https://www.tiktok.com/login"
+            # Luôn truy cập https://www.tiktok.com/login rồi click [Use QR code] để lấy mã QR Token đăng nhập thật (chứa link /t/...)
             try:
-                page.goto(target_login_url, wait_until="domcontentloaded", timeout=25000)
+                page.goto("https://www.tiktok.com/login", wait_until="domcontentloaded", timeout=25000)
             except Exception:
                 pass
 
-            if mode != "qr":
-                try:
-                    page.locator("text=/Use QR|Dùng mã QR|Quét mã QR/i").first.click(timeout=1500)
-                except Exception:
-                    pass
+            try:
+                btn = page.locator("text=/Use QR|Dùng mã QR|Quét mã QR/i").first
+                if btn.is_visible(timeout=3000):
+                    btn.click()
+            except Exception:
+                pass
 
             qr_captured = False
             last_qr_ts = 0
@@ -1168,10 +1168,35 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                         pass
                     return
 
-                # Bắt mã QR: Hỗ trợ cả thẻ IMG (data:image/png;base64) và CANVAS
-                if (not qr_captured) or (time.time() - last_qr_ts > 15):
+                # Bắt mã QR ĐĂNG NHẬP THẬT (canvas chứa token đăng nhập /t/...)
+                if not qr_captured:
                     try:
-                        # Kiểm tra xem mã QR có bị hết hạn cần click tải lại không
+                        # Kiểm tra xem nút "Use QR code" có xuất hiện không và bấm
+                        qr_btn = page.locator("text=/Use QR|Dùng mã QR|Quét mã QR/i").first
+                        if qr_btn.is_visible(timeout=200):
+                            qr_btn.click()
+                    except Exception:
+                        pass
+
+                    try:
+                        canvas = page.query_selector("canvas")
+                        if canvas:
+                            box = canvas.bounding_box()
+                            if box and box["width"] > 40 and box["height"] > 40:
+                                qr_url = canvas.evaluate("el => el.toDataURL()")
+                                if qr_url and len(qr_url) > 2000:
+                                    with _BROWSER_LOGIN_LOCK:
+                                        _BROWSER_LOGIN_STATE["status"] = "qr_ready"
+                                        _BROWSER_LOGIN_STATE["qr_image"] = qr_url
+                                        _BROWSER_LOGIN_STATE["message"] = "Mã QR đã sẵn sàng! Mở app TikTok để quét."
+                                        _BROWSER_LOGIN_STATE["updated_at"] = time.time()
+                                    qr_captured = True
+                                    last_qr_ts = time.time()
+                    except Exception:
+                        pass
+                elif time.time() - last_qr_ts > 15:
+                    # Kiểm tra xem mã QR có bị hết hạn cần click tải lại không
+                    try:
                         reload_btn = page.locator("text=/Click to refresh|Nhấp để làm mới|Refresh|Tải lại/i").first
                         if reload_btn.is_visible(timeout=150):
                             try:
@@ -1179,18 +1204,13 @@ def _worker_browser_login(timeout_sec: int, stop_event: threading.Event, proxy: 
                                 time.sleep(0.6)
                             except Exception:
                                 pass
-
-                        # TikTok dùng thẻ img[src^="data:image"] hoặc canvas
-                        qr_el = page.query_selector('img[src^="data:image"], canvas, [data-e2e*="qr"] img, div[class*="qrcode"] img')
-                        if qr_el:
-                            qr_url = qr_el.evaluate('el => el.tagName === "CANVAS" ? el.toDataURL() : (el.currentSrc || el.src)')
-                            if qr_url and str(qr_url).startswith("data:image"):
+                        canvas = page.query_selector("canvas")
+                        if canvas:
+                            qr_url = canvas.evaluate("el => el.toDataURL()")
+                            if qr_url and len(qr_url) > 2000 and qr_url != _BROWSER_LOGIN_STATE.get("qr_image"):
                                 with _BROWSER_LOGIN_LOCK:
-                                    _BROWSER_LOGIN_STATE["status"] = "qr_ready"
                                     _BROWSER_LOGIN_STATE["qr_image"] = qr_url
-                                    _BROWSER_LOGIN_STATE["message"] = "Mã QR đã sẵn sàng! Mở app TikTok để quét."
                                     _BROWSER_LOGIN_STATE["updated_at"] = time.time()
-                                qr_captured = True
                                 last_qr_ts = time.time()
                     except Exception:
                         pass
