@@ -905,32 +905,33 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 300) {{
                 Write-Host "[+] DA DANG NHAP THANH CONG TREN CHROME!" -ForegroundColor Green
                 Write-Host "[*] Dang dong bo tai khoan len trang web TikFlow..." -ForegroundColor Yellow
 
-            $cookiePairs = @()
-            foreach ($c in $cookies) {{
-                if ($c.name -and $c.value) {{
-                    $cookiePairs += ($c.name + "=" + $c.value)
+                $cookiePairs = @()
+                foreach ($c in $cookies) {{
+                    if ($c.name -and $c.value) {{
+                        $cookiePairs += ($c.name + "=" + $c.value)
+                    }}
                 }}
-            }}
-            $fullCookieStr = $cookiePairs -join "; "
+                $fullCookieStr = $cookiePairs -join "; "
 
-            $syncBody = @{{
-                id = "{sync_id}"
-                cookie = $fullCookieStr
-                proxy = "{clean_proxy}"
-            }} | ConvertTo-Json
+                $syncBody = @{{
+                    id = "{sync_id}"
+                    cookie = $fullCookieStr
+                    proxy = "{clean_proxy}"
+                }} | ConvertTo-Json
 
-            try {{
-                $syncRes = Invoke-RestMethod -Uri "{clean_origin}/api/studio/external-login/sync" -Method Post -ContentType "application/json; charset=utf-8" -Body $syncBody -TimeoutSec 10
-                if ($syncRes.success) {{
-                    Write-Host "[+] THANH CONG 100%! Tai khoan da duoc nap vao web TikFlow!" -ForegroundColor Green
-                    Write-Host "[+] Ban co the quay lai man hinh Web de xem danh sach video." -ForegroundColor Cyan
-                    $synced = $true
+                try {{
+                    $syncRes = Invoke-RestMethod -Uri "{clean_origin}/api/studio/external-login/sync" -Method Post -ContentType "application/json; charset=utf-8" -Body $syncBody -TimeoutSec 10
+                    if ($syncRes.success) {{
+                        Write-Host "[+] THANH CONG 100%! Tai khoan da duoc nap vao web TikFlow!" -ForegroundColor Green
+                        Write-Host "[+] Ban co the quay lai man hinh Web de xem danh sach video." -ForegroundColor Cyan
+                        $synced = $true
+                    }}
+                }} catch {{
+                    Write-Host "[-] Loi dong bo len server: " $_ -ForegroundColor Red
                 }}
-            }} catch {{
-                Write-Host "[-] Loi dong bo len server: " $_ -ForegroundColor Red
-            }}
 
-            break
+                break
+            }}
         }}
     }} catch {{}}
 
