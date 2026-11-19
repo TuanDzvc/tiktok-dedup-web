@@ -837,14 +837,27 @@
                     <button 
                         type="button" 
                         id="btnBrowserLogin"
-                        onclick="handleBrowserLogin(false)" 
+                        onclick="handleBrowserLogin(false, 'qr')" 
                         class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-extrabold text-sm transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2.5 active:scale-98"
                     >
                         <i class="fa-solid fa-qrcode text-amber-300 text-base"></i>
-                        <span>Hiện Mã QR Đăng Nhập Kênh</span>
+                        <span>Hiện Mã QR Đăng Nhập (Khuyên Dùng Cho Mọi Máy)</span>
                     </button>
-                    <p class="text-[11px] text-slate-400 leading-relaxed">
-                        💡 Bấm để hiện mã QR trực tiếp trên màn hình, mở app TikTok trên điện thoại quét là xong ngay trong 3s! (Hỗ trợ chuẩn Proxy SOCKS5/HTTP đã chọn).
+
+                    <button 
+                        type="button" 
+                        id="btnNativeWindowLogin"
+                        onclick="handleBrowserLogin(false, 'window')" 
+                        class="w-full py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700/80 flex items-center justify-center gap-2 transition active:scale-95"
+                        title="Chỉ mở được trên máy tính đang đặt server chạy file Python của Tool"
+                    >
+                        <i class="fa-solid fa-window-maximize text-cyan-400 text-xs"></i>
+                        <span>Hoặc Mở Cửa Sổ Trình Duyệt Desktop (Chỉ máy chủ Tool)</span>
+                    </button>
+
+                    <p class="text-[11px] text-slate-400 leading-relaxed pt-0.5">
+                        💡 <b>Quét mã QR:</b> Hoạt động 100% cho cả máy khách ở xa, laptop lẫn điện thoại (vào nick trong 3s).<br/>
+                        💡 <b>Mở cửa sổ Desktop:</b> Cửa sổ Chrome chỉ có thể mở ngoài màn hình trên máy chủ đang chạy file tool.
                     </p>
                 </div>
 
@@ -3149,7 +3162,7 @@
             }
         }
 
-        async function handleBrowserLogin(force = false) {
+        async function handleBrowserLogin(force = false, mode = 'qr') {
             const proxy = (document.getElementById('loginProxyInput')?.value || '').trim();
             if (proxy) {
                 localStorage.setItem('tikflow_last_proxy', proxy);
@@ -3164,7 +3177,23 @@
 
             if (initialEl) initialEl.classList.add('hidden');
             if (displayEl) displayEl.classList.remove('hidden');
-            if (loadState) loadState.classList.remove('hidden');
+            if (loadState) {
+                loadState.classList.remove('hidden');
+                if (mode === 'window') {
+                    loadState.innerHTML = `
+                        <div class="w-10 h-10 border-4 border-amber-500/30 border-t-amber-400 rounded-full animate-spin"></div>
+                        <p class="text-xs text-amber-300 font-bold">Cửa sổ Chrome đang mở trên màn hình máy Server!</p>
+                        <p class="text-[11px] text-slate-300">Vui lòng đăng nhập trên cửa sổ Chrome vừa bật lên...</p>
+                        <button type="button" onclick="cancelQrLogin()" class="mt-2 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700">Đóng / Hủy</button>
+                    `;
+                } else {
+                    loadState.innerHTML = `
+                        <div class="w-10 h-10 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
+                        <p class="text-xs text-cyan-300 font-bold animate-pulse">Đang kết nối TikTok & tạo mã QR...</p>
+                        <p class="text-[10px] text-slate-400">Đang đồng bộ địa chỉ IP & Múi giờ Proxy...</p>
+                    `;
+                }
+            }
             if (readyState) readyState.classList.add('hidden');
             if (overlay) overlay.classList.add('hidden');
             if (qrImg) qrImg.src = '';
@@ -3174,13 +3203,17 @@
                 browserLoginPollInterval = null;
             }
 
-            showToast(proxy ? `Đang kết nối qua Proxy: ${proxy} & tạo mã QR...` : "Đang kết nối TikTok & tạo mã QR...");
+            if (mode === 'window') {
+                showToast("Đang mở cửa sổ trình duyệt Chrome trên Desktop máy Server...");
+            } else {
+                showToast(proxy ? `Đang kết nối qua Proxy: ${proxy} & tạo mã QR...` : "Đang kết nối TikTok & tạo mã QR...");
+            }
 
             try {
                 const startRes = await fetch('/api/studio/browser/login/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ proxy: proxy, force: force })
+                    body: JSON.stringify({ proxy: proxy, force: force, mode: mode })
                 });
                 const text = await startRes.text();
                 let startData = null;
@@ -3197,7 +3230,7 @@
                 }
 
                 // Nếu đã có mã QR sẵn trong bộ nhớ đệm
-                if (startData.qr_image) {
+                if (startData.qr_image && mode === 'qr') {
                     if (qrImg) qrImg.src = startData.qr_image;
                     if (loadState) loadState.classList.add('hidden');
                     if (readyState) readyState.classList.remove('hidden');

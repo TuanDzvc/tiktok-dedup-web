@@ -618,16 +618,18 @@ async def api_studio_item_delete(req: Request):
 
 @app.post("/api/studio/browser/login/start")
 async def api_studio_browser_login_start(req: Request):
-    """Khởi chạy trình duyệt đăng nhập chạy ngầm (hỗ trợ HTTP & SOCKS5) bắt mã QR TikTok và phản hồi ngay lập tức."""
+    """Khởi chạy trình duyệt đăng nhập (hỗ trợ HTTP & SOCKS5, chế độ QR stream hoặc mở cửa sổ desktop)."""
     proxy = ""
     force = False
+    mode = "qr"
     try:
         body = await req.json()
         proxy = str(body.get("proxy") or "").strip()
         force = bool(body.get("force", False))
+        mode = str(body.get("mode") or "qr").strip().lower()
     except Exception:
         pass
-    res = studio_engine.start_interactive_browser_login(proxy=proxy, force=force)
+    res = studio_engine.start_interactive_browser_login(proxy=proxy, force=force, mode=mode)
     return JSONResponse(content=res)
 
 @app.get("/api/studio/browser/login/status")
