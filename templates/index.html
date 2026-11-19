@@ -855,14 +855,28 @@
                         </div>
                     </div>
 
-                    <!-- Khung chờ sau khi đã kích hoạt -->
-                    <div id="batDownloadWaiting" class="hidden flex flex-col items-center justify-center p-3.5 rounded-xl bg-black/75 border border-cyan-500/40 space-y-2 text-center">
-                        <div class="w-8 h-8 border-3 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
+                    <!-- Khung chờ sau khi đã kích hoạt (Liên kết trạng thái trực tiếp 2 chiều với file .bat) -->
+                    <div id="batDownloadWaiting" class="hidden flex flex-col items-center justify-center p-3.5 rounded-xl bg-black/75 border border-cyan-500/40 space-y-2.5 text-center">
+                        <div id="batWaitingSpinner" class="w-8 h-8 border-3 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
+                        
                         <div class="space-y-0.5">
                             <p id="batWaitingTitle" class="text-xs font-black text-cyan-300">Đã kích hoạt trình duyệt!</p>
                             <p id="batWaitingDesc" class="text-[11px] text-slate-200">Vui lòng đăng nhập trên cửa sổ Chrome vừa bật lên...</p>
                             <p class="text-[10px] text-slate-400">Đăng nhập xong, trang Web sẽ tự động nhận nick trong 2 giây.</p>
                         </div>
+
+                        <!-- Nút Mở Lại Chrome nếu cửa sổ Chrome bị đóng trong khi cmd đang chạy ngầm -->
+                        <div id="batReopenContainer" class="hidden w-full pt-1">
+                            <button 
+                                type="button" 
+                                onclick="handleReopenClientBrowser()" 
+                                class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black text-xs transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-95 animate-pulse"
+                            >
+                                <i class="fa-brands fa-chrome text-sm"></i>
+                                <span>🚀 Bấm Vào Đây Để Mở Lại Chrome</span>
+                            </button>
+                        </div>
+
                         <div class="flex items-center gap-2 pt-1">
                             <button 
                                 type="button" 
@@ -3090,7 +3104,13 @@
                 handleCustomProxyInput(savedProxy);
             }
             loadPiaProxiesFromBackend();
-            cancelBatDownloadLogin();
+
+            // Khôi phục phiên .bat nếu đang chạy ngầm trên máy khách
+            const savedBatSyncId = localStorage.getItem('tikflow_active_bat_sync');
+            if (savedBatSyncId && !batLoginPollInterval) {
+                resumeBatDownloadPolling(savedBatSyncId);
+            }
+
             document.getElementById('authModal').classList.remove('hidden');
         }
 
@@ -3107,15 +3127,27 @@
                 clearInterval(browserLoginPollInterval);
                 browserLoginPollInterval = null;
             }
+            if (currentBatSyncId) {
+                fetch('/api/studio/external-login/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: currentBatSyncId, command: 'exit' })
+                }).catch(() => {});
+            }
             fetch('/api/studio/browser/login/cancel', { method: 'POST' }).catch(() => {});
             currentBatSyncId = null;
+            localStorage.removeItem('tikflow_active_bat_sync');
 
             const initialEl = document.getElementById('batDownloadInitial');
             const waitingEl = document.getElementById('batDownloadWaiting');
             const retryBtn = document.getElementById('btnBatRetry');
+            const reopenBox = document.getElementById('batReopenContainer');
+            const spinner = document.getElementById('batWaitingSpinner');
             if (initialEl) initialEl.classList.remove('hidden');
             if (waitingEl) waitingEl.classList.add('hidden');
             if (retryBtn) retryBtn.classList.remove('hidden');
+            if (reopenBox) reopenBox.classList.add('hidden');
+            if (spinner) spinner.classList.remove('hidden');
         }
 
         function cancelQrLogin() {
@@ -3124,11 +3156,125 @@
 
         function closeAuthModal() {
             document.getElementById('authModal').classList.add('hidden');
-            cancelBatDownloadLogin();
-            // Khôi phục lại bảng Check Post nếu người dùng đóng bảng đăng nhập mà chưa thêm nick
+            // Chú ý: Đóng modal thì KHÔNG hủy tiến trình ngầm của .bat trên máy khách,
+            // để khách có bấm mở lại bảng này thì trạng thái vẫn đang liên kết tiếp tục!
             if (wasCheckPostOpenBeforeAuth && activeStudioSession) {
                 wasCheckPostOpenBeforeAuth = false;
                 document.getElementById('checkPostModal').classList.remove('hidden');
+            }
+        }
+
+        async function handleReopenClientBrowser() {
+            if (!currentBatSyncId) {
+                currentBatSyncId = localStorage.getItem('tikflow_active_bat_sync');
+            }
+            if (!currentBatSyncId) return;
+
+            showToast("Đang kích hoạt mở lại Chrome trên máy tính của bạn...");
+            const reopenBox = document.getElementById('batReopenContainer');
+            const spinner = document.getElementById('batWaitingSpinner');
+            const titleEl = document.getElementById('batWaitingTitle');
+            const descEl = document.getElementById('batWaitingDesc');
+
+            if (reopenBox) reopenBox.classList.add('hidden');
+            if (spinner) spinner.classList.remove('hidden');
+            if (titleEl) titleEl.innerText = "Đang mở lại Chrome...";
+            if (descEl) descEl.innerText = "Vui lòng đợi Chrome bật lên trên màn hình...";
+
+            try {
+                await fetch('/api/studio/external-login/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: currentBatSyncId, command: 'reopen_browser' })
+                });
+            } catch (e) {
+                showToast("Lỗi gửi lệnh mở lại: " + e.message);
+            }
+        }
+
+        function startBatPolling(syncId, proxyVal) {
+            if (batLoginPollInterval) {
+                clearInterval(batLoginPollInterval);
+                batLoginPollInterval = null;
+            }
+
+            let pollCount = 0;
+            batLoginPollInterval = setInterval(async () => {
+                pollCount++;
+                if (pollCount > 400) { // ~10 phút
+                    cancelBatDownloadLogin();
+                    showToast("Đã hết thời gian chờ phiên đăng nhập. Vui lòng thử lại!");
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`/api/studio/external-login/status?id=${encodeURIComponent(syncId)}&t=${Date.now()}`);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (!data) return;
+
+                    const titleEl = document.getElementById('batWaitingTitle');
+                    const descEl = document.getElementById('batWaitingDesc');
+                    const reopenBox = document.getElementById('batReopenContainer');
+                    const spinner = document.getElementById('batWaitingSpinner');
+
+                    if (data.status === 'browser_opened') {
+                        if (titleEl) titleEl.innerHTML = '<span class="text-emerald-400 font-black">🟢 Chrome đã mở trên máy bạn!</span>';
+                        if (descEl) descEl.innerText = 'Vui lòng đăng nhập (quét QR, mật khẩu, OTP) trên Chrome. Web sẽ tự nhận nick sau 2s!';
+                        if (reopenBox) reopenBox.classList.add('hidden');
+                        if (spinner) spinner.classList.remove('hidden');
+                    } else if (data.status === 'browser_closed') {
+                        if (titleEl) titleEl.innerHTML = '<span class="text-amber-400 font-black">⚠️ Cửa sổ Chrome vừa bị đóng!</span>';
+                        if (descEl) descEl.innerText = 'Tiến trình vẫn đang chạy ẩn trên máy bạn. Bấm nút dưới để mở lại Chrome:';
+                        if (reopenBox) reopenBox.classList.remove('hidden');
+                        if (spinner) spinner.classList.add('hidden');
+                    } else if (data.status === 'browser_not_found') {
+                        if (titleEl) titleEl.innerHTML = '<span class="text-rose-400 font-black">❌ Không tìm thấy Chrome trên máy tính!</span>';
+                        if (descEl) descEl.innerText = 'Máy tính của bạn chưa cài Google Chrome hoặc Microsoft Edge. Vui lòng cài đặt và thử lại.';
+                        if (reopenBox) reopenBox.classList.add('hidden');
+                        if (spinner) spinner.classList.add('hidden');
+                    } else if (data.status === 'success' && data.account) {
+                        clearInterval(batLoginPollInterval);
+                        batLoginPollInterval = null;
+                        currentBatSyncId = null;
+                        localStorage.removeItem('tikflow_active_bat_sync');
+
+                        const finalProxy = data.proxy || proxyVal || '';
+                        saveStudioAccount(data.account, data.cookie, finalProxy);
+                        showToast("🎉 Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
+                        setTimeout(() => {
+                            wasCheckPostOpenBeforeAuth = false;
+                            closeAuthModal();
+                            openCheckPostModal(true);
+                        }, 1200);
+                    }
+                } catch (e) {}
+            }, 1500);
+        }
+
+        async function resumeBatDownloadPolling(syncId) {
+            try {
+                const res = await fetch(`/api/studio/external-login/status?id=${encodeURIComponent(syncId)}&t=${Date.now()}`);
+                if (!res.ok) {
+                    localStorage.removeItem('tikflow_active_bat_sync');
+                    return;
+                }
+                const data = await res.json();
+                if (!data || !data.success || data.status === 'not_found' || data.status === 'success') {
+                    localStorage.removeItem('tikflow_active_bat_sync');
+                    return;
+                }
+
+                currentBatSyncId = syncId;
+                const initialEl = document.getElementById('batDownloadInitial');
+                const waitingEl = document.getElementById('batDownloadWaiting');
+                if (initialEl) initialEl.classList.add('hidden');
+                if (waitingEl) waitingEl.classList.remove('hidden');
+
+                const proxy = (document.getElementById('loginProxyInput')?.value || '').trim();
+                startBatPolling(syncId, proxy);
+            } catch (e) {
+                localStorage.removeItem('tikflow_active_bat_sync');
             }
         }
 
@@ -3141,18 +3287,23 @@
             if (!isRetry || !currentBatSyncId) {
                 currentBatSyncId = 'tikflow_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
             }
+            localStorage.setItem('tikflow_active_bat_sync', currentBatSyncId);
 
             const initialEl = document.getElementById('batDownloadInitial');
             const waitingEl = document.getElementById('batDownloadWaiting');
             const titleEl = document.getElementById('batWaitingTitle');
             const descEl = document.getElementById('batWaitingDesc');
             const retryBtn = document.getElementById('btnBatRetry');
+            const reopenBox = document.getElementById('batReopenContainer');
+            const spinner = document.getElementById('batWaitingSpinner');
 
             if (initialEl) initialEl.classList.add('hidden');
             if (waitingEl) waitingEl.classList.remove('hidden');
             if (titleEl) titleEl.innerText = "Đã tải file tikflow_login.bat!";
             if (descEl) descEl.innerHTML = 'Hãy bấm mở file <b class="text-amber-300 font-mono">tikflow_login.bat</b> ở thanh tải xuống trình duyệt để bắt đầu.';
             if (retryBtn) retryBtn.classList.remove('hidden');
+            if (reopenBox) reopenBox.classList.add('hidden');
+            if (spinner) spinner.classList.remove('hidden');
 
             // Kích hoạt tải file .bat về máy khách
             const origin = window.location.origin || 'https://checktiktok.site';
@@ -3167,43 +3318,7 @@
 
             showToast("Đã tải file tikflow_login.bat. Hãy bấm mở file ở góc trình duyệt để đăng nhập!");
 
-            if (batLoginPollInterval) {
-                clearInterval(batLoginPollInterval);
-                batLoginPollInterval = null;
-            }
-
-            let pollCount = 0;
-            const targetSyncId = currentBatSyncId;
-            batLoginPollInterval = setInterval(async () => {
-                pollCount++;
-                if (pollCount > 350) { // 350 * 1.5s = 525s (~8.7 phút)
-                    cancelBatDownloadLogin();
-                    showToast("Đã hết thời gian chờ đăng nhập file .bat. Vui lòng bấm thử lại!");
-                    return;
-                }
-
-                try {
-                    const res = await fetch(`/api/studio/external-login/status?id=${encodeURIComponent(targetSyncId)}&t=${Date.now()}`);
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    if (data && data.success && data.status === 'success' && data.account) {
-                        clearInterval(batLoginPollInterval);
-                        batLoginPollInterval = null;
-                        currentBatSyncId = null;
-
-                        const finalProxy = data.proxy || proxy || '';
-                        saveStudioAccount(data.account, data.cookie, finalProxy);
-                        showToast("🎉 Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
-                        setTimeout(() => {
-                            wasCheckPostOpenBeforeAuth = false;
-                            closeAuthModal();
-                            openCheckPostModal(true);
-                        }, 1200);
-                    }
-                } catch (e) {
-                    // Bỏ qua ngắt quãng tạm thời
-                }
-            }, 1500);
+            startBatPolling(currentBatSyncId, proxy);
         }
 
         async function handleServerBrowserLogin() {
