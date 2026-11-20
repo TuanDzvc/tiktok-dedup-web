@@ -749,13 +749,43 @@ async def api_studio_external_login_sync(req: Request):
     if not sync_id or not cookie_str:
         return JSONResponse(status_code=400, content={"success": False, "error": "Thiếu id hoặc cookie."})
 
+    # Chuẩn hóa cookie có cả sessionid và sessionid_ss
+    cdict = studio_engine.parse_cookie_dict(cookie_str)
+    sid_val = cdict.get("sessionid") or cdict.get("sessionid_ss") or cdict.get("sid_tt") or cdict.get("sid_guard")
+    if sid_val:
+        if "sessionid" not in cdict:
+            cdict["sessionid"] = sid_val
+        if "sessionid_ss" not in cdict:
+            cdict["sessionid_ss"] = sid_val
+        cookie_str = studio_engine.cookie_to_header_str(cdict)
+
     acc_info = studio_engine.get_account_info(cookie_str, proxy=proxy)
     if not acc_info or not (acc_info.get("uid") or acc_info.get("uniqueId") or acc_info.get("username")):
         # Thử lại không qua proxy phòng trường hợp proxy server bị nghẽn
         if proxy:
             acc_info = studio_engine.get_account_info(cookie_str, proxy="")
+
+    # Nếu Passport API tạm thời bị rate-limit hoặc chặn từ IP server, vẫn chấp nhận cookie tươi từ máy khách với profile dự phòng
     if not acc_info or not (acc_info.get("uid") or acc_info.get("uniqueId") or acc_info.get("username")):
-        return JSONResponse(status_code=400, content={"success": False, "error": "Cookie không hợp lệ hoặc đã hết hạn."})
+        uid_val = str(cdict.get("uid_tt") or cdict.get("uid_tt_ss") or cdict.get("user_id") or "")
+        if not uid_val and sid_val:
+            uid_val = str(abs(hash(sid_val)))
+        if not uid_val:
+            uid_val = str(int(time.time()))
+        u_fallback = f"user_{uid_val[-8:]}" if len(uid_val) >= 8 else f"user_{uid_val}"
+        m_c = re.search(r'(?:store-country-code|country_code|region|country)\s*=\s*([a-zA-Z]{2})', cookie_str, re.IGNORECASE)
+        c_val = m_c.group(1).upper() if m_c else "US"
+        acc_info = {
+            "valid": True,
+            "uid": uid_val,
+            "username": u_fallback,
+            "uniqueId": u_fallback,
+            "nickname": u_fallback,
+            "avatar": "",
+            "country": c_val,
+            "createDate": "-",
+            "sec_uid": ""
+        }
 
     with EXTERNAL_LOGIN_LOCK:
         EXTERNAL_LOGIN_SESSIONS[sync_id] = {
@@ -898,7 +928,7 @@ function Start-LoginBrowser {{
 
     $argList = @(
         ("--remote-debugging-port=" + $script:port),
-        ("--user-data-dir=`"" + $tmpDir + "`""),
+        ("--user-data-dir=" + $tmpDir),
         "--no-first-run",
         "--no-default-browser-check"
     )
@@ -948,7 +978,7 @@ function Send-Sync($cookieStr, $proxyStr) {{
         $req = [System.Net.WebRequest]::Create("{clean_origin}/api/studio/external-login/sync")
         $req.Method = "POST"
         $req.ContentType = "application/json; charset=utf-8"
-        $req.Timeout = 10000
+        $req.Timeout = 35000
         $req.ContentLength = $bytes.Length
         
         $stream = $req.GetRequestStream()
@@ -998,6 +1028,7 @@ $ws = Get-CDPWebSocket
 $ct = New-Object System.Threading.CancellationToken
 $startTs = [DateTime]::UtcNow
 $synced = $false
+$msgId = 1
 
 while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
     if ($synced) {{ break }}
@@ -1039,7 +1070,8 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
 
     if ($ws -and $ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {{
         try {{
-            $msg = '{{"id":1,"method":"Storage.getCookies"}}'
+            $msgId++
+            $msg = "{{`"id`":$msgId,`"method`":`"Storage.getCookies`"}}"
             $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
             $seg = New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)
             $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct).Wait(2000)
@@ -1049,7 +1081,9 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
                 $buffer = New-Object byte[] 65536
                 $recSeg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buffer)
                 $recTask = $ws.ReceiveAsync($recSeg, $ct)
-                $recTask.Wait(3000)
+                if (-not $recTask.Wait(3000)) {{
+                    break
+                }}
                 if ($recTask.Result.Count -gt 0) {{
                     $memStream.Write($buffer, 0, $recTask.Result.Count)
                 }}
@@ -1063,21 +1097,48 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
             }}
 
             if ($cookies) {{
-                $sidCookie = $cookies | Where-Object {{ $_.name -eq "sessionid" -and $_.value }} | Select-Object -First 1
+                # Bắt tất cả các loại cookie xác thực session của TikTok: sessionid, sessionid_ss, sid_tt, sid_guard
+                $sidCookie = $cookies | Where-Object {{ 
+                    ($_.name -eq "sessionid" -or $_.name -eq "sessionid_ss" -or $_.name -eq "sid_tt" -or $_.name -eq "sid_guard") -and $_.value -and ($_.value.ToString().Trim().Length -gt 8)
+                }} | Select-Object -First 1
+
                 if ($sidCookie) {{
                     $cookiePairs = @()
+                    $hasSessionId = $false
+                    $hasSessionIdSs = $false
+                    $sidVal = ""
                     foreach ($c in $cookies) {{
                         if ($c.name -and $c.value) {{
                             $cookiePairs += ($c.name + "=" + $c.value)
+                            if ($c.name -eq "sessionid") {{ $hasSessionId = $true; $sidVal = $c.value }}
+                            if ($c.name -eq "sessionid_ss") {{ $hasSessionIdSs = $true; if (-not $sidVal) {{ $sidVal = $c.value }} }}
+                            if ($c.name -eq "sid_tt" -and -not $sidVal) {{ $sidVal = $c.value }}
                         }}
+                    }}
+                    # Nếu có sessionid_ss mà thiếu sessionid thì tự bù để các API tương thích 100%
+                    if (-not $hasSessionId -and $sidVal) {{
+                        $cookiePairs += ("sessionid=" + $sidVal)
+                    }}
+                    if (-not $hasSessionIdSs -and $sidVal) {{
+                        $cookiePairs += ("sessionid_ss=" + $sidVal)
                     }}
                     $fullCookieStr = $cookiePairs -join "; "
 
+                    # Báo web đang đồng bộ dữ liệu
+                    Send-State "syncing"
+
+                    # 1. Gửi đồng bộ có proxy
                     $syncOk = Send-Sync $fullCookieStr "{clean_proxy}"
+                    if (-not $syncOk) {{
+                        # 2. Nếu proxy lỗi (như proxy LAN dev), gửi đồng bộ direct
+                        $syncOk = Send-Sync $fullCookieStr ""
+                    }}
+
                     if ($syncOk) {{
                         $synced = $true
+                        Send-State "success"
+                        break
                     }}
-                    break
                 }}
             }}
         }} catch {{

@@ -3541,6 +3541,11 @@
                         if (descEl) descEl.innerText = 'Vui lòng đăng nhập (quét QR, mật khẩu, OTP) trên Chrome. Web sẽ tự nhận nick sau 2s!';
                         if (reopenBox) reopenBox.classList.add('hidden');
                         if (spinner) spinner.classList.remove('hidden');
+                    } else if (data.status === 'syncing' || data.status === 'logging_in') {
+                        if (titleEl) titleEl.innerHTML = '<span class="text-cyan-400 font-black">⚡ Đã nhận diện đăng nhập!</span>';
+                        if (descEl) descEl.innerText = 'Đang đồng bộ dữ liệu tài khoản TikTok về hệ thống...';
+                        if (reopenBox) reopenBox.classList.add('hidden');
+                        if (spinner) spinner.classList.remove('hidden');
                     } else if (data.status === 'browser_closed') {
                         if (titleEl) titleEl.innerHTML = '<span class="text-amber-400 font-black">⚠️ Cửa sổ Chrome vừa bị đóng!</span>';
                         if (descEl) descEl.innerText = 'Tiến trình vẫn đang chạy ẩn trên máy bạn. Bấm nút dưới để mở lại Chrome:';

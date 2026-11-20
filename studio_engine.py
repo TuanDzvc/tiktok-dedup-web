@@ -65,10 +65,16 @@ def parse_cookie_dict(cookie_str: str) -> Dict[str, str]:
 
 
 def cookie_to_header_str(cookie_val: Any) -> str:
-    """Chuẩn hóa cookie thành chuỗi header HTTP."""
+    """Chuẩn hóa cookie thành chuỗi header HTTP và đồng bộ sessionid/sessionid_ss."""
     if not cookie_val:
         return ""
-    cdict = parse_cookie_dict(cookie_val) if not isinstance(cookie_val, dict) else cookie_val
+    cdict = parse_cookie_dict(cookie_val) if not isinstance(cookie_val, dict) else dict(cookie_val)
+    sid = cdict.get("sessionid") or cdict.get("sessionid_ss") or cdict.get("sid_tt")
+    if sid:
+        if "sessionid" not in cdict:
+            cdict["sessionid"] = sid
+        if "sessionid_ss" not in cdict:
+            cdict["sessionid_ss"] = sid
     return "; ".join(f"{k}={v}" for k, v in cdict.items() if k and v)
 
 
