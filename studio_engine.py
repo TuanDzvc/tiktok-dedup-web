@@ -547,6 +547,62 @@ def fetch_user_avatar(username: str, cookie_str: str = "", proxy: str = None) ->
         pass
     return ""
 
+def fetch_user_avatar_and_profile(username: str = "", cookie_str: str = "", proxy: str = None) -> dict:
+    """Lấy avatar, uniqueId chuẩn và nickname từ Cookie hoặc SSR."""
+    clean_u = (username or "").lstrip("@").strip()
+    result = {"success": False, "avatar": "", "uniqueId": clean_u, "nickname": ""}
+    
+    headers = {
+        "User-Agent": DEFAULT_UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.tiktok.com/",
+    }
+    if cookie_str:
+        headers["Cookie"] = cookie_to_header_str(cookie_str)
+    
+    proxies = normalize_proxy_for_requests(proxy)
+    
+    # 1. Nếu có Cookie, lấy trực tiếp từ trang chủ TikTok
+    if cookie_str:
+        try:
+            r_home = requests.get("https://www.tiktok.com/", headers=headers, proxies=proxies if proxies else None, timeout=7)
+            if r_home.status_code == 200 and r_home.text:
+                m_h = re.search(r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)</script>', r_home.text)
+                if m_h:
+                    d_h = json.loads(m_h.group(1))
+                    app_u = d_h.get("__DEFAULT_SCOPE__", {}).get("webapp.app-context", {}).get("user", {})
+                    av_uris = app_u.get("avatarUri") or []
+                    av = ""
+                    if isinstance(av_uris, list) and av_uris and av_uris[0]:
+                        av = av_uris[0]
+                    elif app_u.get("avatarLarger") or app_u.get("avatarMedium") or app_u.get("avatarThumb"):
+                        av = app_u.get("avatarLarger") or app_u.get("avatarMedium") or app_u.get("avatarThumb")
+                    
+                    real_u = app_u.get("uniqueId") or clean_u
+                    real_nick = app_u.get("nickName") or ""
+                    if av:
+                        result["avatar"] = av
+                    if real_u:
+                        result["uniqueId"] = real_u
+                    if real_nick:
+                        result["nickname"] = real_nick
+                    if av:
+                        result["success"] = True
+                        return result
+        except Exception:
+            pass
+
+    # 2. Nếu chưa lấy được, fetch từ profile @username
+    target_uname = result.get("uniqueId") or clean_u
+    if target_uname:
+        av = fetch_user_avatar(target_uname, cookie_str=cookie_str, proxy=proxy)
+        if av:
+            result["avatar"] = av
+            result["success"] = True
+            
+    return result
+
 def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
     """Xác thực Cookie và lấy thông tin chi tiết tài khoản TikTok."""
     if not cookie_str:
@@ -599,9 +655,17 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
                 c_date = datetime.datetime.fromtimestamp(c_ts).strftime("%d/%m/%Y") if c_ts > 0 else "-"
                 sec_uid = str(data.get("sec_user_id") or data.get("sec_uid") or "")
 
-                # Lấy Avatar chất lượng cao từ SSR profile TikTok với Cookie vừa nạp
+                # Lấy Avatar chất lượng cao và đồng bộ Handle/Nickname mới nhất từ SSR TikTok
                 clean_u = str(u_name or "").lstrip("@").strip()
-                if not avatar and clean_u:
+                if cookie_str:
+                    prof_data = fetch_user_avatar_and_profile(clean_u, cookie_str=cookie_str, proxy=proxy)
+                    if prof_data.get("avatar"):
+                        avatar = prof_data["avatar"]
+                    if prof_data.get("uniqueId") and not prof_data["uniqueId"].startswith("user"):
+                        clean_u = prof_data["uniqueId"]
+                    if prof_data.get("nickname"):
+                        nick = prof_data["nickname"]
+                elif not avatar and clean_u:
                     avatar = fetch_user_avatar(clean_u, cookie_str=cookie_str, proxy=proxy)
 
                 return {

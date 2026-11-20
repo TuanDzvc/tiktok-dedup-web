@@ -203,10 +203,10 @@
                         <input 
                             type="text" 
                             id="channelInput" 
-                            placeholder="Nhập @username (VD: @nathan.lynn.walker) hoặc dán link TikTok..."
+                            placeholder="Nhập @username hoặc link kênh..."
                             value=""
                             autocomplete="off"
-                            class="w-full bg-transparent border-none text-white text-base sm:text-lg focus:outline-none placeholder-slate-400 font-medium cursor-text min-w-0"
+                            class="w-full bg-transparent border-none text-white text-sm sm:text-base focus:outline-none placeholder-slate-400 font-medium cursor-text min-w-0"
                             onkeydown="if(event.key === 'Enter'){ event.preventDefault(); handleCheck(); }"
                             onclick="this.select()"
                             onfocus="this.select()"
@@ -266,13 +266,16 @@
                         </button>
                     </div>
 
-                    <!-- DÒNG SHORTCUT: Các nick đã thêm hiển thị sẵn dưới ô tìm kiếm để click 1 chạm (Tối đa 7 nick + nút Xem thêm, 1 hàng duy nhất không tràn) -->
-                    <div id="quickAccountPillsRow" class="hidden flex items-center gap-2 overflow-x-auto py-1 text-xs select-none no-scrollbar">
-                        <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
-                            <i class="fa-solid fa-bolt text-amber-400 text-[10px]"></i> Kênh đã thêm:
-                        </span>
-                        <div id="quickAccountPillsList" class="flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar">
-                            <!-- Populated by JS -->
+                    <!-- KHU VỰC KÊNH ĐÃ THÊM: Lưới 3 hàng x 4 cột (3x4 = 12 nick tối đa) -->
+                    <div id="quickAccountPillsRow" class="hidden pt-1 pb-1 text-xs select-none">
+                        <div class="flex items-center justify-between mb-2 px-1">
+                            <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                                <i class="fa-solid fa-bolt text-amber-400 text-xs"></i> Kênh đã thêm <span class="text-slate-500 font-normal hidden sm:inline">(Click để quét nhanh)</span>:
+                            </span>
+                            <span id="quickAccountCountBadge" class="text-[11px] text-cyan-400 font-semibold"></span>
+                        </div>
+                        <div id="quickAccountPillsList" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <!-- Populated by JS: Lưới 3 hàng x 4 cột = 3x4 -->
                         </div>
                     </div>
 
@@ -1533,8 +1536,10 @@
         }
 
         let scanStepTimer = null;
+        let currentScanStage = 1;
 
         function setScanStep(step) {
+            currentScanStage = (typeof step === 'number') ? step : 4;
             const b1 = document.getElementById('scanStep1Box');
             const b2 = document.getElementById('scanStep2Box');
             const b3 = document.getElementById('scanStep3Box');
@@ -1545,44 +1550,55 @@
             const sub = document.getElementById('scanStepSubtitle');
             const limit = parseInt(document.getElementById('scanLimitSelect')?.value || 24);
 
-            const sActive = "p-2.5 rounded-xl bg-cyan-950/80 border-2 border-cyan-400 text-cyan-300 shadow-lg shadow-cyan-500/20 flex flex-col items-center gap-1.5 transition-all duration-300 scale-105";
-            const sDone = "p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-600/70 text-emerald-300 flex flex-col items-center gap-1.5 transition-all duration-300";
-            const sWaiting = "p-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 flex flex-col items-center gap-1.5 transition-all duration-300";
+            // 3 MÀU RIÊNG BIỆT (KHÔNG DÙNG XANH LÁ):
+            // Bước 1: Xanh ngọc Cyan Neon
+            const sActive1 = "p-2.5 rounded-xl bg-cyan-950/80 border-2 border-cyan-400 text-cyan-300 shadow-lg shadow-cyan-500/25 flex flex-col items-center gap-1.5 transition-all duration-300 scale-105";
+            const sDone1 = "p-2.5 rounded-xl bg-cyan-950/50 border border-cyan-500/70 text-cyan-300 flex flex-col items-center gap-1.5 transition-all duration-300";
+
+            // Bước 2: Tím Neon / Purple
+            const sActive2 = "p-2.5 rounded-xl bg-purple-950/80 border-2 border-purple-400 text-purple-300 shadow-lg shadow-purple-500/25 flex flex-col items-center gap-1.5 transition-all duration-300 scale-105";
+            const sDone2 = "p-2.5 rounded-xl bg-purple-950/50 border border-purple-500/70 text-purple-300 flex flex-col items-center gap-1.5 transition-all duration-300";
+
+            // Bước 3: Cam Vàng Hoàng Hôn / Amber Gold
+            const sActive3 = "p-2.5 rounded-xl bg-amber-950/80 border-2 border-amber-400 text-amber-300 shadow-lg shadow-amber-500/25 flex flex-col items-center gap-1.5 transition-all duration-300 scale-105";
+            const sDone3 = "p-2.5 rounded-xl bg-amber-950/50 border border-amber-500/70 text-amber-300 flex flex-col items-center gap-1.5 transition-all duration-300";
+
+            const sWaiting = "p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/80 text-slate-400 flex flex-col items-center gap-1.5 transition-all duration-300";
 
             if (step === 1) {
-                if (b1) b1.className = sActive;
+                if (b1) b1.className = sActive1;
                 if (b2) b2.className = sWaiting;
                 if (b3) b3.className = sWaiting;
                 if (i1) i1.className = "fa-solid fa-spinner animate-spin text-sm text-cyan-400";
-                if (i2) i2.className = "fa-solid fa-video text-sm";
-                if (i3) i3.className = "fa-solid fa-chart-pie text-sm";
+                if (i2) i2.className = "fa-solid fa-video text-sm text-slate-500";
+                if (i3) i3.className = "fa-solid fa-chart-pie text-sm text-slate-500";
                 if (title) title.innerText = "Đang kết nối tài khoản & UID...";
                 if (sub) sub.innerText = "Đang đồng bộ Cookie Studio, Passport API & giải mã Snowflake UID 64-bit";
             } else if (step === 2) {
-                if (b1) b1.className = sDone;
-                if (b2) b2.className = sActive;
+                if (b1) b1.className = sDone1;
+                if (b2) b2.className = sActive2;
                 if (b3) b3.className = sWaiting;
-                if (i1) i1.className = "fa-solid fa-circle-check text-sm text-emerald-400";
-                if (i2) i2.className = "fa-solid fa-spinner animate-spin text-sm text-cyan-400";
-                if (i3) i3.className = "fa-solid fa-chart-pie text-sm";
+                if (i1) i1.className = "fa-solid fa-circle-check text-sm text-cyan-400";
+                if (i2) i2.className = "fa-solid fa-spinner animate-spin text-sm text-purple-400";
+                if (i3) i3.className = "fa-solid fa-chart-pie text-sm text-slate-500";
                 if (title) title.innerText = `Đang tải ${limit} video gần nhất...`;
                 if (sub) sub.innerText = "Đang tải danh sách bài đăng, tiêu đề, view và thông số kiểm duyệt từ TikTok";
             } else if (step === 3) {
-                if (b1) b1.className = sDone;
-                if (b2) b2.className = sDone;
-                if (b3) b3.className = sActive;
-                if (i1) i1.className = "fa-solid fa-circle-check text-sm text-emerald-400";
-                if (i2) i2.className = "fa-solid fa-circle-check text-sm text-emerald-400";
-                if (i3) i3.className = "fa-solid fa-spinner animate-spin text-sm text-cyan-400";
+                if (b1) b1.className = sDone1;
+                if (b2) b2.className = sDone2;
+                if (b3) b3.className = sActive3;
+                if (i1) i1.className = "fa-solid fa-circle-check text-sm text-cyan-400";
+                if (i2) i2.className = "fa-solid fa-circle-check text-sm text-purple-400";
+                if (i3) i3.className = "fa-solid fa-spinner animate-spin text-sm text-amber-400";
                 if (title) title.innerText = "Đang quét án phạt & kiểm tra FYP...";
                 if (sub) sub.innerText = "Đang phân tích Group ID trùng lặp, âm thanh bản quyền và trạng thái phân phối FYP";
             } else if (step === 'done') {
-                if (b1) b1.className = sDone;
-                if (b2) b2.className = sDone;
-                if (b3) b3.className = sDone;
-                if (i1) i1.className = "fa-solid fa-circle-check text-sm text-emerald-400";
-                if (i2) i2.className = "fa-solid fa-circle-check text-sm text-emerald-400";
-                if (i3) i3.className = "fa-solid fa-circle-check text-sm text-emerald-400";
+                if (b1) b1.className = sDone1;
+                if (b2) b2.className = sDone2;
+                if (b3) b3.className = sDone3;
+                if (i1) i1.className = "fa-solid fa-circle-check text-sm text-cyan-400";
+                if (i2) i2.className = "fa-solid fa-circle-check text-sm text-purple-400";
+                if (i3) i3.className = "fa-solid fa-circle-check text-sm text-amber-400";
                 if (title) title.innerText = "Quét hoàn tất!";
                 if (sub) sub.innerText = "Đang kết xuất báo cáo kiểm tra...";
             }
@@ -1614,8 +1630,8 @@
                 clearTimeout(scanStepTimer.t2);
             }
             scanStepTimer = {
-                t1: setTimeout(() => setScanStep(2), 900),
-                t2: setTimeout(() => setScanStep(3), 2200)
+                t1: setTimeout(() => setScanStep(2), 650),
+                t2: setTimeout(() => setScanStep(3), 1600)
             };
 
             // Tự động kiểm tra xem kênh này có trong kho tài khoản Studio đã lưu hay không
@@ -1668,8 +1684,17 @@
                     clearTimeout(scanStepTimer.t1);
                     clearTimeout(scanStepTimer.t2);
                 }
+                // Đảm bảo hoạt ảnh các bước 1 -> 2 -> 3 mượt mà trước khi hoàn tất
+                if (currentScanStage < 2) {
+                    setScanStep(2);
+                    await new Promise(r => setTimeout(r, 220));
+                }
+                if (currentScanStage < 3) {
+                    setScanStep(3);
+                    await new Promise(r => setTimeout(r, 220));
+                }
                 setScanStep('done');
-                await new Promise(r => setTimeout(r, 260));
+                await new Promise(r => setTimeout(r, 320));
 
                 channelData = data.channel || {};
                 userInfoData = data.user_info || {};
@@ -1895,6 +1920,54 @@
             document.getElementById('cuStatusBadge').innerText = ui.is_self ? '⭐ Nick trong Tool' : '🌐 Kênh công khai';
             const qInput = document.getElementById('quickCheckInput');
             if (qInput) qInput.value = cleanHandle;
+
+            // Tự động đồng bộ Avatar, Nickname & Handle chuẩn vào danh sách tài khoản đã lưu (localStorage)
+            try {
+                let savedAccs = getSavedStudioAccounts();
+                if (savedAccs && savedAccs.length > 0) {
+                    let updatedAccs = false;
+                    const chUidStr = String(ui.uid || '');
+                    const chUserLower = rawUniqueId.toLowerCase();
+                    const rawUiUserLower = String(ui.username || '').replace(/^@+/, '').toLowerCase();
+
+                    savedAccs.forEach(a => {
+                        const aUid = String(a.uid || '');
+                        const aUser = String(a.uniqueId || a.username || '').replace(/^@+/, '').toLowerCase();
+                        const isMatchUid = chUidStr && aUid && aUid === chUidStr;
+                        const isMatchUser = (aUser && chUserLower && aUser === chUserLower) || (rawUiUserLower && aUser && aUser === rawUiUserLower);
+                        const isMatchCookie = currentCheckCookie && a.cookie && a.cookie.trim() === currentCheckCookie.trim();
+
+                        if (isMatchUid || isMatchUser || isMatchCookie) {
+                            if (ch.avatar && ch.avatar.startsWith('http') && !ch.avatar.includes('ui-avatars')) {
+                                if (a.avatar !== ch.avatar) {
+                                    a.avatar = ch.avatar;
+                                    updatedAccs = true;
+                                }
+                            }
+                            if (rawUniqueId && !rawUniqueId.startsWith('user')) {
+                                if (a.uniqueId !== rawUniqueId) {
+                                    a.uniqueId = rawUniqueId;
+                                    updatedAccs = true;
+                                }
+                            }
+                            if (ch.nickname && ch.nickname !== 'Kênh TikTok' && ch.nickname !== 'User') {
+                                if (a.nickname !== ch.nickname) {
+                                    a.nickname = ch.nickname;
+                                    updatedAccs = true;
+                                }
+                            }
+                        }
+                    });
+
+                    if (updatedAccs) {
+                        localStorage.setItem('tikflow_studio_accounts', JSON.stringify(savedAccs));
+                        renderChannelAccountPicker();
+                        renderAccountDropdown();
+                    }
+                }
+            } catch (errSync) {
+                console.error("Lỗi cập nhật avatar vào kho tài khoản:", errSync);
+            }
 
             // 3. Stats & Videos
             updateSummaryStats();
@@ -3041,9 +3114,14 @@
 
             if (pillsRow && pillsList) {
                 pillsRow.classList.remove('hidden');
-                const maxShortcuts = 7;
+                const maxShortcuts = 12; // 3 hàng x 4 cột = 12 kênh
                 const visibleAccounts = accounts.slice(0, maxShortcuts);
                 const hasMore = accounts.length > maxShortcuts;
+
+                const countBadge = document.getElementById('quickAccountCountBadge');
+                if (countBadge) {
+                    countBadge.innerText = `${accounts.length} nick`;
+                }
 
                 let pillsHtml = visibleAccounts.map(a => {
                     const aAv = (a.avatar && a.avatar.startsWith('http') && !a.avatar.includes('ui-avatars')) 
@@ -3052,22 +3130,27 @@
                     const aFlag = getCountryFlag(a.country);
                     const rawUser = String(a.uniqueId || a.username || '').replace(/^@+/, '').trim();
                     const handle = rawUser ? `@${rawUser}` : (a.nickname || 'User');
-                    const displayName = a.nickname || a.username || 'User';
+                    const displayName = a.nickname || a.username || rawUser || 'User';
                     return `
-                        <button type="button" onclick="selectAccountForCheck('${escapeHtml(handle)}')" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-cyan-950/80 border border-slate-700/80 hover:border-cyan-500/60 text-slate-200 text-xs font-medium transition active:scale-95 shadow-sm whitespace-nowrap flex-shrink-0" title="Chọn nick ${escapeHtml(displayName)} (${escapeHtml(handle)})">
-                            <img src="${aAv}" class="w-4 h-4 rounded-full object-cover flex-shrink-0 border border-slate-600/60" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(displayName)}" />
-                            <span class="font-bold text-white text-[11px] truncate max-w-[110px]">${escapeHtml(displayName)}</span>
-                            ${aFlag}
+                        <button type="button" onclick="selectAccountForCheck('${escapeHtml(handle)}')" class="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-slate-900/90 hover:bg-cyan-950/90 border border-slate-700/80 hover:border-cyan-500/60 text-slate-200 text-xs font-medium transition active:scale-95 shadow-sm min-w-0 w-full text-left group" title="Chọn nick ${escapeHtml(displayName)} (${escapeHtml(handle)})">
+                            <img src="${aAv}" class="w-6 h-6 rounded-full object-cover flex-shrink-0 border border-slate-700 group-hover:border-cyan-400 transition" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(displayName)}" />
+                            <div class="min-w-0 flex-1 overflow-hidden">
+                                <div class="font-bold text-white text-[11px] truncate flex items-center justify-between gap-1">
+                                    <span class="truncate">${escapeHtml(displayName)}</span>
+                                    <span class="flex-shrink-0 text-[11px]">${aFlag}</span>
+                                </div>
+                                <div class="text-[10px] text-cyan-400/90 font-mono truncate">${escapeHtml(handle)}</div>
+                            </div>
                         </button>
                     `;
                 }).join('');
 
                 if (hasMore) {
                     pillsHtml += `
-                        <button type="button" onclick="toggleChannelAccountPicker(event)" class="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-xs font-bold transition whitespace-nowrap active:scale-95 shadow-sm flex-shrink-0" title="Xem tất cả ${accounts.length} nick đã thêm">
-                            <i class="fa-solid fa-users text-[10px]"></i>
-                            <span>+${accounts.length - maxShortcuts} nick khác</span>
-                            <i class="fa-solid fa-chevron-down text-[8px] text-cyan-400"></i>
+                        <button type="button" onclick="toggleChannelAccountPicker(event)" class="col-span-2 sm:col-span-4 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 text-xs font-bold transition shadow-sm" title="Xem tất cả ${accounts.length} nick đã thêm">
+                            <i class="fa-solid fa-users text-xs"></i>
+                            <span>Xem thêm +${accounts.length - maxShortcuts} nick khác trong danh sách</span>
+                            <i class="fa-solid fa-chevron-down text-[10px] text-cyan-400"></i>
                         </button>
                     `;
                 }
@@ -3084,23 +3167,41 @@
                 let accounts = getSavedStudioAccounts();
                 if (!accounts || accounts.length === 0) return;
 
-                for (let i = 0; i < accounts.length; i++) {
-                    const a = accounts[i];
-                    if (!a.avatar || a.avatar.includes('ui-avatars')) {
+                let needsUpdate = false;
+                await Promise.all(accounts.map(async (a, idx) => {
+                    const hasRealAvatar = a.avatar && a.avatar.startsWith('http') && !a.avatar.includes('ui-avatars');
+                    const hasCustomHandle = a.uniqueId && !a.uniqueId.startsWith('user');
+                    const hasNickname = a.nickname && a.nickname !== 'User' && a.nickname !== a.username;
+
+                    if (!hasRealAvatar || !hasCustomHandle || !hasNickname) {
                         const u = (a.uniqueId || a.username || '').replace(/^@+/, '').trim();
                         const ck = a.cookie || '';
                         if (u || ck) {
                             try {
                                 const res = await fetch(`/api/studio/profile/avatar?username=${encodeURIComponent(u)}&cookie=${encodeURIComponent(ck)}`).then(r => r.json());
-                                if (res && res.success && res.avatar) {
-                                    accounts[i].avatar = res.avatar;
-                                    localStorage.setItem('tikflow_studio_accounts', JSON.stringify(accounts));
-                                    renderChannelAccountPicker();
-                                    renderAccountDropdown();
+                                if (res && res.success) {
+                                    if (res.avatar && (!a.avatar || a.avatar.includes('ui-avatars'))) {
+                                        accounts[idx].avatar = res.avatar;
+                                        needsUpdate = true;
+                                    }
+                                    if (res.uniqueId && !res.uniqueId.startsWith('user')) {
+                                        accounts[idx].uniqueId = res.uniqueId;
+                                        needsUpdate = true;
+                                    }
+                                    if (res.nickname && (!a.nickname || a.nickname === 'User')) {
+                                        accounts[idx].nickname = res.nickname;
+                                        needsUpdate = true;
+                                    }
                                 }
                             } catch (e) {}
                         }
                     }
+                }));
+
+                if (needsUpdate) {
+                    localStorage.setItem('tikflow_studio_accounts', JSON.stringify(accounts));
+                    renderChannelAccountPicker();
+                    renderAccountDropdown();
                 }
             } catch (e) {
                 console.error("Lỗi đồng bộ avatar tài khoản:", e);
