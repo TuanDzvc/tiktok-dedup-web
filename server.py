@@ -513,10 +513,10 @@ def api_studio_qr_status(session_id: str = Query(..., description="ID phiên QR"
     return JSONResponse(content=res)
 
 @app.get("/api/studio/profile/avatar")
-def api_studio_profile_avatar(username: str = Query(..., description="TikTok Username"), cookie: str = Query(None, description="Cookie (optional)")):
+def api_studio_profile_avatar(username: str = Query("", description="TikTok Username"), cookie: str = Query(None, description="Cookie (optional)")):
     """Lấy avatar trực tiếp cho kênh TikTok nếu session chưa có avatar."""
     clean_u = (username or "").lstrip("@").strip()
-    if not clean_u:
+    if not clean_u and not cookie:
         return JSONResponse(content={"success": False, "avatar": ""})
     av = studio_engine.fetch_user_avatar(clean_u, cookie_str=cookie)
     return JSONResponse(content={"success": bool(av), "avatar": av})

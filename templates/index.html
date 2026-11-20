@@ -237,6 +237,18 @@
                                     <span>CHỌN NICK ĐÃ THÊM</span>
                                     <span class="text-cyan-400 text-[10px]">Click để quét ngay</span>
                                 </div>
+                                <div class="px-1 py-1.5" id="channelAccountPickerSearchBox">
+                                    <div class="relative">
+                                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]"></i>
+                                        <input 
+                                            type="text" 
+                                            id="pickerFilterInput" 
+                                            oninput="filterChannelPickerAccounts(this.value)" 
+                                            placeholder="Tìm nhanh theo tên, @handle..." 
+                                            class="w-full pl-7 pr-2.5 py-1 bg-slate-900/90 border border-slate-700/80 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400 placeholder-slate-500" 
+                                        />
+                                    </div>
+                                </div>
                                 <div id="channelAccountPickerList" class="py-1.5 max-h-[350px] overflow-y-auto space-y-1">
                                     <!-- Populated by JS -->
                                 </div>
@@ -254,12 +266,12 @@
                         </button>
                     </div>
 
-                    <!-- DÒNG SHORTCUT: Các nick đã thêm hiển thị sẵn dưới ô tìm kiếm để click 1 chạm -->
-                    <div id="quickAccountPillsRow" class="hidden flex items-center gap-2 overflow-x-auto py-0.5 text-xs select-none">
+                    <!-- DÒNG SHORTCUT: Các nick đã thêm hiển thị sẵn dưới ô tìm kiếm để click 1 chạm (Tối đa 7 nick + nút Xem thêm, 1 hàng duy nhất không tràn) -->
+                    <div id="quickAccountPillsRow" class="hidden flex items-center gap-2 overflow-x-auto py-1 text-xs select-none no-scrollbar">
                         <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
                             <i class="fa-solid fa-bolt text-amber-400 text-[10px]"></i> Kênh đã thêm:
                         </span>
-                        <div id="quickAccountPillsList" class="flex items-center gap-2 flex-wrap">
+                        <div id="quickAccountPillsList" class="flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar">
                             <!-- Populated by JS -->
                         </div>
                     </div>
@@ -315,19 +327,19 @@
                     Đang đồng bộ Cookie Studio, Passport API & giải mã thông tin tài khoản
                 </p>
             </div>
-            <!-- Progress steps -->
+            <!-- Progress steps (Animated 1 -> 2 -> 3) -->
             <div class="max-w-md mx-auto grid grid-cols-3 gap-2 text-xs font-medium">
-                <div class="p-2 rounded-xl bg-cyan-950/60 border border-cyan-800/80 text-cyan-300 flex flex-col items-center gap-1">
-                    <i class="fa-solid fa-id-badge text-sm"></i>
-                    <span>1. Passport & UID</span>
+                <div id="scanStep1Box" class="p-2.5 rounded-xl bg-cyan-950/80 border-2 border-cyan-400 text-cyan-300 shadow-lg shadow-cyan-500/20 flex flex-col items-center gap-1.5 transition-all duration-300 scale-105">
+                    <i id="scanStep1Icon" class="fa-solid fa-spinner animate-spin text-sm text-cyan-400"></i>
+                    <span id="scanStep1Text" class="font-bold">1. Passport & UID</span>
                 </div>
-                <div class="p-2 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 flex flex-col items-center gap-1">
-                    <i class="fa-solid fa-video text-sm"></i>
-                    <span>2. Tải 18 video</span>
+                <div id="scanStep2Box" class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 flex flex-col items-center gap-1.5 transition-all duration-300">
+                    <i id="scanStep2Icon" class="fa-solid fa-video text-sm"></i>
+                    <span id="scanStep2Text" class="font-bold">2. Tải 24 video</span>
                 </div>
-                <div class="p-2 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 flex flex-col items-center gap-1">
-                    <i class="fa-solid fa-chart-pie text-sm"></i>
-                    <span>3. Quét án phạt FYP</span>
+                <div id="scanStep3Box" class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 flex flex-col items-center gap-1.5 transition-all duration-300">
+                    <i id="scanStep3Icon" class="fa-solid fa-chart-pie text-sm"></i>
+                    <span id="scanStep3Text" class="font-bold">3. Quét án phạt FYP</span>
                 </div>
             </div>
         </section>
@@ -1520,6 +1532,62 @@
             await runCheckQuery(cleanVal);
         }
 
+        let scanStepTimer = null;
+
+        function setScanStep(step) {
+            const b1 = document.getElementById('scanStep1Box');
+            const b2 = document.getElementById('scanStep2Box');
+            const b3 = document.getElementById('scanStep3Box');
+            const i1 = document.getElementById('scanStep1Icon');
+            const i2 = document.getElementById('scanStep2Icon');
+            const i3 = document.getElementById('scanStep3Icon');
+            const title = document.getElementById('scanStepTitle');
+            const sub = document.getElementById('scanStepSubtitle');
+            const limit = parseInt(document.getElementById('scanLimitSelect')?.value || 24);
+
+            const sActive = "p-2.5 rounded-xl bg-cyan-950/80 border-2 border-cyan-400 text-cyan-300 shadow-lg shadow-cyan-500/20 flex flex-col items-center gap-1.5 transition-all duration-300 scale-105";
+            const sDone = "p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-600/70 text-emerald-300 flex flex-col items-center gap-1.5 transition-all duration-300";
+            const sWaiting = "p-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 flex flex-col items-center gap-1.5 transition-all duration-300";
+
+            if (step === 1) {
+                if (b1) b1.className = sActive;
+                if (b2) b2.className = sWaiting;
+                if (b3) b3.className = sWaiting;
+                if (i1) i1.className = "fa-solid fa-spinner animate-spin text-sm text-cyan-400";
+                if (i2) i2.className = "fa-solid fa-video text-sm";
+                if (i3) i3.className = "fa-solid fa-chart-pie text-sm";
+                if (title) title.innerText = "Đang kết nối tài khoản & UID...";
+                if (sub) sub.innerText = "Đang đồng bộ Cookie Studio, Passport API & giải mã Snowflake UID 64-bit";
+            } else if (step === 2) {
+                if (b1) b1.className = sDone;
+                if (b2) b2.className = sActive;
+                if (b3) b3.className = sWaiting;
+                if (i1) i1.className = "fa-solid fa-circle-check text-sm text-emerald-400";
+                if (i2) i2.className = "fa-solid fa-spinner animate-spin text-sm text-cyan-400";
+                if (i3) i3.className = "fa-solid fa-chart-pie text-sm";
+                if (title) title.innerText = `Đang tải ${limit} video gần nhất...`;
+                if (sub) sub.innerText = "Đang tải danh sách bài đăng, tiêu đề, view và thông số kiểm duyệt từ TikTok";
+            } else if (step === 3) {
+                if (b1) b1.className = sDone;
+                if (b2) b2.className = sDone;
+                if (b3) b3.className = sActive;
+                if (i1) i1.className = "fa-solid fa-circle-check text-sm text-emerald-400";
+                if (i2) i2.className = "fa-solid fa-circle-check text-sm text-emerald-400";
+                if (i3) i3.className = "fa-solid fa-spinner animate-spin text-sm text-cyan-400";
+                if (title) title.innerText = "Đang quét án phạt & kiểm tra FYP...";
+                if (sub) sub.innerText = "Đang phân tích Group ID trùng lặp, âm thanh bản quyền và trạng thái phân phối FYP";
+            } else if (step === 'done') {
+                if (b1) b1.className = sDone;
+                if (b2) b2.className = sDone;
+                if (b3) b3.className = sDone;
+                if (i1) i1.className = "fa-solid fa-circle-check text-sm text-emerald-400";
+                if (i2) i2.className = "fa-solid fa-circle-check text-sm text-emerald-400";
+                if (i3) i3.className = "fa-solid fa-circle-check text-sm text-emerald-400";
+                if (title) title.innerText = "Quét hoàn tất!";
+                if (sub) sub.innerText = "Đang kết xuất báo cáo kiểm tra...";
+            }
+        }
+
         async function runCheckQuery(inputVal) {
             const cleanHandle = extractCleanHandle(inputVal);
             currentQuery = cleanHandle;
@@ -1537,6 +1605,18 @@
             if (qBtn) { qBtn.disabled = true; qBtn.classList.add('opacity-70'); }
 
             const limit = parseInt(document.getElementById('scanLimitSelect')?.value || 24);
+            const step2Text = document.getElementById('scanStep2Text');
+            if (step2Text) step2Text.innerText = `2. Tải ${limit} video`;
+
+            setScanStep(1);
+            if (scanStepTimer) {
+                clearTimeout(scanStepTimer.t1);
+                clearTimeout(scanStepTimer.t2);
+            }
+            scanStepTimer = {
+                t1: setTimeout(() => setScanStep(2), 900),
+                t2: setTimeout(() => setScanStep(3), 2200)
+            };
 
             // Tự động kiểm tra xem kênh này có trong kho tài khoản Studio đã lưu hay không
             const queryCleanName = cleanHandle.replace(/^@+/, '').toLowerCase();
@@ -1584,6 +1664,13 @@
                     return;
                 }
 
+                if (scanStepTimer) {
+                    clearTimeout(scanStepTimer.t1);
+                    clearTimeout(scanStepTimer.t2);
+                }
+                setScanStep('done');
+                await new Promise(r => setTimeout(r, 260));
+
                 channelData = data.channel || {};
                 userInfoData = data.user_info || {};
                 currentVideos = data.list || [];
@@ -1594,8 +1681,16 @@
                 renderResults(data);
 
             } catch (err) {
+                if (scanStepTimer) {
+                    clearTimeout(scanStepTimer.t1);
+                    clearTimeout(scanStepTimer.t2);
+                }
                 showError("Lỗi kết nối tới máy chủ backend: " + err.message);
             } finally {
+                if (scanStepTimer) {
+                    clearTimeout(scanStepTimer.t1);
+                    clearTimeout(scanStepTimer.t2);
+                }
                 document.getElementById('scanningSection').classList.add('hidden');
                 document.getElementById('btnSubmit').disabled = false;
                 document.getElementById('btnSubmit').classList.remove('opacity-70');
@@ -2371,6 +2466,7 @@
             // Khởi tạo Creator Studio Session từ localStorage nếu có
             initStudioSession();
             renderChannelAccountPicker();
+            syncMissingStudioAvatars();
         });
         // ==============================================================================
         // TIKTOK CREATOR STUDIO & CHECK POST LOGIC
@@ -2843,9 +2939,40 @@
 
         // ==================== BỘ CHỌN NICK CHO Ô NHẬP @USER TÌM KIẾM ====================
         function toggleChannelAccountPicker(event) {
-            if (event) event.stopPropagation();
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
             const menu = document.getElementById('channelAccountPickerMenu');
-            if (menu) menu.classList.toggle('hidden');
+            if (!menu) return;
+            const isHidden = menu.classList.contains('hidden');
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                const inp = document.getElementById('pickerFilterInput');
+                if (inp) {
+                    inp.value = '';
+                    filterChannelPickerAccounts('');
+                    setTimeout(() => inp.focus(), 50);
+                }
+            } else {
+                menu.classList.add('hidden');
+            }
+        }
+
+        function filterChannelPickerAccounts(query) {
+            const list = document.getElementById('channelAccountPickerList');
+            if (!list) return;
+            const items = list.querySelectorAll('[data-account-handle]');
+            const q = (query || '').toLowerCase().trim().replace(/^@+/, '');
+            items.forEach(el => {
+                const handle = (el.dataset.accountHandle || '').toLowerCase();
+                const name = (el.dataset.accountName || '').toLowerCase();
+                if (!q || handle.includes(q) || name.includes(q)) {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
         }
 
         function closeChannelAccountPicker() {
@@ -2887,19 +3014,20 @@
 
             if (list) {
                 list.innerHTML = accounts.map(a => {
-                    const aAv = (a.avatar && a.avatar.startsWith('http')) 
+                    const aAv = (a.avatar && a.avatar.startsWith('http') && !a.avatar.includes('ui-avatars')) 
                         ? getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '') 
                         : `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nickname || a.username || 'User')}&background=0284c7&color=ffffff&bold=true`;
                     const aFlag = getCountryFlag(a.country);
                     const rawUser = String(a.uniqueId || a.username || '').replace(/^@+/, '').trim();
                     const handle = rawUser ? `@${rawUser}` : (a.nickname || 'User');
+                    const displayName = a.nickname || a.username || 'User';
                     return `
-                        <div onclick="selectAccountForCheck('${escapeHtml(handle)}')" class="flex items-center justify-between p-2 rounded-xl hover:bg-slate-800/90 cursor-pointer transition border border-transparent hover:border-cyan-500/40">
+                        <div onclick="selectAccountForCheck('${escapeHtml(handle)}')" data-account-handle="${escapeHtml(handle)}" data-account-name="${escapeHtml(displayName)}" class="flex items-center justify-between p-2 rounded-xl hover:bg-slate-800/90 cursor-pointer transition border border-transparent hover:border-cyan-500/40">
                             <div class="flex items-center gap-2 overflow-hidden">
-                                <img src="${aAv}" class="w-8 h-8 rounded-xl object-cover border border-slate-700 flex-shrink-0" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(a.nickname || a.username || 'User')}" />
+                                <img src="${aAv}" class="w-8 h-8 rounded-xl object-cover border border-slate-700 flex-shrink-0" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(displayName)}" />
                                 <div class="text-left overflow-hidden">
                                     <div class="text-xs font-bold text-white flex items-center gap-1.5 truncate">
-                                        <span class="truncate max-w-[130px]">${escapeHtml(a.nickname || 'User')}</span>
+                                        <span class="truncate max-w-[130px]">${escapeHtml(displayName)}</span>
                                         ${aFlag}
                                     </div>
                                     <div class="text-[10px] text-cyan-400 font-mono truncate">${escapeHtml(handle)}</div>
@@ -2913,21 +3041,71 @@
 
             if (pillsRow && pillsList) {
                 pillsRow.classList.remove('hidden');
-                pillsList.innerHTML = accounts.map(a => {
-                    const aAv = (a.avatar && a.avatar.startsWith('http')) 
+                const maxShortcuts = 7;
+                const visibleAccounts = accounts.slice(0, maxShortcuts);
+                const hasMore = accounts.length > maxShortcuts;
+
+                let pillsHtml = visibleAccounts.map(a => {
+                    const aAv = (a.avatar && a.avatar.startsWith('http') && !a.avatar.includes('ui-avatars')) 
                         ? getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '') 
                         : `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nickname || a.username || 'User')}&background=0284c7&color=ffffff&bold=true`;
                     const aFlag = getCountryFlag(a.country);
                     const rawUser = String(a.uniqueId || a.username || '').replace(/^@+/, '').trim();
                     const handle = rawUser ? `@${rawUser}` : (a.nickname || 'User');
+                    const displayName = a.nickname || a.username || 'User';
                     return `
-                        <button type="button" onclick="selectAccountForCheck('${escapeHtml(handle)}')" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-cyan-950/80 border border-slate-700/80 hover:border-cyan-500/60 text-slate-200 text-xs font-medium transition active:scale-95 shadow-sm">
-                            <img src="${aAv}" class="w-4 h-4 rounded-full object-cover flex-shrink-0" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(a.nickname || a.username || 'User')}" />
-                            <span class="font-bold text-white text-[11px] truncate max-w-[120px]">${escapeHtml(a.nickname || a.username || 'User')}</span>
+                        <button type="button" onclick="selectAccountForCheck('${escapeHtml(handle)}')" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-cyan-950/80 border border-slate-700/80 hover:border-cyan-500/60 text-slate-200 text-xs font-medium transition active:scale-95 shadow-sm whitespace-nowrap flex-shrink-0" title="Chọn nick ${escapeHtml(displayName)} (${escapeHtml(handle)})">
+                            <img src="${aAv}" class="w-4 h-4 rounded-full object-cover flex-shrink-0 border border-slate-600/60" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(displayName)}" />
+                            <span class="font-bold text-white text-[11px] truncate max-w-[110px]">${escapeHtml(displayName)}</span>
                             ${aFlag}
                         </button>
                     `;
                 }).join('');
+
+                if (hasMore) {
+                    pillsHtml += `
+                        <button type="button" onclick="toggleChannelAccountPicker(event)" class="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-xs font-bold transition whitespace-nowrap active:scale-95 shadow-sm flex-shrink-0" title="Xem tất cả ${accounts.length} nick đã thêm">
+                            <i class="fa-solid fa-users text-[10px]"></i>
+                            <span>+${accounts.length - maxShortcuts} nick khác</span>
+                            <i class="fa-solid fa-chevron-down text-[8px] text-cyan-400"></i>
+                        </button>
+                    `;
+                }
+
+                pillsList.innerHTML = pillsHtml;
+            }
+        }
+
+        let isSyncingStudioAvatars = false;
+        async function syncMissingStudioAvatars() {
+            if (isSyncingStudioAvatars) return;
+            isSyncingStudioAvatars = true;
+            try {
+                let accounts = getSavedStudioAccounts();
+                if (!accounts || accounts.length === 0) return;
+
+                for (let i = 0; i < accounts.length; i++) {
+                    const a = accounts[i];
+                    if (!a.avatar || a.avatar.includes('ui-avatars')) {
+                        const u = (a.uniqueId || a.username || '').replace(/^@+/, '').trim();
+                        const ck = a.cookie || '';
+                        if (u || ck) {
+                            try {
+                                const res = await fetch(`/api/studio/profile/avatar?username=${encodeURIComponent(u)}&cookie=${encodeURIComponent(ck)}`).then(r => r.json());
+                                if (res && res.success && res.avatar) {
+                                    accounts[i].avatar = res.avatar;
+                                    localStorage.setItem('tikflow_studio_accounts', JSON.stringify(accounts));
+                                    renderChannelAccountPicker();
+                                    renderAccountDropdown();
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Lỗi đồng bộ avatar tài khoản:", e);
+            } finally {
+                isSyncingStudioAvatars = false;
             }
         }
 

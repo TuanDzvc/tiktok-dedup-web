@@ -493,6 +493,29 @@ def fetch_user_avatar(username: str, cookie_str: str = "", proxy: str = None) ->
 
     proxies = normalize_proxy_for_requests(proxy)
 
+    # 1. Nếu có Cookie tài khoản, lấy trực tiếp Avatar chính chủ siêu nét từ trang chủ TikTok
+    if cookie_str:
+        try:
+            r_home = requests.get(
+                "https://www.tiktok.com/",
+                headers=headers,
+                proxies=proxies if proxies else None,
+                timeout=7
+            )
+            if r_home.status_code == 200 and r_home.text:
+                m_h = re.search(r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)</script>', r_home.text)
+                if m_h:
+                    d_h = json.loads(m_h.group(1))
+                    app_u = d_h.get("__DEFAULT_SCOPE__", {}).get("webapp.app-context", {}).get("user", {})
+                    av_uris = app_u.get("avatarUri") or []
+                    if isinstance(av_uris, list) and av_uris and av_uris[0]:
+                        return av_uris[0]
+                    av_u = app_u.get("avatarLarger") or app_u.get("avatarMedium") or app_u.get("avatarThumb")
+                    if av_u:
+                        return av_u
+        except Exception:
+            pass
+
     try:
         r = requests.get(
             f"https://www.tiktok.com/@{clean_u}",
