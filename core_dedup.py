@@ -1017,6 +1017,10 @@ def fetch_channel_info_and_posts(
                         if sf:
                             check_user_info["create_date"] = sf
                             channel_info["createDate"] = sf
+
+                    p_nm_ts = int(p_data.get("nickname_modify_time") or p_data.get("modify_time") or p_data.get("nickNameModifyTime") or 0)
+                    if p_nm_ts > 0:
+                        check_user_info["last_nickname_change"] = datetime.datetime.fromtimestamp(p_nm_ts).strftime("%d/%m/%Y")
         except Exception:
             pass
 
@@ -1097,16 +1101,30 @@ def fetch_channel_info_and_posts(
                                 channel_info["createDate"] = sf_date
                                 check_user_info["create_date"] = sf_date
 
+                        # Trích xuất thời điểm đổi nickname lần cuối (nếu có)
+                        nick_mod = int(u.get("nickNameModifyTime") or u.get("nickNameModifyTs") or 0)
+                        if nick_mod > 0:
+                            check_user_info["last_nickname_change"] = datetime.datetime.fromtimestamp(nick_mod).strftime("%d/%m/%Y")
+                        else:
+                            check_user_info["last_nickname_change"] = "Chưa đổi lần nào"
+
+                        # Trích xuất quốc gia kênh (CHỈ lấy từ chính user / biz context của kênh, KHÔNG lấy từ app_context của viewer mượn)
                         if not detected_account_country:
                             c_u = (u.get("region") or u.get("country") or "").strip().upper()
                             if c_u and c_u not in ("NONE", "AUTO", "EU") and not c_u.endswith("_TTP"):
                                 detected_account_country = c_u
                             else:
-                                app_ctx = scope.get("webapp.app-context", {})
-                                app_user = app_ctx.get("user", {})
-                                c_ssr = (app_user.get("storeRegion") or app_user.get("ageGateRegion") or "").strip().upper()
-                                if c_ssr and c_ssr not in ("NONE", "AUTO", "EU") and not c_ssr.endswith("_TTP"):
-                                    detected_account_country = c_ssr
+                                biz_ctx = scope.get("webapp.biz-context", {})
+                                d_kind = str(biz_ctx.get("domains", {}).get("kind") or "").lower()
+                                v_reg = str(biz_ctx.get("vregion") or "").upper()
+                                v_geo = str(biz_ctx.get("vgeo") or "").upper()
+                                av_url = str(channel_info.get("avatar") or "")
+                                if d_kind == "us" or "US" in v_reg or "US" in v_geo or "tiktokcdn-us.com" in av_url or "useast" in av_url:
+                                    detected_account_country = "US"
+                                elif "GB" in v_reg or "UK" in v_reg:
+                                    detected_account_country = "GB"
+                                elif "VN" in v_reg or "VN" in v_geo:
+                                    detected_account_country = "VN"
                     except Exception:
                         pass
 
@@ -1135,6 +1153,13 @@ def fetch_channel_info_and_posts(
                             if sf_date:
                                 channel_info["createDate"] = sf_date
                                 check_user_info["create_date"] = sf_date
+                    m_nick_mod = re.search(r'"nickNameModifyTime":([0-9]+)', html)
+                    if m_nick_mod and check_user_info.get("last_nickname_change") in ("—", ""):
+                        nm_ts = int(m_nick_mod.group(1))
+                        if nm_ts > 0:
+                            check_user_info["last_nickname_change"] = datetime.datetime.fromtimestamp(nm_ts).strftime("%d/%m/%Y")
+                        else:
+                            check_user_info["last_nickname_change"] = "Chưa đổi lần nào"
         except Exception:
             pass
 
@@ -1659,6 +1684,17 @@ def fetch_channel_info_and_posts(
     }
 
     channel_info["followers_fmt"] = format_count_compact(channel_info.get("followers", 0))
+
+    if video_list and not is_self_account:
+        from collections import Counter
+        reg_counter = Counter(v.get("region") for v in video_list if v.get("region") and v.get("region") not in ("NONE", "AUTO", "EU"))
+        if reg_counter:
+            top_reg, _ = reg_counter.most_common(1)[0]
+            if top_reg and top_reg != channel_info.get("region"):
+                channel_info["region"] = top_reg
+                reg_disp = format_full_country_display(top_reg)
+                channel_info["region_display"] = reg_disp
+                check_user_info["country"] = reg_disp
 
     ch_vids = int(channel_info.get("videoCount") or 0)
     video_notice = ""
