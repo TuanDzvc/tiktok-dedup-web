@@ -563,6 +563,14 @@
                         </div>
                     </div>
 
+                    <!-- Thông báo trạng thái video của kênh (nếu không có video hoặc video riêng tư) -->
+                    <div id="channelVideoNoticeBanner" class="hidden p-4 rounded-2xl bg-amber-950/40 border border-amber-500/50 text-amber-200 text-xs sm:text-sm flex items-start sm:items-center gap-3 shadow-lg shadow-amber-950/20">
+                        <i class="fa-solid fa-circle-exclamation text-amber-400 text-xl flex-shrink-0 mt-0.5 sm:mt-0"></i>
+                        <div class="flex-1 leading-relaxed">
+                            <span id="channelVideoNoticeText" class="font-medium"></span>
+                        </div>
+                    </div>
+
                     <!-- Filter & Action Toolbar -->
                     <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-dark-900/70 p-4 rounded-2xl border border-slate-800">
                         <!-- Filter Tabs -->
@@ -1385,6 +1393,7 @@
         let currentMaxCursor = 0;
         let hasMoreVideos = false;
         let isLoadingMore = false;
+        let currentVideoNotice = '';
 
         function getCountryFlag(code) {
             if (!code) return `<span class="text-base select-none">🌐</span>`;
@@ -1517,6 +1526,7 @@
             currentMaxCursor = 0;
             currentVideos = [];
             hasMoreVideos = false;
+            currentVideoNotice = '';
 
             document.getElementById('errorBanner').classList.add('hidden');
             document.getElementById('resultSection').classList.add('hidden');
@@ -1579,6 +1589,7 @@
                 currentVideos = data.list || [];
                 currentMaxCursor = data.maxCursor || (data.list ? data.list.length : limit);
                 hasMoreVideos = Boolean(data.hasMore);
+                currentVideoNotice = data.video_notice || '';
 
                 renderResults(data);
 
@@ -1675,16 +1686,20 @@
 
             const isAllReached = Boolean(channelTotal > 0 && totalScanned >= channelTotal);
 
-            if (!hasMoreVideos || isAllReached) {
+            if (!hasMoreVideos || isAllReached || totalScanned === 0) {
                 btn.classList.add('hidden');
-                endMsg.classList.remove('hidden');
-                if (endText) {
-                    if (isAllReached) {
-                        endText.innerText = `🎉 Đã quét toàn bộ ${totalScanned} / ${channelTotal} video của kênh này.`;
-                    } else if (channelTotal > 0 && totalScanned < channelTotal) {
-                        endText.innerText = `Đã dừng ở ${totalScanned} / ${channelTotal} video (TikTok giới hạn xem công khai).`;
-                    } else {
-                        endText.innerText = `🎉 Đã quét toàn bộ video tìm thấy (${totalScanned} video).`;
+                if (totalScanned === 0) {
+                    endMsg.classList.add('hidden');
+                } else {
+                    endMsg.classList.remove('hidden');
+                    if (endText) {
+                        if (isAllReached) {
+                            endText.innerText = `🎉 Đã quét toàn bộ ${totalScanned} / ${channelTotal} video của kênh này.`;
+                        } else if (channelTotal > 0 && totalScanned < channelTotal) {
+                            endText.innerText = `Đã dừng ở ${totalScanned} / ${channelTotal} video (TikTok giới hạn xem công khai).`;
+                        } else {
+                            endText.innerText = `🎉 Đã quét toàn bộ video tìm thấy (${totalScanned} video).`;
+                        }
                     }
                 }
             } else {
@@ -1788,6 +1803,19 @@
 
             // 3. Stats & Videos
             updateSummaryStats();
+
+            // Video status notice banner (private or 0 videos)
+            const noticeBanner = document.getElementById('channelVideoNoticeBanner');
+            const noticeText = document.getElementById('channelVideoNoticeText');
+            if (noticeBanner && noticeText) {
+                if (currentVideoNotice) {
+                    noticeText.innerText = currentVideoNotice;
+                    noticeBanner.classList.remove('hidden');
+                } else {
+                    noticeBanner.classList.add('hidden');
+                }
+            }
+
             document.getElementById('resultSection').classList.remove('hidden');
             setFilter('all');
             updateLoadMoreButtonState();
@@ -1872,11 +1900,16 @@
             tbody.innerHTML = '';
 
             if (filteredVideos.length === 0) {
+                const emptyNotice = (currentVideos.length === 0 && currentVideoNotice)
+                    ? `<div class="max-w-xl mx-auto py-5 px-6 rounded-2xl bg-amber-950/30 border border-amber-600/40 text-amber-200 text-xs sm:text-sm text-center">
+                         <i class="fa-solid fa-circle-info text-amber-400 text-2xl mb-2.5 block"></i>
+                         <div class="leading-relaxed font-medium">${escapeHtml(currentVideoNotice)}</div>
+                       </div>`
+                    : `<i class="fa-solid fa-inbox text-3xl mb-2 block"></i> Không có video nào khớp với bộ lọc hiện tại.`;
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="9" class="p-8 text-center text-slate-500 font-medium">
-                            <i class="fa-solid fa-inbox text-3xl mb-2 block"></i>
-                            Không có video nào khớp với bộ lọc hiện tại.
+                        <td colspan="9" class="p-8 text-center text-slate-400 font-medium">
+                            ${emptyNotice}
                         </td>
                     </tr>
                 `;
@@ -2081,7 +2114,13 @@
             grid.innerHTML = '';
 
             if (filteredVideos.length === 0) {
-                grid.innerHTML = `<div class="col-span-full text-center p-8 text-slate-500 font-medium">Không có video nào phù hợp với bộ lọc hiện tại.</div>`;
+                const emptyNotice = (currentVideos.length === 0 && currentVideoNotice)
+                    ? `<div class="max-w-xl mx-auto py-5 px-6 rounded-2xl bg-amber-950/30 border border-amber-600/40 text-amber-200 text-xs sm:text-sm text-center">
+                         <i class="fa-solid fa-circle-info text-amber-400 text-2xl mb-2.5 block"></i>
+                         <div class="leading-relaxed font-medium">${escapeHtml(currentVideoNotice)}</div>
+                       </div>`
+                    : `Không có video nào phù hợp với bộ lọc hiện tại.`;
+                grid.innerHTML = `<div class="col-span-full text-center p-8 text-slate-400 font-medium">${emptyNotice}</div>`;
                 return;
             }
 

@@ -1635,20 +1635,12 @@ def fetch_channel_info_and_posts(
         }
         video_list.append(post_data)
 
-    if not video_list:
-        ch_vids = int(channel_info.get("videoCount") or 0)
-        if ch_vids > 0:
-            return {
-                "success": False,
-                "channel": channel_info,
-                "user_info": check_user_info,
-                "error": f"Kênh @{username} có {ch_vids} video nhưng TikTok tạm thời giới hạn tải danh sách. Vui lòng bấm 'Kiểm tra ngay' lại sau vài giây!"
-            }
-        elif not channel_info.get("followers") and not sec_uid and not is_self_account:
-            return {
-                "success": False,
-                "error": f"Không thể kết nối hoặc tìm thấy kênh TikTok @{username}. Vui lòng kiểm tra lại đường dẫn / ID!"
-            }
+    # Chỉ báo lỗi nếu hoàn toàn không tìm thấy thông tin kênh (không có avatar, followers, videoCount, UID)
+    if not video_list and not channel_info.get("avatar") and not channel_info.get("followers") and not channel_info.get("videoCount") and not sec_uid and not is_self_account and check_user_info.get("uid") in ("---", ""):
+        return {
+            "success": False,
+            "error": f"Không thể kết nối hoặc không tìm thấy kênh TikTok @{username}. Vui lòng kiểm tra lại đường dẫn / ID!"
+        }
 
     total_loaded = len(video_list)
     dup_count = sum(1 for v in video_list if v.get("is_dup"))
@@ -1668,6 +1660,14 @@ def fetch_channel_info_and_posts(
 
     channel_info["followers_fmt"] = format_count_compact(channel_info.get("followers", 0))
 
+    ch_vids = int(channel_info.get("videoCount") or 0)
+    video_notice = ""
+    if total_loaded == 0:
+        if ch_vids > 0:
+            video_notice = f"Kênh @{username} có {ch_vids} video trên TikTok nhưng các video này có thể đang ở chế độ Riêng tư (Private), hoặc TikTok tạm thời giới hạn tải danh sách công khai."
+        else:
+            video_notice = f"Kênh @{username} hiện chưa đăng tải video nào."
+
     return {
         "success": True,
         "channel": channel_info,
@@ -1676,5 +1676,6 @@ def fetch_channel_info_and_posts(
         "stats_summary": stats_summary,
         "user_info": check_user_info,
         "hasMore": has_more,
-        "maxCursor": next_cursor
+        "maxCursor": next_cursor,
+        "video_notice": video_notice
     }
