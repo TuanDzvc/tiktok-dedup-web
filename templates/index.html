@@ -3583,8 +3583,15 @@
                     }
 
                     if (data.status === 'browser_opened') {
+                        const dRaw = String(data.detail || '');
+                        let diagTxt = '';
+                        if (dRaw.startsWith('CDP_FAIL')) {
+                            diagTxt = `<br><span class="text-[10px] text-rose-300 font-mono break-all">Lỗi đọc cookie: ${escapeHtml(dRaw.substring(0, 160))}</span>`;
+                        } else if (dRaw.startsWith('CDP_OK') && !/\bsessionid\b/.test(dRaw) && /tiktok=([3-9]|\d{2,})/.test(dRaw)) {
+                            diagTxt = `<br><span class="text-[11px] text-amber-300 font-semibold">⚠️ Cửa sổ Chrome do tool mở CHƯA đăng nhập. Hãy đăng nhập đúng cửa sổ Chrome vừa bật lên (không phải Chrome bạn đang dùng).</span>`;
+                        }
                         if (titleEl) titleEl.innerHTML = '<span class="text-emerald-400 font-black">🟢 Chrome đã mở trên máy bạn!</span>';
-                        if (descEl) descEl.innerHTML = 'Vui lòng đăng nhập (quét QR, mật khẩu, mã email) trên cửa sổ Chrome vừa bật lên.<br><span class="text-cyan-300 font-semibold">Web sẽ tự động nhận nick ngay sau 2 giây!</span>';
+                        if (descEl) descEl.innerHTML = 'Vui lòng đăng nhập (quét QR, mật khẩu, mã email) trên cửa sổ Chrome vừa bật lên.<br><span class="text-cyan-300 font-semibold">Web sẽ tự động nhận nick ngay sau 2 giây!</span>' + diagTxt;
                         if (reopenBox) reopenBox.classList.add('hidden');
                         if (spinner) spinner.classList.remove('hidden');
                     } else if (data.status === 'syncing' || data.status === 'logging_in') {

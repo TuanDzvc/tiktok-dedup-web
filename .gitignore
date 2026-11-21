@@ -4,3 +4,5 @@ __pycache__/
 .venv
 *.bat
 *.vbs
+
+external_login_debug.log

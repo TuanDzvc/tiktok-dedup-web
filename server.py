@@ -8,6 +8,7 @@ Tự động kích hoạt Cloudflare Tunnel để tạo tên miền công khai m
 import os
 import sys
 import logging
+from starlette.concurrency import run_in_threadpool
 from pathlib import Path
 
 logger = logging.getLogger("tikflow")
@@ -550,7 +551,7 @@ async def api_studio_cookie_import(req: Request):
     if not cookie_str:
         raise HTTPException(status_code=400, detail="Vui lòng dán chuỗi Cookie!")
     
-    acc_info = studio_engine.get_account_info(cookie_str, proxy=proxy)
+    acc_info = await run_in_threadpool(studio_engine.get_account_info, cookie_str, proxy=proxy)
     if not acc_info.get("valid"):
         return JSONResponse(content={"success": False, "error": acc_info.get("error", "Cookie không hợp lệ hoặc đã hết hạn.")})
 
@@ -594,7 +595,7 @@ async def api_studio_posts(req: Request):
     proxy = str(body.get("proxy") or "").strip()
     sec_uid = str(body.get("sec_uid") or "").strip()
     
-    res = studio_engine.get_studio_post_list(cookie_str, proxy=proxy, count=count, max_cursor=max_cursor, sec_uid=sec_uid)
+    res = await run_in_threadpool(studio_engine.get_studio_post_list, cookie_str, proxy=proxy, count=count, max_cursor=max_cursor, sec_uid=sec_uid)
     return JSONResponse(content=res)
 
 @app.post("/api/studio/item/visibility")
@@ -613,7 +614,7 @@ async def api_studio_item_visibility(req: Request):
     if not cookie_str or not item_id:
         raise HTTPException(status_code=400, detail="Thiếu Cookie hoặc ID video.")
     
-    res = studio_engine.set_post_visibility(cookie_str, item_id, visibility, proxy=proxy)
+    res = await run_in_threadpool(studio_engine.set_post_visibility, cookie_str, item_id, visibility, proxy=proxy)
     return JSONResponse(content=res)
 
 @app.post("/api/studio/item/delete")
@@ -631,7 +632,7 @@ async def api_studio_item_delete(req: Request):
     if not cookie_str or not item_id:
         raise HTTPException(status_code=400, detail="Thiếu Cookie hoặc ID video.")
     
-    res = studio_engine.delete_studio_post(cookie_str, item_id, proxy=proxy)
+    res = await run_in_threadpool(studio_engine.delete_studio_post, cookie_str, item_id, proxy=proxy)
     return JSONResponse(content=res)
 
 @app.post("/api/studio/browser/login/start")
@@ -734,7 +735,7 @@ async def api_studio_external_login_event(req: Request):
         sess = EXTERNAL_LOGIN_SESSIONS.get(sync_id)
         if not sess:
             sess = {
-                "status": event or "waiting",
+                "status": (event if event != "client_info" else "waiting") or "waiting",
                 "detail": detail,
                 "command": "none",
                 "client_ip": client_ip,
@@ -743,9 +744,11 @@ async def api_studio_external_login_event(req: Request):
             }
             EXTERNAL_LOGIN_SESSIONS[sync_id] = sess
         else:
-            if event and sess.get("status") != "success":
+            if event == "client_info":
+                sess["client_info"] = detail
+            elif event and sess.get("status") != "success":
                 sess["status"] = event
-            if detail:
+            if detail and event != "client_info":
                 sess["detail"] = detail
             sess["client_ip"] = client_ip
             sess["last_seen"] = time.time()
@@ -753,6 +756,16 @@ async def api_studio_external_login_event(req: Request):
         cmd = sess.get("command", "none")
         if cmd != "none":
             sess["command"] = "none"
+
+        # Ghi log chẩn đoán từ máy khách (chỉ khi nội dung thay đổi) để debug từ xa
+        log_key = f"{event}|{detail}"
+        if sess.get("_last_log") != log_key:
+            sess["_last_log"] = log_key
+            try:
+                with open(Path(__file__).resolve().parent / "external_login_debug.log", "a", encoding="utf-8") as lf:
+                    lf.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ID={sync_id} IP={client_ip} {event}: {detail}\n")
+            except Exception:
+                pass
 
         logger.info(f"[ExternalLogin] ID={sync_id} IP={client_ip} Event={event} Detail={detail}")
         return JSONResponse(content={"success": True, "command": cmd, "status": sess.get("status")})
@@ -805,11 +818,11 @@ async def api_studio_external_login_sync(req: Request):
             cdict["sessionid_ss"] = sid_val
         cookie_str = studio_engine.cookie_to_header_str(cdict)
 
-    acc_info = studio_engine.get_account_info(cookie_str, proxy=proxy)
+    acc_info = await run_in_threadpool(studio_engine.get_account_info, cookie_str, proxy=proxy)
     if not acc_info or not (acc_info.get("uid") or acc_info.get("uniqueId") or acc_info.get("username")):
         # Thử lại không qua proxy phòng trường hợp proxy server bị nghẽn
         if proxy:
-            acc_info = studio_engine.get_account_info(cookie_str, proxy="")
+            acc_info = await run_in_threadpool(studio_engine.get_account_info, cookie_str, proxy="")
 
     # Nếu Passport API tạm thời bị rate-limit hoặc chặn từ IP server, vẫn chấp nhận cookie tươi từ máy khách với profile dự phòng
     if not acc_info or not (acc_info.get("uid") or acc_info.get("uniqueId") or acc_info.get("username")):
@@ -837,7 +850,7 @@ async def api_studio_external_login_sync(req: Request):
         u_cand = (acc_info.get("uniqueId") or acc_info.get("username") or "").lstrip("@").strip()
         if u_cand and not u_cand.startswith("user_"):
             try:
-                cand_av = studio_engine.fetch_user_avatar(u_cand)
+                cand_av = await run_in_threadpool(studio_engine.fetch_user_avatar, u_cand)
                 if cand_av:
                     acc_info["avatar"] = cand_av
             except Exception:
@@ -1077,13 +1090,15 @@ function Send-Sync($cookieStr, $proxyStr) {{
 
 function Get-BrowserCookiesViaCDP {{
     $cookies = $null
+    $global:cdpErr = ""
     try {{
         $ver = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $global:cdpPort + "/json/version") -TimeoutSec 2
         $wsUrl = $ver.webSocketDebuggerUrl
         if ($wsUrl) {{
             $w = New-Object System.Net.WebSockets.ClientWebSocket
-            $cts = New-Object System.Threading.CancellationTokenSource(3000)
-            $w.ConnectAsync([System.Uri]$wsUrl, $cts.Token).Wait(3000)
+                    try {{ $w.Options.Proxy = $null }} catch {{}}
+            $cts = New-Object System.Threading.CancellationTokenSource(9000)
+            $w.ConnectAsync([System.Uri]$wsUrl, $cts.Token).Wait(6000)
             if ($w.State -eq [System.Net.WebSockets.WebSocketState]::Open) {{
                 $msg = '{{"id":1,"method":"Storage.getCookies"}}'
                 $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
@@ -1095,7 +1110,7 @@ function Get-BrowserCookiesViaCDP {{
                     $buf = New-Object byte[] 65536
                     $rseg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buf)
                     $rtask = $w.ReceiveAsync($rseg, $cts.Token)
-                    if (-not $rtask.Wait(2500)) {{ break }}
+                    if (-not $rtask.Wait(6000)) {{ $global:cdpErr = "ws receive timeout"; break }}
                     if ($rtask.Result.Count -gt 0) {{ $mem.Write($buf, 0, $rtask.Result.Count) }}
                 }} while (-not $rtask.Result.EndOfMessage)
 
@@ -1109,10 +1124,15 @@ function Get-BrowserCookiesViaCDP {{
                     $cookies = $data.result.cookies
                 }}
             }} else {{
+                $global:cdpErr = "browser ws not open: " + $w.State
                 try {{ $w.Dispose() }} catch {{}}
             }}
+        }} else {{
+            $global:cdpErr = "no webSocketDebuggerUrl"
         }}
-    }} catch {{}}
+    }} catch {{
+        $global:cdpErr = "browser target: " + $_.Exception.GetBaseException().Message
+    }}
 
     # Fallback: Nếu Browser target không trả về cookies, lấy qua Page target Network.getCookies
     if (-not $cookies) {{
@@ -1121,8 +1141,9 @@ function Get-BrowserCookiesViaCDP {{
             foreach ($pg in $pages) {{
                 if ($pg.type -eq "page" -and $pg.webSocketDebuggerUrl) {{
                     $w = New-Object System.Net.WebSockets.ClientWebSocket
-                    $cts = New-Object System.Threading.CancellationTokenSource(3000)
-                    $w.ConnectAsync([System.Uri]$pg.webSocketDebuggerUrl, $cts.Token).Wait(3000)
+                    try {{ $w.Options.Proxy = $null }} catch {{}}
+                    $cts = New-Object System.Threading.CancellationTokenSource(9000)
+                    $w.ConnectAsync([System.Uri]$pg.webSocketDebuggerUrl, $cts.Token).Wait(6000)
                     if ($w.State -eq [System.Net.WebSockets.WebSocketState]::Open) {{
                         $msg = '{{"id":2,"method":"Network.getCookies"}}'
                         $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
@@ -1134,7 +1155,7 @@ function Get-BrowserCookiesViaCDP {{
                             $buf = New-Object byte[] 65536
                             $rseg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buf)
                             $rtask = $w.ReceiveAsync($rseg, $cts.Token)
-                            if (-not $rtask.Wait(2500)) {{ break }}
+                            if (-not $rtask.Wait(6000)) {{ $global:cdpErr = "ws receive timeout"; break }}
                             if ($rtask.Result.Count -gt 0) {{ $mem.Write($buf, 0, $rtask.Result.Count) }}
                         }} while (-not $rtask.Result.EndOfMessage)
 
@@ -1149,11 +1170,14 @@ function Get-BrowserCookiesViaCDP {{
                             break
                         }}
                     }} else {{
+                        $global:cdpErr += " | page ws not open: " + $w.State
                         try {{ $w.Dispose() }} catch {{}}
                     }}
                 }}
             }}
-        }} catch {{}}
+        }} catch {{
+            $global:cdpErr += " | page target: " + $_.Exception.GetBaseException().Message
+        }}
     }}
     return $cookies
 }}
@@ -1164,6 +1188,13 @@ if (-not $browser) {{
 }}
 
 $proc = Start-LoginBrowser
+$global:diag = "Chrome đang mở, đang chờ đăng nhập..."
+$global:lastDiag = ""
+$osInfo = ""
+try {{ $osInfo = [Environment]::OSVersion.VersionString + " PS" + $PSVersionTable.PSVersion.ToString() + " CLR" + [Environment]::Version.ToString() }} catch {{}}
+$sysProxy = ""
+try {{ $sysProxy = [System.Net.WebRequest]::DefaultWebProxy.GetProxy([Uri]"http://127.0.0.1:9222/").ToString() }} catch {{}}
+Send-State "client_info" ("browser=" + $browser + " | " + $osInfo + " | proxy127=" + $sysProxy + " | chromeProxyArg=" + $proxyArg) | Out-Null
 Send-State "browser_opened" "Đã khởi động Chrome trên cổng $global:cdpPort"
 $startTs = [DateTime]::UtcNow
 $synced = $false
@@ -1199,8 +1230,8 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
         continue
     }}
 
-    # Kiểm tra lệnh điều khiển từ web
-    $cmd = Send-State "browser_opened" "Chrome đang mở, đang chờ đăng nhập..."
+    # Kiểm tra lệnh điều khiển từ web (kèm dòng chẩn đoán đọc cookie lần trước)
+    $cmd = Send-State "browser_opened" $global:diag
     if ($cmd -eq "exit") {{
         try {{ Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }} catch {{}}
         break
@@ -1208,6 +1239,16 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
 
     # Đọc cookies thông qua CDP
     $cookies = Get-BrowserCookiesViaCDP
+    if (-not $cookies) {{
+        $global:diag = "CDP_FAIL: " + $global:cdpErr
+    }} else {{
+        $tkNames = @($cookies | Where-Object {{ $_.domain -like "*tiktok*" }} | ForEach-Object {{ $_.name }})
+        $global:diag = "CDP_OK cookies=" + @($cookies).Count + " tiktok=" + $tkNames.Count + " names=" + (($tkNames | Select-Object -First 40) -join ",")
+    }}
+    if ($global:diag -ne $global:lastDiag) {{
+        Log-Local $global:diag
+        $global:lastDiag = $global:diag
+    }}
 
     if ($cookies) {{
         $sidCookie = $cookies | Where-Object {{ 
