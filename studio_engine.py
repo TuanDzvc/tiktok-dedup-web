@@ -587,12 +587,15 @@ def fetch_user_avatar_and_profile(username: str = "", cookie_str: str = "", prox
                     
                     real_u = app_u.get("uniqueId") or clean_u
                     real_nick = app_u.get("nickName") or ""
+                    u_region = app_u.get("region") or app_u.get("countryCode") or ""
                     if av:
                         result["avatar"] = av
                     if real_u:
                         result["uniqueId"] = real_u
                     if real_nick:
                         result["nickname"] = real_nick
+                    if u_region:
+                        result["region"] = str(u_region).strip().upper()
                     if av:
                         result["success"] = True
                         return result
@@ -646,23 +649,13 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
                     or data.get("avatar")
                     or ""
                 )
-                # Trích xuất quốc gia chính xác từ Cookie của tài khoản (store-country-code, v.v.)
-                m_country = re.search(r'(?:store-country-code|country_code|region|country)\s*=\s*([a-zA-Z]{2})', cookie_str, re.IGNORECASE)
+                # Trích xuất quốc gia chính xác từ Cookie của tài khoản (store-country-code, store-country-code-ttp, region, v.v.)
+                m_country = re.search(r'(?:store-country-code(?:-ttp)?|country_code|region|country)\s*=\s*([a-zA-Z]{2})', cookie_str, re.IGNORECASE)
                 cookie_country = m_country.group(1).upper() if m_country else ""
 
-                country = (
-                    cookie_country
-                    or data.get("store_country")
-                    or data.get("country")
-                    or data.get("region")
-                    or "VN"
-                ).upper()
-                c_ts = int(data.get("create_time") or 0)
-                c_date = datetime.datetime.fromtimestamp(c_ts).strftime("%d/%m/%Y") if c_ts > 0 else "-"
-                sec_uid = str(data.get("sec_user_id") or data.get("sec_uid") or "")
-
-                # Lấy Avatar chất lượng cao và đồng bộ Handle/Nickname mới nhất từ SSR TikTok
+                # Lấy Avatar chất lượng cao, đồng bộ Handle/Nickname và Region từ SSR TikTok
                 clean_u = str(u_name or "").lstrip("@").strip()
+                prof_data = {}
                 if cookie_str:
                     prof_data = fetch_user_avatar_and_profile(clean_u, cookie_str=cookie_str, proxy=proxy)
                     if prof_data.get("avatar"):
@@ -673,6 +666,18 @@ def get_account_info(cookie_str: str, proxy: str = "") -> Dict[str, Any]:
                         nick = prof_data["nickname"]
                 elif not avatar and clean_u:
                     avatar = fetch_user_avatar(clean_u, cookie_str=cookie_str, proxy=proxy)
+
+                country = (
+                    cookie_country
+                    or prof_data.get("region")
+                    or data.get("store_country")
+                    or data.get("country")
+                    or data.get("country_code")
+                    or "US"
+                ).upper()
+                c_ts = int(data.get("create_time") or 0)
+                c_date = datetime.datetime.fromtimestamp(c_ts).strftime("%d/%m/%Y") if c_ts > 0 else "-"
+                sec_uid = str(data.get("sec_user_id") or data.get("sec_uid") or "")
 
                 return {
                     "valid": True,
@@ -711,8 +716,8 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
     cookie_header = cookie_to_header_str(cdict)
 
     # Trích xuất quốc gia tài khoản để định tuyến đúng cụm máy chủ khu vực
-    m_country = re.search(r'store-country-code\s*=\s*([a-zA-Z]{2})', cookie_str, re.IGNORECASE)
-    c_code = m_country.group(1).upper() if m_country else "VN"
+    m_country = re.search(r'(?:store-country-code(?:-ttp)?|country_code|region|country)\s*=\s*([a-zA-Z]{2})', cookie_str, re.IGNORECASE)
+    c_code = m_country.group(1).upper() if m_country else "US"
 
     # URL chuẩn của TikTok Creator Studio Item List
     url_studio = (
@@ -1017,6 +1022,11 @@ def set_post_visibility(cookie_str: str, item_id: str, visibility_type: int, pro
     try:
         url = "https://www.tiktok.com/tiktokstudio/api/web/item/visibility"
         r = requests.post(url, headers=headers, json=payload, proxies=proxies if proxies else None, timeout=12)
+        # Nếu máy chủ TikTok bị quá tải trả về HTTP 500/502/503/504, tự động thử lại sau 800ms
+        if r.status_code >= 500:
+            time.sleep(0.8)
+            r = requests.post(url, headers=headers, json=payload, proxies=proxies if proxies else None, timeout=15)
+
         if r.status_code == 200:
             res_data = r.json()
             st = res_data.get("status_code", res_data.get("code", 0))
@@ -1064,6 +1074,11 @@ def delete_studio_post(cookie_str: str, item_id: str, proxy: str = "") -> Dict[s
     try:
         url = "https://www.tiktok.com/tiktokstudio/api/web/item/delete"
         r = requests.post(url, headers=headers, json=payload, proxies=proxies if proxies else None, timeout=15)
+        # Nếu máy chủ TikTok bị quá tải trả về HTTP 500/502/503/504, tự động thử lại sau 800ms
+        if r.status_code >= 500:
+            time.sleep(0.8)
+            r = requests.post(url, headers=headers, json=payload, proxies=proxies if proxies else None, timeout=15)
+
         if r.status_code == 200:
             res_data = r.json()
             st = res_data.get("status_code", res_data.get("code", 0))

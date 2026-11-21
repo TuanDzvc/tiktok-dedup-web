@@ -660,30 +660,47 @@ def _cleanup_external_sessions():
             EXTERNAL_LOGIN_SESSIONS.pop(k, None)
 
 @app.get("/api/studio/external-login/status")
-def api_studio_external_login_status(id: str = ""):
+def api_studio_external_login_status(req: Request, id: str = ""):
     """Kiểm tra trạng thái đăng nhập từ file .bat chạy trên máy khách."""
     _cleanup_external_sessions()
     sync_id = str(id or "").strip()
+    client_ip = req.client.host if req.client else ""
+
     with EXTERNAL_LOGIN_LOCK:
         sess = EXTERNAL_LOGIN_SESSIONS.get(sync_id)
+
+        # Fallback liên kết session: Nếu sync_id không tìm thấy hoặc đang chờ,
+        # tự động tìm session đang mở hoặc thành công gần nhất của cùng client IP
+        if not sess or sess.get("status") == "waiting":
+            for sid, s in list(EXTERNAL_LOGIN_SESSIONS.items()):
+                if s.get("client_ip") == client_ip and s.get("status") in ("browser_opened", "syncing", "success"):
+                    sess = s
+                    sync_id = sid
+                    break
+
         if not sess:
             return JSONResponse(content={"success": False, "status": "not_found"})
+
         return JSONResponse(content={
             "success": True,
+            "id": sync_id,
             "status": sess.get("status", "waiting"),
             "account": sess.get("account"),
             "cookie": sess.get("cookie"),
             "proxy": sess.get("proxy", ""),
+            "detail": sess.get("detail", ""),
             "last_seen": sess.get("last_seen", 0)
         })
 
 @app.post("/api/studio/external-login/event")
 async def api_studio_external_login_event(req: Request):
     """File .bat chạy ẩn trên máy khách báo sự kiện (browser_opened, browser_closed) và nhận lệnh điều khiển."""
+    client_ip = req.client.host if req.client else ""
     try:
         body = await req.json()
         sync_id = str(body.get("id") or "").strip()
         event = str(body.get("event") or "").strip()
+        detail = str(body.get("detail") or "").strip()
     except Exception:
         return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
 
@@ -695,7 +712,9 @@ async def api_studio_external_login_event(req: Request):
         if not sess:
             sess = {
                 "status": event or "waiting",
+                "detail": detail,
                 "command": "none",
+                "client_ip": client_ip,
                 "created_at": time.time(),
                 "last_seen": time.time()
             }
@@ -703,12 +722,16 @@ async def api_studio_external_login_event(req: Request):
         else:
             if event and sess.get("status") != "success":
                 sess["status"] = event
+            if detail:
+                sess["detail"] = detail
+            sess["client_ip"] = client_ip
             sess["last_seen"] = time.time()
 
         cmd = sess.get("command", "none")
         if cmd != "none":
             sess["command"] = "none"
 
+        logger.info(f"[ExternalLogin] ID={sync_id} IP={client_ip} Event={event} Detail={detail}")
         return JSONResponse(content={"success": True, "command": cmd, "status": sess.get("status")})
 
 @app.post("/api/studio/external-login/command")
@@ -820,17 +843,20 @@ async def api_studio_external_login_sync(req: Request):
 
 
 @app.get("/api/studio/download-login-bat")
-def api_studio_download_login_bat(id: str = "", proxy: str = "", origin: str = ""):
+def api_studio_download_login_bat(req: Request, id: str = "", proxy: str = "", origin: str = ""):
     """Tạo và tải về file .bat chạy ngầm 100% ẩn cmd, tự động mở Chrome và kết nối 2 chiều với web."""
     sync_id = str(id or "").strip()
     if not sync_id:
         sync_id = f"tikflow_{int(time.time())}_{secrets.token_hex(4)}"
+
+    client_ip = req.client.host if req.client else ""
 
     with EXTERNAL_LOGIN_LOCK:
         EXTERNAL_LOGIN_SESSIONS[sync_id] = {
             "status": "waiting",
             "command": "none",
             "proxy": str(proxy or "").strip(),
+            "client_ip": client_ip,
             "last_seen": time.time(),
             "created_at": time.time()
         }
@@ -847,6 +873,23 @@ def api_studio_download_login_bat(id: str = "", proxy: str = "", origin: str = "
 try {{
     [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {{$true}}
 }} catch {{}}
+
+# Ẩn ngay cửa sổ console
+try {{
+    $hideDef = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();'
+    Add-Type -Name Win32 -Namespace Native -MemberDefinition $hideDef -ErrorAction SilentlyContinue
+    $h = [Native.Win32]::GetConsoleWindow()
+    if ($h -ne [IntPtr]::Zero) {{ [Native.Win32]::ShowWindow($h, 0) }}
+}} catch {{}}
+
+function Log-Local($msg) {{
+    try {{
+        $l = "[" + (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") + "] " + $msg
+        Add-Content -Path (Join-Path $env:TEMP "tikflow_login.log") -Value $l -ErrorAction SilentlyContinue
+    }} catch {{}}
+}}
+
+Log-Local "Bat script started for session: {sync_id}"
 
 $chromePaths = @(
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -875,12 +918,13 @@ if (-not $browser) {{
     }} catch {{}}
 }}
 if (-not $browser) {{
-    Send-State "browser_not_found"
+    Log-Local "No browser found"
+    Send-State "browser_not_found" "Không tìm thấy Chrome/Edge trên máy tính"
     exit 1
 }}
 
-$port = Get-Random -Minimum 9300 -Maximum 9800
-$tmpDir = Join-Path $env:TEMP ("tikflow_profile_" + (Get-Random))
+$global:cdpPort = Get-Random -Minimum 9300 -Maximum 9800
+$tmpDir = Join-Path $env:TEMP ("tikflow_prof_" + (Get-Random))
 
 $proxyArg = ""
 if ("{clean_proxy}" -ne "") {{
@@ -919,7 +963,6 @@ if ("{clean_proxy}" -ne "") {{
 }}
 
 function Start-LoginBrowser {{
-    $script:port = Get-Random -Minimum 9300 -Maximum 9800
     try {{
         if (-not (Test-Path -LiteralPath $tmpDir)) {{
             New-Item -ItemType Directory -Path $tmpDir -Force -ErrorAction SilentlyContinue | Out-Null
@@ -927,8 +970,8 @@ function Start-LoginBrowser {{
     }} catch {{}}
 
     $argList = @(
-        ("--remote-debugging-port=" + $script:port),
-        ("--user-data-dir=" + $tmpDir),
+        ("--remote-debugging-port=" + $global:cdpPort),
+        ("--user-data-dir=`"" + $tmpDir + "`""),
         "--no-first-run",
         "--no-default-browser-check"
     )
@@ -938,12 +981,13 @@ function Start-LoginBrowser {{
     $argList += "https://www.tiktok.com/login"
 
     $p = Start-Process -FilePath $browser -ArgumentList $argList -PassThru
+    Log-Local ("Started browser PID " + $p.Id + " on port " + $global:cdpPort)
     return $p
 }}
 
-function Send-State($evt) {{
+function Send-State($evt, $detail = "") {{
     try {{
-        $body = @{{ id = "{sync_id}"; event = $evt }} | ConvertTo-Json
+        $body = @{{ id = "{sync_id}"; event = $evt; detail = $detail }} | ConvertTo-Json
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
         
         $req = [System.Net.WebRequest]::Create("{clean_origin}/api/studio/external-login/event")
@@ -999,36 +1043,93 @@ function Send-Sync($cookieStr, $proxyStr) {{
     }}
 }}
 
-function Get-CDPWebSocket {{
-    $wsUrl = $null
-    for ($i = 0; $i -lt 15; $i++) {{
+function Get-BrowserCookiesViaCDP {{
+    $cookies = $null
+    try {{
+        $ver = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $global:cdpPort + "/json/version") -TimeoutSec 2
+        $wsUrl = $ver.webSocketDebuggerUrl
+        if ($wsUrl) {{
+            $w = New-Object System.Net.WebSockets.ClientWebSocket
+            $cts = New-Object System.Threading.CancellationTokenSource(3000)
+            $w.ConnectAsync([System.Uri]$wsUrl, $cts.Token).Wait(3000)
+            if ($w.State -eq [System.Net.WebSockets.WebSocketState]::Open) {{
+                $msg = '{{"id":1,"method":"Storage.getCookies"}}'
+                $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
+                $seg = New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)
+                $w.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $cts.Token).Wait(2000)
+
+                $mem = New-Object System.IO.MemoryStream
+                do {{
+                    $buf = New-Object byte[] 65536
+                    $rseg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buf)
+                    $rtask = $w.ReceiveAsync($rseg, $cts.Token)
+                    if (-not $rtask.Wait(2500)) {{ break }}
+                    if ($rtask.Result.Count -gt 0) {{ $mem.Write($buf, 0, $rtask.Result.Count) }}
+                }} while (-not $rtask.Result.EndOfMessage)
+
+                $respStr = [System.Text.Encoding]::UTF8.GetString($mem.ToArray())
+                $data = $respStr | ConvertFrom-Json
+                try {{
+                    $w.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "done", [System.Threading.CancellationToken]::None).Wait(500)
+                    $w.Dispose()
+                }} catch {{}}
+                if ($data.result -and $data.result.cookies) {{
+                    $cookies = $data.result.cookies
+                }}
+            }} else {{
+                try {{ $w.Dispose() }} catch {{}}
+            }}
+        }}
+    }} catch {{}}
+
+    # Fallback: Nếu Browser target không trả về cookies, lấy qua Page target Network.getCookies
+    if (-not $cookies) {{
         try {{
-            $ver = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $script:port + "/json/version") -TimeoutSec 2
-            if ($ver.webSocketDebuggerUrl) {{
-                $wsUrl = $ver.webSocketDebuggerUrl
-                break
+            $pages = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $global:cdpPort + "/json/list") -TimeoutSec 2
+            foreach ($pg in $pages) {{
+                if ($pg.type -eq "page" -and $pg.webSocketDebuggerUrl) {{
+                    $w = New-Object System.Net.WebSockets.ClientWebSocket
+                    $cts = New-Object System.Threading.CancellationTokenSource(3000)
+                    $w.ConnectAsync([System.Uri]$pg.webSocketDebuggerUrl, $cts.Token).Wait(3000)
+                    if ($w.State -eq [System.Net.WebSockets.WebSocketState]::Open) {{
+                        $msg = '{{"id":2,"method":"Network.getCookies"}}'
+                        $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
+                        $seg = New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)
+                        $w.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $cts.Token).Wait(2000)
+
+                        $mem = New-Object System.IO.MemoryStream
+                        do {{
+                            $buf = New-Object byte[] 65536
+                            $rseg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buf)
+                            $rtask = $w.ReceiveAsync($rseg, $cts.Token)
+                            if (-not $rtask.Wait(2500)) {{ break }}
+                            if ($rtask.Result.Count -gt 0) {{ $mem.Write($buf, 0, $rtask.Result.Count) }}
+                        }} while (-not $rtask.Result.EndOfMessage)
+
+                        $respStr = [System.Text.Encoding]::UTF8.GetString($mem.ToArray())
+                        $data = $respStr | ConvertFrom-Json
+                        try {{
+                            $w.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "done", [System.Threading.CancellationToken]::None).Wait(500)
+                            $w.Dispose()
+                        }} catch {{}}
+                        if ($data.result -and $data.result.cookies) {{
+                            $cookies = $data.result.cookies
+                            break
+                        }}
+                    }} else {{
+                        try {{ $w.Dispose() }} catch {{}}
+                    }}
+                }}
             }}
         }} catch {{}}
-        Start-Sleep -Milliseconds 600
     }}
-    if (-not $wsUrl) {{ return $null }}
-    try {{
-        $w = New-Object System.Net.WebSockets.ClientWebSocket
-        $c = New-Object System.Threading.CancellationToken
-        $w.ConnectAsync([System.Uri]$wsUrl, $c).Wait(5000)
-        return $w
-    }} catch {{
-        return $null
-    }}
+    return $cookies
 }}
 
 $proc = Start-LoginBrowser
-Send-State "browser_opened"
-$ws = Get-CDPWebSocket
-$ct = New-Object System.Threading.CancellationToken
+Send-State "browser_opened" "Đã khởi động Chrome trên cổng $global:cdpPort"
 $startTs = [DateTime]::UtcNow
 $synced = $false
-$msgId = 1
 
 while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
     if ($synced) {{ break }}
@@ -1039,7 +1140,7 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
             $isClosed = $true
         }} else {{
             try {{
-                $ping = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $script:port + "/json/version") -TimeoutSec 1 -ErrorAction Stop
+                $ping = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $global:cdpPort + "/json/version") -TimeoutSec 1 -ErrorAction Stop
                 if (-not $ping.webSocketDebuggerUrl) {{ $isClosed = $true }}
             }} catch {{
                 $isClosed = $true
@@ -1050,11 +1151,10 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
     }}
 
     if ($isClosed) {{
-        $cmd = Send-State "browser_closed"
+        $cmd = Send-State "browser_closed" "Cửa sổ Chrome đã bị đóng"
         if ($cmd -eq "reopen_browser") {{
             $proc = Start-LoginBrowser
-            Send-State "browser_opened"
-            $ws = Get-CDPWebSocket
+            Send-State "browser_opened" "Đã mở lại Chrome theo yêu cầu"
         }} elseif ($cmd -eq "exit") {{
             break
         }}
@@ -1062,100 +1162,61 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
         continue
     }}
 
-    $cmd = Send-State "browser_opened"
+    # Kiểm tra lệnh điều khiển từ web
+    $cmd = Send-State "browser_opened" "Chrome đang mở, đang chờ đăng nhập..."
     if ($cmd -eq "exit") {{
         try {{ Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }} catch {{}}
         break
     }}
 
-    if ($ws -and $ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {{
-        try {{
-            $msgId++
-            $msg = "{{`"id`":$msgId,`"method`":`"Storage.getCookies`"}}"
-            $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
-            $seg = New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)
-            $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct).Wait(2000)
+    # Đọc cookies thông qua CDP
+    $cookies = Get-BrowserCookiesViaCDP
 
-            $memStream = New-Object System.IO.MemoryStream
-            do {{
-                $buffer = New-Object byte[] 65536
-                $recSeg = New-Object System.ArraySegment[byte] -ArgumentList @(,$buffer)
-                $recTask = $ws.ReceiveAsync($recSeg, $ct)
-                if (-not $recTask.Wait(3000)) {{
-                    break
-                }}
-                if ($recTask.Result.Count -gt 0) {{
-                    $memStream.Write($buffer, 0, $recTask.Result.Count)
-                }}
-            }} while (-not $recTask.Result.EndOfMessage)
+    if ($cookies) {{
+        $sidCookie = $cookies | Where-Object {{ 
+            ($_.name -eq "sessionid" -or $_.name -eq "sessionid_ss" -or $_.name -eq "sid_tt" -or $_.name -eq "sid_guard") -and $_.value -and ($_.value.ToString().Trim().Length -gt 8)
+        }} | Select-Object -First 1
 
-            $respStr = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
-            $json = $respStr | ConvertFrom-Json
-            $cookies = $null
-            if ($json.result -and $json.result.cookies) {{
-                $cookies = $json.result.cookies
-            }}
-
-            if ($cookies) {{
-                # Bắt tất cả các loại cookie xác thực session của TikTok: sessionid, sessionid_ss, sid_tt, sid_guard
-                $sidCookie = $cookies | Where-Object {{ 
-                    ($_.name -eq "sessionid" -or $_.name -eq "sessionid_ss" -or $_.name -eq "sid_tt" -or $_.name -eq "sid_guard") -and $_.value -and ($_.value.ToString().Trim().Length -gt 8)
-                }} | Select-Object -First 1
-
-                if ($sidCookie) {{
-                    $cookiePairs = @()
-                    $hasSessionId = $false
-                    $hasSessionIdSs = $false
-                    $sidVal = ""
-                    foreach ($c in $cookies) {{
-                        if ($c.name -and $c.value) {{
-                            $cookiePairs += ($c.name + "=" + $c.value)
-                            if ($c.name -eq "sessionid") {{ $hasSessionId = $true; $sidVal = $c.value }}
-                            if ($c.name -eq "sessionid_ss") {{ $hasSessionIdSs = $true; if (-not $sidVal) {{ $sidVal = $c.value }} }}
-                            if ($c.name -eq "sid_tt" -and -not $sidVal) {{ $sidVal = $c.value }}
-                        }}
-                    }}
-                    # Nếu có sessionid_ss mà thiếu sessionid thì tự bù để các API tương thích 100%
-                    if (-not $hasSessionId -and $sidVal) {{
-                        $cookiePairs += ("sessionid=" + $sidVal)
-                    }}
-                    if (-not $hasSessionIdSs -and $sidVal) {{
-                        $cookiePairs += ("sessionid_ss=" + $sidVal)
-                    }}
-                    $fullCookieStr = $cookiePairs -join "; "
-
-                    # Báo web đang đồng bộ dữ liệu
-                    Send-State "syncing"
-
-                    # 1. Gửi đồng bộ có proxy
-                    $syncOk = Send-Sync $fullCookieStr "{clean_proxy}"
-                    if (-not $syncOk) {{
-                        # 2. Nếu proxy lỗi (như proxy LAN dev), gửi đồng bộ direct
-                        $syncOk = Send-Sync $fullCookieStr ""
-                    }}
-
-                    if ($syncOk) {{
-                        $synced = $true
-                        Send-State "success"
-                        break
-                    }}
+        if ($sidCookie) {{
+            $cookiePairs = @()
+            $hasSessionId = $false
+            $hasSessionIdSs = $false
+            $sidVal = ""
+            foreach ($c in $cookies) {{
+                if ($c.name -and $c.value) {{
+                    $cookiePairs += ($c.name + "=" + $c.value)
+                    if ($c.name -eq "sessionid") {{ $hasSessionId = $true; $sidVal = $c.value }}
+                    if ($c.name -eq "sessionid_ss") {{ $hasSessionIdSs = $true; if (-not $sidVal) {{ $sidVal = $c.value }} }}
+                    if ($c.name -eq "sid_tt" -and -not $sidVal) {{ $sidVal = $c.value }}
                 }}
             }}
-        }} catch {{
-            try {{ $ws = Get-CDPWebSocket }} catch {{}}
+            if (-not $hasSessionId -and $sidVal) {{
+                $cookiePairs += ("sessionid=" + $sidVal)
+            }}
+            if (-not $hasSessionIdSs -and $sidVal) {{
+                $cookiePairs += ("sessionid_ss=" + $sidVal)
+            }}
+            $fullCookieStr = $cookiePairs -join "; "
+
+            Send-State "syncing" "Đã phát hiện Cookie đăng nhập. Đang đồng bộ nick..."
+            Log-Local ("Found session cookie! Sending sync for session: " + $sidVal.Substring(0, [Math]::Min(10, $sidVal.Length)) + "...")
+
+            $syncOk = Send-Sync $fullCookieStr "{clean_proxy}"
+            if (-not $syncOk) {{
+                $syncOk = Send-Sync $fullCookieStr ""
+            }}
+
+            if ($syncOk) {{
+                $synced = $true
+                Send-State "success" "Đồng bộ tài khoản thành công!"
+                Log-Local "Sync success reported to web!"
+                break
+            }}
         }}
-    }} else {{
-        try {{ $ws = Get-CDPWebSocket }} catch {{}}
     }}
 
     Start-Sleep -Seconds 1
 }}
-
-try {{
-    if ($ws) {{
-        $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "done", $ct).Wait(1000)
-    }}
-}} catch {{}}
 
 try {{
     if ($proc -and -not $proc.HasExited) {{
@@ -1176,11 +1237,22 @@ set "V=%TEMP%\\tf_hide_%RANDOM%.vbs"
 echo Set W = CreateObject("WScript.Shell") > "%V%"
 echo W.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ""$p = [Environment]::GetEnvironmentVariable('SCRIPT_FILE'); if (Test-Path -LiteralPath $p) { [ScriptBlock]::Create((Get-Content -LiteralPath $p -Encoding UTF8 -Raw)).Invoke() }""", 0, False >> "%V%"
 wscript.exe "%V%"
+timeout /t 1 /nobreak >nul 2>&1
 del /f /q "%V%" >nul 2>&1
 exit
 #>
 
 '''
+    bat_content = bat_header + ps_code
+
+    return Response(
+        content=bat_content,
+        media_type="application/x-bat",
+        headers={
+            "Content-Disposition": 'attachment; filename="tikflow_login.bat"',
+            "Cache-Control": "no-cache, no-store, must-revalidate"
+        }
+    )
     bat_content = bat_header + ps_code
 
     return Response(

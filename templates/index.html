@@ -2791,9 +2791,8 @@
 
         function extractCountryFromCookie(cookieStr) {
             if (!cookieStr) return '';
-            const m = cookieStr.match(/(?:store-country-code|country_code|region|country)\s*=\s*([a-zA-Z]{2})/i);
+            const m = cookieStr.match(/(?:store-country-code(?:-ttp)?|country_code|region|country)\s*=\s*([a-zA-Z]{2})/i);
             if (m) return m[1].toUpperCase();
-            if (cookieStr.includes('alisg')) return 'VN';
             return '';
         }
 
@@ -3536,9 +3535,15 @@
                     const reopenBox = document.getElementById('batReopenContainer');
                     const spinner = document.getElementById('batWaitingSpinner');
 
+                    if (data.id && data.id !== syncId) {
+                        syncId = data.id;
+                        currentBatSyncId = data.id;
+                        localStorage.setItem('tikflow_active_bat_sync', data.id);
+                    }
+
                     if (data.status === 'browser_opened') {
                         if (titleEl) titleEl.innerHTML = '<span class="text-emerald-400 font-black">🟢 Chrome đã mở trên máy bạn!</span>';
-                        if (descEl) descEl.innerText = 'Vui lòng đăng nhập (quét QR, mật khẩu, OTP) trên Chrome. Web sẽ tự nhận nick sau 2s!';
+                        if (descEl) descEl.innerHTML = 'Vui lòng đăng nhập (quét QR, mật khẩu, mã email) trên cửa sổ Chrome vừa bật lên.<br><span class="text-cyan-300 font-semibold">Web sẽ tự động nhận nick ngay sau 2 giây!</span>';
                         if (reopenBox) reopenBox.classList.add('hidden');
                         if (spinner) spinner.classList.remove('hidden');
                     } else if (data.status === 'syncing' || data.status === 'logging_in') {
@@ -3557,6 +3562,8 @@
                         if (reopenBox) reopenBox.classList.add('hidden');
                         if (spinner) spinner.classList.add('hidden');
                     } else if (data.status === 'waiting') {
+                        if (titleEl) titleEl.innerText = "Đã tải file tikflow_login.bat!";
+                        if (descEl) descEl.innerHTML = 'Hãy bấm mở file <b class="text-amber-300 font-mono">tikflow_login.bat</b> ở thanh tải xuống trình duyệt để bắt đầu.<br><span class="text-xs text-slate-400">Đăng nhập xong, trang Web sẽ tự động nhận nick trong 2 giây.</span>';
                         if (reopenBox) reopenBox.classList.add('hidden');
                         if (spinner) spinner.classList.remove('hidden');
                     } else if (data.status === 'success' && data.account) {
@@ -4054,7 +4061,7 @@
             }
             emptyState.classList.add('hidden');
 
-            const channelCountry = (activeStudioSession && activeStudioSession.account && activeStudioSession.account.country) || extractCountryFromCookie(activeStudioSession ? activeStudioSession.cookie : '') || 'VN';
+            const channelCountry = (activeStudioSession && activeStudioSession.account && activeStudioSession.account.country) || extractCountryFromCookie(activeStudioSession ? activeStudioSession.cookie : '') || 'US';
 
             tbody.innerHTML = filteredStudioPosts.map((item, idx) => {
                 const isSelected = selectedStudioItemIds.has(item.item_id);
@@ -4156,8 +4163,8 @@
                         <!-- Quốc gia -->
                         <td class="py-1 px-1 text-center border-r border-slate-800/80">
                             <div class="inline-flex items-center justify-center gap-1 font-bold text-[11px] text-slate-300">
-                                ${getCountryFlag(channelCountry)}
-                                <span>${channelCountry}</span>
+                                ${getCountryFlag(item.country || item.country_code || item.region || channelCountry)}
+                                <span>${item.country || item.country_code || item.region || channelCountry}</span>
                             </div>
                         </td>
 
@@ -4588,6 +4595,7 @@
 
             const itemIds = Array.from(selectedStudioItemIds);
             let successCount = 0;
+            const failedBatchIds = [];
             showToast(`Đang chuyển ${itemIds.length} video sang ${label}...`);
 
             for (const id of itemIds) {
@@ -4611,9 +4619,43 @@
                             it.visibility_label = label;
                             it.visibility_badge = newVis === 2 ? "bg-rose-950 text-rose-300 border-rose-800" : (newVis === 3 ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-emerald-950 text-emerald-300 border-emerald-800");
                         }
+                    } else {
+                        failedBatchIds.push(id);
                     }
                 } catch (e) {
+                    failedBatchIds.push(id);
                     console.error("Batch vis error:", e);
+                }
+            }
+
+            // Tự động thử lại ở cuối nếu có video bị lỗi HTTP 500 / quá tải máy chủ
+            if (failedBatchIds.length > 0) {
+                showToast(`🔄 Đang tự động thử lại ${failedBatchIds.length} video bị lỗi máy chủ TikTok...`);
+                await new Promise(r => setTimeout(r, 1800));
+                for (const id of failedBatchIds) {
+                    try {
+                        const res = await fetch('/api/studio/item/visibility', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                cookie: activeStudioSession.cookie,
+                                item_id: id,
+                                visibility: newVis,
+                                proxy: activeStudioSession.proxy || ''
+                            })
+                        });
+                        const d = await res.json();
+                        if (d.success) {
+                            successCount++;
+                            const it = studioPosts.find(v => String(v.item_id) === String(id));
+                            if (it) {
+                                it.visibility_code = newVis;
+                                it.visibility_label = label;
+                                it.visibility_badge = newVis === 2 ? "bg-rose-950 text-rose-300 border-rose-800" : (newVis === 3 ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-emerald-950 text-emerald-300 border-emerald-800");
+                            }
+                        }
+                    } catch (e) {}
+                    await new Promise(r => setTimeout(r, 200));
                 }
             }
 
@@ -4811,6 +4853,7 @@
                 stepLabel.innerText = `Bước 2: Đang thực hiện ${act.verb} (${totalTargets} video)...`;
                 let completedCount = 0;
                 let successCount = 0;
+                const failedVideos = [];
 
                 // Xử lý theo batch 3 song song để tối ưu tốc độ và an toàn
                 const batchSize = 3;
@@ -4840,7 +4883,8 @@
                                     removeStudioRowImmediately(vidId);
                                     addLog(`Đã xóa: ${vidId}`, "text-emerald-400");
                                 } else {
-                                    addLog(`Lỗi xóa ${vidId}: ${delData.error || 'Thất bại'}`, "text-rose-400");
+                                    failedVideos.push({ item: v, vidId: vidId });
+                                    addLog(`⚠️ Tạm lỗi xóa ${vidId}: ${delData.error || 'Thất bại'} (Sẽ tự động thử lại ở cuối)`, "text-amber-400");
                                 }
                             } else {
                                 const visRes = await fetch('/api/studio/item/visibility', {
@@ -4861,11 +4905,13 @@
                                     v.visibility_badge = actionType === 2 ? "bg-rose-950 text-rose-300 border-rose-800" : (actionType === 3 ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-emerald-950 text-emerald-300 border-emerald-800");
                                     addLog(`Đổi xong: ${vidId} -> ${v.visibility_label}`, "text-emerald-400");
                                 } else {
-                                    addLog(`Lỗi đổi ${vidId}: ${visData.error || 'Thất bại'}`, "text-rose-400");
+                                    failedVideos.push({ item: v, vidId: vidId });
+                                    addLog(`⚠️ Tạm lỗi đổi ${vidId}: ${visData.error || 'Thất bại'} (Sẽ tự động thử lại ở cuối)`, "text-amber-400");
                                 }
                             }
                         } catch (err) {
-                            addLog(`Lỗi mạng ${vidId}: ${err.message}`, "text-rose-400");
+                            failedVideos.push({ item: v, vidId: vidId });
+                            addLog(`⚠️ Lỗi mạng ${vidId}: ${err.message} (Sẽ tự động thử lại ở cuối)`, "text-amber-400");
                         } finally {
                             completedCount++;
                             const pct = Math.round((completedCount / totalTargets) * 100);
@@ -4876,6 +4922,80 @@
                     }));
 
                     await new Promise(r => setTimeout(r, 150));
+                }
+
+                // BƯỚC 3: TỰ ĐỘNG THỬ LẠI CÁC VIDEO BỊ LỖI KẾT NỐI MÁY CHỦ TIKTOK (HTTP 500 / MẠNG)
+                if (failedVideos.length > 0 && !isFullChannelCancelled) {
+                    stepLabel.innerText = `Bước 3: Tự động quay lại thử lại ${failedVideos.length} video bị lỗi máy chủ...`;
+                    addLog(`🔄 Phát hiện ${failedVideos.length} video bị lỗi mạng/HTTP 500 tạm thời. Chờ 2.5 giây để máy chủ TikTok ổn định rồi tự động thử lại...`, "text-cyan-400 font-bold");
+                    await new Promise(r => setTimeout(r, 2500));
+
+                    let retryList = [...failedVideos];
+                    for (let round = 1; round <= 2 && retryList.length > 0 && !isFullChannelCancelled; round++) {
+                        addLog(`🔁 Bắt đầu lượt thử lại ${round}/2 cho ${retryList.length} video...`, "text-sky-300 font-semibold");
+                        let stillFailed = [];
+
+                        for (const target of retryList) {
+                            if (isFullChannelCancelled) break;
+                            const vidId = target.vidId;
+                            const v = target.item;
+                            try {
+                                if (actionType === 4) {
+                                    const delRes = await fetch('/api/studio/item/delete', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            cookie: activeStudioSession.cookie,
+                                            item_id: vidId,
+                                            proxy: activeStudioSession.proxy || ''
+                                        })
+                                    });
+                                    const delData = await safeParseJson(delRes);
+                                    if (delData.success) {
+                                        successCount++;
+                                        removeStudioRowImmediately(vidId);
+                                        addLog(`✅ Thử lại thành công: Đã xóa ${vidId}`, "text-emerald-400 font-bold");
+                                    } else {
+                                        stillFailed.push(target);
+                                        addLog(`❌ Thử lại chưa được ${vidId}: ${delData.error || 'Thất bại'}`, "text-rose-400");
+                                    }
+                                } else {
+                                    const visRes = await fetch('/api/studio/item/visibility', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            cookie: activeStudioSession.cookie,
+                                            item_id: vidId,
+                                            visibility: actionType,
+                                            proxy: activeStudioSession.proxy || ''
+                                        })
+                                    });
+                                    const visData = await safeParseJson(visRes);
+                                    if (visData.success) {
+                                        successCount++;
+                                        v.visibility_code = actionType;
+                                        v.visibility_label = actionType === 2 ? "Riêng tư (Ẩn)" : (actionType === 3 ? "Bạn bè" : "Công khai");
+                                        v.visibility_badge = actionType === 2 ? "bg-rose-950 text-rose-300 border-rose-800" : (actionType === 3 ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-emerald-950 text-emerald-300 border-emerald-800");
+                                        addLog(`✅ Thử lại thành công: Đổi xong ${vidId} -> ${v.visibility_label}`, "text-emerald-400 font-bold");
+                                        renderStudioTable();
+                                    } else {
+                                        stillFailed.push(target);
+                                        addLog(`❌ Thử lại chưa được ${vidId}: ${visData.error || 'Thất bại'}`, "text-rose-400");
+                                    }
+                                }
+                            } catch (err) {
+                                stillFailed.push(target);
+                                addLog(`❌ Lỗi mạng thử lại ${vidId}: ${err.message}`, "text-rose-400");
+                            }
+                            await new Promise(r => setTimeout(r, 250));
+                        }
+
+                        retryList = stillFailed;
+                        if (retryList.length > 0 && round < 2 && !isFullChannelCancelled) {
+                            addLog(`⏳ Chờ 2 giây trước khi thử lại lượt cuối...`, "text-slate-400");
+                            await new Promise(r => setTimeout(r, 2000));
+                        }
+                    }
                 }
 
                 stepLabel.innerText = `Đã hoàn tất ${act.verb}!`;
