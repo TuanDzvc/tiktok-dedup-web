@@ -1453,10 +1453,29 @@
             document.getElementById('channelInput').focus();
         }
 
+        function isTiktokAvatarExpired(url) {
+            if (!url || typeof url !== 'string' || !url.startsWith('http')) return true;
+            if (url.includes('ui-avatars.com')) return true;
+            const m = url.match(/[?&]x-expires=(\d+)/);
+            if (m) {
+                const exp = parseInt(m[1], 10);
+                const nowSec = Math.floor(Date.now() / 1000);
+                // Coi như hết hạn nếu còn dưới 10 phút hoặc đã quá hạn
+                if (exp && exp <= (nowSec + 600)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function getCleanFallbackAvatar(name = 'User') {
+            return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=0284c7&color=ffffff&bold=true`;
+        }
+
         function getProxiedImage(url, fallbackName = 'User', cookieStr = '') {
             if (!url || typeof url !== 'string' || !url.startsWith('http')) {
                 const name = fallbackName && fallbackName !== 'Video' ? fallbackName : 'User';
-                return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0284c7&color=ffffff&bold=true`;
+                return getCleanFallbackAvatar(name);
             }
             if (url.includes('ui-avatars.com')) return url;
             const ck = cookieStr || currentCheckCookie || (activeStudioSession ? activeStudioSession.cookie : '') || '';
@@ -1468,8 +1487,14 @@
         }
 
         function handleStudioAvatarError(img) {
-            const fallbackName = (img && img.dataset && img.dataset.fallbackName) || 'TikTok';
-            img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=0284c7&color=ffffff&bold=true`;
+            if (!img) return;
+            const fallbackName = (img.dataset && img.dataset.fallbackName) || 'TikTok';
+            if (img.dataset.hasFailed) {
+                img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="%230284c7"/><path d="M48 24a14 14 0 100 28 14 14 0 000-28zm0 34c-16 0-26 10-26 18v2h52v-2c0-8-10-18-26-18z" fill="%23ffffff"/></svg>';
+                return;
+            }
+            img.dataset.hasFailed = '1';
+            img.src = getCleanFallbackAvatar(fallbackName);
         }
 
         let currentCheckCookie = '';
@@ -1939,7 +1964,7 @@
 
                         if (isMatchUid || isMatchUser || isMatchCookie) {
                             if (ch.avatar && ch.avatar.startsWith('http') && !ch.avatar.includes('ui-avatars')) {
-                                if (a.avatar !== ch.avatar) {
+                                if (a.avatar !== ch.avatar || isTiktokAvatarExpired(a.avatar)) {
                                     a.avatar = ch.avatar;
                                     updatedAccs = true;
                                 }
@@ -2826,8 +2851,8 @@
             document.getElementById('studioUid').innerText = `UID: ${acc.uid || '-'}`;
             document.getElementById('studioCreatedDate').innerText = `Tạo: ${acc.create_date || '-'}`;
 
-            // Tự động kéo avatar chất lượng cao từ TikTok nếu nick chưa có avatar
-            if (!acc.avatar || acc.avatar.includes('ui-avatars')) {
+            // Tự động kéo avatar chất lượng cao từ TikTok nếu nick chưa có avatar hoặc avatar đã hết hạn
+            if (!acc.avatar || acc.avatar.includes('ui-avatars') || isTiktokAvatarExpired(acc.avatar)) {
                 const u = (acc.uniqueId || acc.username || '').replace('@', '').trim();
                 if (u) {
                     fetch(`/api/studio/profile/avatar?username=${encodeURIComponent(u)}&cookie=${encodeURIComponent(activeStudioSession.cookie || '')}`)
@@ -2897,7 +2922,10 @@
             const accounts = getSavedStudioAccounts();
             if (activeStudioSession && activeStudioSession.account) {
                 const acc = activeStudioSession.account;
-                const avatar = getProxiedImage(acc.avatar, acc.nickname || acc.username, activeStudioSession.cookie || '');
+                const isExpired = isTiktokAvatarExpired(acc.avatar);
+                const avatar = (!isExpired && acc.avatar) 
+                    ? getProxiedImage(acc.avatar, acc.nickname || acc.username, activeStudioSession.cookie || '') 
+                    : getCleanFallbackAvatar(acc.nickname || acc.username || 'User');
                 const flag = getCountryFlag(acc.country);
                 const count = accounts.length || 1;
 
@@ -2934,9 +2962,10 @@
                                 <div class="py-1.5 max-h-[330px] overflow-y-auto space-y-1">
                                     ${accounts.map(a => {
                                         const isActive = String(a.uid) === String(acc.uid);
-                                        const aAv = (a.avatar && a.avatar.startsWith('http')) 
+                                        const isExpired = isTiktokAvatarExpired(a.avatar);
+                                        const aAv = (!isExpired && a.avatar && a.avatar.startsWith('http')) 
                                             ? getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '') 
-                                            : `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nickname || a.username || 'User')}&background=0284c7&color=ffffff&bold=true`;
+                                            : getCleanFallbackAvatar(a.nickname || a.username || 'User');
                                         const aFlag = getCountryFlag(a.country);
                                         return `
                                             <div onclick="switchStudioAccount('${a.uid}'); closeNavAccountDropdown();" class="flex items-center justify-between p-2 rounded-xl cursor-pointer transition ${isActive ? 'bg-cyan-950/80 border border-cyan-500/60 shadow-sm' : 'hover:bg-slate-800/80 border border-transparent'}">
@@ -3086,9 +3115,10 @@
 
             if (list) {
                 list.innerHTML = accounts.map(a => {
-                    const aAv = (a.avatar && a.avatar.startsWith('http') && !a.avatar.includes('ui-avatars')) 
+                    const isExpired = isTiktokAvatarExpired(a.avatar);
+                    const aAv = (!isExpired && a.avatar && a.avatar.startsWith('http')) 
                         ? getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '') 
-                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nickname || a.username || 'User')}&background=0284c7&color=ffffff&bold=true`;
+                        : getCleanFallbackAvatar(a.nickname || a.username || 'User');
                     const aFlag = getCountryFlag(a.country);
                     const rawUser = String(a.uniqueId || a.username || '').replace(/^@+/, '').trim();
                     const handle = rawUser ? `@${rawUser}` : (a.nickname || 'User');
@@ -3123,9 +3153,10 @@
                 }
 
                 let pillsHtml = visibleAccounts.map(a => {
-                    const aAv = (a.avatar && a.avatar.startsWith('http') && !a.avatar.includes('ui-avatars')) 
+                    const isExpired = isTiktokAvatarExpired(a.avatar);
+                    const aAv = (!isExpired && a.avatar && a.avatar.startsWith('http')) 
                         ? getProxiedImage(a.avatar, a.nickname || a.username, a.cookie || '') 
-                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nickname || a.username || 'User')}&background=0284c7&color=ffffff&bold=true`;
+                        : getCleanFallbackAvatar(a.nickname || a.username || 'User');
                     const aFlag = getCountryFlag(a.country);
                     const rawUser = String(a.uniqueId || a.username || '').replace(/^@+/, '').trim();
                     const handle = rawUser ? `@${rawUser}` : (a.nickname || 'User');
@@ -3168,26 +3199,26 @@
 
                 let needsUpdate = false;
                 await Promise.all(accounts.map(async (a, idx) => {
-                    const hasRealAvatar = a.avatar && a.avatar.startsWith('http') && !a.avatar.includes('ui-avatars');
+                    const isAvatarExpired = isTiktokAvatarExpired(a.avatar);
                     const hasCustomHandle = a.uniqueId && !a.uniqueId.startsWith('user');
                     const hasNickname = a.nickname && a.nickname !== 'User' && a.nickname !== a.username;
 
-                    if (!hasRealAvatar || !hasCustomHandle || !hasNickname) {
+                    if (isAvatarExpired || !hasCustomHandle || !hasNickname) {
                         const u = (a.uniqueId || a.username || '').replace(/^@+/, '').trim();
                         const ck = a.cookie || '';
                         if (u || ck) {
                             try {
                                 const res = await fetch(`/api/studio/profile/avatar?username=${encodeURIComponent(u)}&cookie=${encodeURIComponent(ck)}`).then(r => r.json());
                                 if (res && res.success) {
-                                    if (res.avatar && (!a.avatar || a.avatar.includes('ui-avatars'))) {
+                                    if (res.avatar && (isAvatarExpired || !a.avatar || a.avatar.includes('ui-avatars') || res.avatar !== a.avatar)) {
                                         accounts[idx].avatar = res.avatar;
                                         needsUpdate = true;
                                     }
-                                    if (res.uniqueId && !res.uniqueId.startsWith('user')) {
+                                    if (res.uniqueId && !res.uniqueId.startsWith('user') && accounts[idx].uniqueId !== res.uniqueId) {
                                         accounts[idx].uniqueId = res.uniqueId;
                                         needsUpdate = true;
                                     }
-                                    if (res.nickname && (!a.nickname || a.nickname === 'User')) {
+                                    if (res.nickname && (!a.nickname || a.nickname === 'User') && accounts[idx].nickname !== res.nickname) {
                                         accounts[idx].nickname = res.nickname;
                                         needsUpdate = true;
                                     }
@@ -3199,6 +3230,16 @@
 
                 if (needsUpdate) {
                     localStorage.setItem('tikflow_studio_accounts', JSON.stringify(accounts));
+                    if (activeStudioSession && activeStudioSession.account) {
+                        const curUid = String(activeStudioSession.account.uid);
+                        const updatedCur = accounts.find(a => String(a.uid) === curUid);
+                        if (updatedCur) {
+                            activeStudioSession.account = updatedCur;
+                            localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
+                            updateCheckPostHeader();
+                            renderAuthNav();
+                        }
+                    }
                     renderChannelAccountPicker();
                     renderAccountDropdown();
                 }
@@ -3897,7 +3938,7 @@
 
                     // Tự động cập nhật Avatar nếu trích xuất được từ tác giả video
                     if (data.author_avatar && activeStudioSession && activeStudioSession.account) {
-                        if (!activeStudioSession.account.avatar || activeStudioSession.account.avatar.includes('ui-avatars.com')) {
+                        if (!activeStudioSession.account.avatar || activeStudioSession.account.avatar.includes('ui-avatars.com') || isTiktokAvatarExpired(activeStudioSession.account.avatar)) {
                             activeStudioSession.account.avatar = data.author_avatar;
                             let accounts = getSavedStudioAccounts();
                             const curUid = String(activeStudioSession.account.uid);

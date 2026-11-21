@@ -476,11 +476,17 @@ def proxy_image(
                     _put_image_cache(url, r2.content, content_type)
                     return Response(content=r2.content, media_type=content_type, headers={"Cache-Control": "public, max-age=604800, immutable"})
             
-            # Trả về ảnh placeholder SVG màu tối nếu TikTok CDN từ chối (không lưu cache để cho phép thử lại)
-            fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#38bdf8">🎬</text></svg>'
+            # Trả về ảnh placeholder SVG nếu TikTok CDN từ chối (không lưu cache để cho phép thử lại)
+            if "avt-" in url or "avatar" in url or "cropcenter" in url:
+                fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#0284c7"/><path d="M48 24a14 14 0 100 28 14 14 0 000-28zm0 34c-16 0-26 10-26 18v2h52v-2c0-8-10-18-26-18z" fill="#ffffff"/></svg>'
+            else:
+                fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#38bdf8">🎬</text></svg>'
             return Response(content=fallback_svg.encode("utf-8"), media_type="image/svg+xml", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     except Exception as e:
-        fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#38bdf8">🎬</text></svg>'
+        if "avt-" in url or "avatar" in url or "cropcenter" in url:
+            fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#0284c7"/><path d="M48 24a14 14 0 100 28 14 14 0 000-28zm0 34c-16 0-26 10-26 18v2h52v-2c0-8-10-18-26-18z" fill="#ffffff"/></svg>'
+        else:
+            fallback_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#38bdf8">🎬</text></svg>'
         return Response(content=fallback_svg.encode("utf-8"), media_type="image/svg+xml", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 @app.get("/api/debug_worker")
@@ -519,6 +525,11 @@ def api_studio_profile_avatar(username: str = Query("", description="TikTok User
     if not clean_u and not cookie:
         return JSONResponse(content={"success": False, "avatar": ""})
     res = studio_engine.fetch_user_avatar_and_profile(clean_u, cookie_str=cookie)
+    if not res.get("avatar") and clean_u:
+        av = studio_engine.fetch_user_avatar(clean_u)
+        if av:
+            res["avatar"] = av
+            res["success"] = True
     return JSONResponse(content=res)
 
 @app.post("/api/studio/cookie/import")
@@ -809,6 +820,16 @@ async def api_studio_external_login_sync(req: Request):
             "createDate": "-",
             "sec_uid": ""
         }
+
+    if acc_info and not acc_info.get("avatar"):
+        u_cand = (acc_info.get("uniqueId") or acc_info.get("username") or "").lstrip("@").strip()
+        if u_cand and not u_cand.startswith("user_"):
+            try:
+                cand_av = studio_engine.fetch_user_avatar(u_cand)
+                if cand_av:
+                    acc_info["avatar"] = cand_av
+            except Exception:
+                pass
 
     with EXTERNAL_LOGIN_LOCK:
         EXTERNAL_LOGIN_SESSIONS[sync_id] = {

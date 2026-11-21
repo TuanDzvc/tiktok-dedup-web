@@ -472,39 +472,27 @@ def fetch_user_avatar(username: str, cookie_str: str = "", proxy: str = None) ->
     """
     Lấy Avatar chất lượng cao của kênh TikTok dựa vào Username và Cookie đăng nhập.
     Sử dụng SSR __UNIVERSAL_DATA_FOR_REHYDRATION__ từ trang profile chuẩn như desktop tool.
+    Tự động fallback sang cookie pool nếu cookie tài khoản bị WAF/hết hạn.
     """
     clean_u = (username or "").lstrip("@").strip()
     if not clean_u:
         return ""
     
-    headers = {
-        "User-Agent": DEFAULT_UA,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.tiktok.com/",
-    }
-    if cookie_str:
-        headers["Cookie"] = cookie_to_header_str(cookie_str)
-    else:
-        try:
-            pool_path = Path(__file__).resolve().parent / "cookie_pool.json"
-            if pool_path.exists():
-                pool_data = json.loads(pool_path.read_text(encoding="utf-8"))
-                if pool_data.get("cookie"):
-                    headers["Cookie"] = pool_data["cookie"]
-                if pool_data.get("user_agent"):
-                    headers["User-Agent"] = pool_data["user_agent"]
-        except Exception:
-            pass
-
     proxies = normalize_proxy_for_requests(proxy)
 
     # 1. Nếu có Cookie tài khoản, lấy trực tiếp Avatar chính chủ siêu nét từ trang chủ TikTok
     if cookie_str:
         try:
+            h_home = {
+                "User-Agent": DEFAULT_UA,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.tiktok.com/",
+                "Cookie": cookie_to_header_str(cookie_str)
+            }
             r_home = requests.get(
                 "https://www.tiktok.com/",
-                headers=headers,
+                headers=h_home,
                 proxies=proxies if proxies else None,
                 timeout=7
             )
@@ -522,35 +510,70 @@ def fetch_user_avatar(username: str, cookie_str: str = "", proxy: str = None) ->
         except Exception:
             pass
 
+    # 2. Thử tải trang Profile @clean_u. Thử lần lượt:
+    # A) Với cookie tài khoản (nếu có)
+    # B) Với cookie pool hệ thống (ổn định 100%, bypass WAF)
+    # C) Không dùng cookie
+    cookie_candidates = []
+    if cookie_str:
+        cookie_candidates.append(cookie_to_header_str(cookie_str))
+    
+    # Cookie pool
+    pool_cookie = ""
+    pool_ua = DEFAULT_UA
     try:
-        r = requests.get(
-            f"https://www.tiktok.com/@{clean_u}",
-            headers=headers,
-            proxies=proxies if proxies else None,
-            timeout=8
-        )
-        if r.status_code == 200:
-            html = r.text
-            m = re.search(r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)</script>', html)
-            if m:
-                d = json.loads(m.group(1))
-                scope = d.get("__DEFAULT_SCOPE__", {})
-                user_detail = scope.get("webapp.user-detail", {})
-                u_info = user_detail.get("userInfo", {})
-                user = u_info.get("user", {})
-                av = user.get("avatarLarger") or user.get("avatarMedium") or user.get("avatarThumb")
-                if av:
-                    return av
-                app_ctx = scope.get("webapp.app-context", {})
-                app_user = app_ctx.get("user", {})
-                av = app_user.get("avatarLarger") or app_user.get("avatarMedium") or app_user.get("avatarThumb")
-                if av:
-                    return av
-            m_reg = re.search(r'"avatar(?:Larger|Medium|Thumb)":"([^"]+)"', html)
-            if m_reg:
-                return m_reg.group(1).replace(r"\u0026", "&").replace(r"\/", "/")
+        pool_path = Path(__file__).resolve().parent / "cookie_pool.json"
+        if pool_path.exists():
+            pool_data = json.loads(pool_path.read_text(encoding="utf-8"))
+            pool_cookie = pool_data.get("cookie", "")
+            pool_ua = pool_data.get("user_agent", DEFAULT_UA)
     except Exception:
         pass
+
+    if pool_cookie and pool_cookie not in cookie_candidates:
+        cookie_candidates.append(pool_cookie)
+    cookie_candidates.append("")  # fallback không cookie
+
+    for candidate_ck in cookie_candidates:
+        try:
+            req_h = {
+                "User-Agent": pool_ua or DEFAULT_UA,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.tiktok.com/",
+            }
+            if candidate_ck:
+                req_h["Cookie"] = candidate_ck
+            
+            r = requests.get(
+                f"https://www.tiktok.com/@{clean_u}",
+                headers=req_h,
+                proxies=proxies if proxies else None,
+                timeout=8
+            )
+            if r.status_code == 200 and r.text and len(r.text) > 3000:
+                html = r.text
+                m = re.search(r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)</script>', html)
+                if m:
+                    d = json.loads(m.group(1))
+                    scope = d.get("__DEFAULT_SCOPE__", {})
+                    user_detail = scope.get("webapp.user-detail", {})
+                    u_info = user_detail.get("userInfo", {})
+                    user = u_info.get("user", {})
+                    av = user.get("avatarLarger") or user.get("avatarMedium") or user.get("avatarThumb")
+                    if av:
+                        return av
+                    app_ctx = scope.get("webapp.app-context", {})
+                    app_user = app_ctx.get("user", {})
+                    av = app_user.get("avatarLarger") or app_user.get("avatarMedium") or app_user.get("avatarThumb")
+                    if av:
+                        return av
+                m_reg = re.search(r'"avatar(?:Larger|Medium|Thumb)":"([^"]+)"', html)
+                if m_reg:
+                    return m_reg.group(1).replace(r"\u0026", "&").replace(r"\/", "/")
+        except Exception:
+            continue
+
     return ""
 
 def fetch_user_avatar_and_profile(username: str = "", cookie_str: str = "", proxy: str = None) -> dict:
@@ -602,10 +625,12 @@ def fetch_user_avatar_and_profile(username: str = "", cookie_str: str = "", prox
         except Exception:
             pass
 
-    # 2. Nếu chưa lấy được, fetch từ profile @username
+    # 2. Nếu chưa lấy được, fetch từ profile @username (tự động fallback pool cookie nếu cần)
     target_uname = result.get("uniqueId") or clean_u
     if target_uname:
         av = fetch_user_avatar(target_uname, cookie_str=cookie_str, proxy=proxy)
+        if not av:
+            av = fetch_user_avatar(target_uname, cookie_str="", proxy="")
         if av:
             result["avatar"] = av
             result["success"] = True
