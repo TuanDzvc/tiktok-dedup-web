@@ -7,7 +7,12 @@ Tự động kích hoạt Cloudflare Tunnel để tạo tên miền công khai m
 
 import os
 import sys
+import logging
 from pathlib import Path
+
+logger = logging.getLogger("tikflow")
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 BASE_DIR = Path(__file__).resolve().parent
 LOG_FILE = BASE_DIR / "server.log"
@@ -680,17 +685,24 @@ def api_studio_external_login_status(req: Request, id: str = ""):
     with EXTERNAL_LOGIN_LOCK:
         sess = EXTERNAL_LOGIN_SESSIONS.get(sync_id)
 
-        # Fallback liên kết session: Nếu sync_id không tìm thấy hoặc đang chờ,
-        # tự động tìm session đang mở hoặc thành công gần nhất của cùng client IP
-        if not sess or sess.get("status") == "waiting":
-            for sid, s in list(EXTERNAL_LOGIN_SESSIONS.items()):
-                if s.get("client_ip") == client_ip and s.get("status") in ("browser_opened", "syncing", "success"):
+        # Fallback chỉ khi KHÔNG tìm thấy phiên (vd: server restart). Không bao giờ lấy
+        # phiên đã hoàn tất/đã được web nhận trước đó để tránh nhận nhầm nick cũ.
+        if not sess:
+            now_ts = time.time()
+            for sid, s in sorted(EXTERNAL_LOGIN_SESSIONS.items(), key=lambda kv: kv[1].get("last_seen", 0), reverse=True):
+                if (s.get("client_ip") == client_ip
+                        and not s.get("consumed")
+                        and now_ts - s.get("last_seen", 0) < 900
+                        and s.get("status") in ("browser_opened", "browser_closed", "syncing", "success")):
                     sess = s
                     sync_id = sid
                     break
 
         if not sess:
             return JSONResponse(content={"success": False, "status": "not_found"})
+
+        if sess.get("status") == "success":
+            sess["consumed"] = True
 
         return JSONResponse(content={
             "success": True,
@@ -940,8 +952,6 @@ if (-not $browser) {{
 }}
 if (-not $browser) {{
     Log-Local "No browser found"
-    Send-State "browser_not_found" "Không tìm thấy Chrome/Edge trên máy tính"
-    exit 1
 }}
 
 $global:cdpPort = Get-Random -Minimum 9300 -Maximum 9800
@@ -1031,6 +1041,7 @@ function Send-State($evt, $detail = "") {{
         $json = $respText | ConvertFrom-Json
         return $json.command
     }} catch {{
+        Log-Local ("Send-State error: " + $_.Exception.Message)
         return "none"
     }}
 }}
@@ -1145,6 +1156,11 @@ function Get-BrowserCookiesViaCDP {{
         }} catch {{}}
     }}
     return $cookies
+}}
+
+if (-not $browser) {{
+    Send-State "browser_not_found" "Không tìm thấy Chrome/Edge trên máy tính" | Out-Null
+    exit 1
 }}
 
 $proc = Start-LoginBrowser
