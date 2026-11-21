@@ -919,6 +919,14 @@
                                 <span>Hủy</span>
                             </button>
                         </div>
+
+                        <!-- Debug log realtime từ file .bat trên máy khách -->
+                        <details id="batDebugBox" class="w-full text-left" open>
+                            <summary class="cursor-pointer text-[10px] font-bold text-slate-400 hover:text-cyan-300 select-none">🐞 Debug log (file .bat báo về) — <span id="batDebugCount">0</span> dòng
+                                <button type="button" onclick="event.preventDefault(); copyBatDebugLog()" class="ml-2 px-1.5 py-0.5 rounded bg-slate-800 text-[9px] text-cyan-300 border border-slate-700">Copy</button>
+                            </summary>
+                            <pre id="batDebugLog" class="mt-1 max-h-44 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/80 border border-slate-800 p-2 text-[9.5px] leading-snug text-emerald-300 font-mono">Chưa nhận được tín hiệu nào từ file .bat...</pre>
+                        </details>
                     </div>
                 </div>
 
@@ -3585,7 +3593,7 @@
                     if (data.status === 'browser_opened') {
                         const dRaw = String(data.detail || '');
                         let diagTxt = '';
-                        if (dRaw.startsWith('CDP_FAIL')) {
+                        if (dRaw.startsWith('CDP_FAIL') || dRaw.startsWith('SYNC_FAIL')) {
                             diagTxt = `<br><span class="text-[10px] text-rose-300 font-mono break-all">Lỗi đọc cookie: ${escapeHtml(dRaw.substring(0, 160))}</span>`;
                         } else if (dRaw.startsWith('CDP_OK') && !/\bsessionid\b/.test(dRaw) && /tiktok=([3-9]|\d{2,})/.test(dRaw)) {
                             diagTxt = `<br><span class="text-[11px] text-amber-300 font-semibold">⚠️ Cửa sổ Chrome do tool mở CHƯA đăng nhập. Hãy đăng nhập đúng cửa sổ Chrome vừa bật lên (không phải Chrome bạn đang dùng).</span>`;
@@ -3621,7 +3629,15 @@
                         localStorage.removeItem('tikflow_active_bat_sync');
 
                         const finalProxy = data.proxy || proxyVal || '';
-                        saveStudioAccount(data.account, data.cookie, finalProxy);
+                        try {
+                            saveStudioAccount(data.account, data.cookie, finalProxy);
+                        } catch (saveErr) {
+                            batWebDebug('LỖI lưu nick trên web: ' + (saveErr && saveErr.message));
+                            if (titleEl) titleEl.innerHTML = '<span class="text-rose-400 font-black">❌ Nhận được nick nhưng web lưu lỗi</span>';
+                            if (descEl) descEl.innerText = String(saveErr && saveErr.message || saveErr);
+                            return;
+                        }
+                        batWebDebug('Web đã lưu nick @' + (data.account.uniqueId || data.account.username) + ' -> mở Check Post');
                         showToast("🎉 Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
                         setTimeout(() => {
                             wasCheckPostOpenBeforeAuth = false;
@@ -3629,8 +3645,45 @@
                             openCheckPostModal(true);
                         }, 1200);
                     }
-                } catch (e) {}
+                } catch (e) {
+                    batWebDebug('Lỗi poll trạng thái: ' + (e && e.message));
+                }
+                refreshBatDebugLog(syncId);
             }, 1500);
+        }
+
+        let batWebDebugLines = [];
+        function batWebDebug(msg) {
+            const ts = new Date().toTimeString().substring(0, 8);
+            batWebDebugLines.push(`${ts} [trình duyệt] ${msg}`);
+            if (batWebDebugLines.length > 100) batWebDebugLines.shift();
+            console.log('[TikFlowBatDebug]', msg);
+        }
+        let batServerDebugLines = [];
+        async function refreshBatDebugLog(syncId) {
+            try {
+                if (syncId) {
+                    const r = await fetch(`/api/studio/external-login/debug?id=${encodeURIComponent(syncId)}&t=${Date.now()}`);
+                    if (r.ok) {
+                        const d = await r.json();
+                        batServerDebugLines = d.lines || [];
+                    }
+                }
+            } catch (e) {}
+            const all = [...batServerDebugLines, ...batWebDebugLines].sort();
+            const pre = document.getElementById('batDebugLog');
+            const cnt = document.getElementById('batDebugCount');
+            if (cnt) cnt.innerText = all.length;
+            if (pre) {
+                const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 10;
+                pre.textContent = all.length ? ('session: ' + syncId + '\n' + all.join('\n')) : 'Chưa nhận được tín hiệu nào từ file .bat...';
+                if (atBottom) pre.scrollTop = pre.scrollHeight;
+            }
+        }
+        function copyBatDebugLog() {
+            const pre = document.getElementById('batDebugLog');
+            if (!pre) return;
+            navigator.clipboard.writeText(pre.textContent).then(() => showToast('Đã copy debug log'), () => {});
         }
 
         async function resumeBatDownloadPolling(syncId) {
@@ -3668,6 +3721,8 @@
             // Luôn tạo mới phiên đồng bộ mỗi lần bấm tải file để đảm bảo liên kết chính xác 100%
             currentBatSyncId = 'tikflow_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
             localStorage.setItem('tikflow_active_bat_sync', currentBatSyncId);
+            batWebDebugLines = []; batServerDebugLines = [];
+            batWebDebug('Bấm tải file .bat | session=' + currentBatSyncId + ' | origin=' + window.location.origin + ' | proxy=' + (proxy || '(không)'));
 
             const initialEl = document.getElementById('batDownloadInitial');
             const waitingEl = document.getElementById('batDownloadWaiting');

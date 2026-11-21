@@ -668,6 +668,31 @@ def api_studio_browser_login_cancel():
 # ==============================================================================
 EXTERNAL_LOGIN_SESSIONS: dict = {}
 EXTERNAL_LOGIN_LOCK = threading.Lock()
+EXTERNAL_LOGIN_EVENTS: dict = {}
+
+def _ext_log(sync_id: str, line: str, client_ip: str = ""):
+    """Lưu log từng phiên đăng nhập .bat (hiện realtime trên web) + ghi ra file debug."""
+    ts = time.strftime("%H:%M:%S")
+    lst = EXTERNAL_LOGIN_EVENTS.setdefault(sync_id, [])
+    lst.append(f"{ts} {line}")
+    if len(lst) > 300:
+        del lst[:-300]
+    try:
+        with open(Path(__file__).resolve().parent / "external_login_debug.log", "a", encoding="utf-8") as lf:
+            lf.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ID={sync_id} IP={client_ip} {line}\n")
+    except Exception:
+        pass
+
+@app.get("/api/studio/external-login/debug")
+def api_studio_external_login_debug(id: str = ""):
+    sync_id = str(id or "").strip()
+    sess = EXTERNAL_LOGIN_SESSIONS.get(sync_id) or {}
+    return JSONResponse(content={
+        "id": sync_id,
+        "status": sess.get("status", "not_found"),
+        "client_info": sess.get("client_info", ""),
+        "lines": EXTERNAL_LOGIN_EVENTS.get(sync_id, [])
+    })
 
 def _cleanup_external_sessions():
     now = time.time()
@@ -703,6 +728,8 @@ def api_studio_external_login_status(req: Request, id: str = ""):
             return JSONResponse(content={"success": False, "status": "not_found"})
 
         if sess.get("status") == "success":
+            if not sess.get("consumed"):
+                _ext_log(sync_id, "[web] trang web ĐÃ NHẬN kết quả success", client_ip)
             sess["consumed"] = True
 
         return JSONResponse(content={
@@ -761,11 +788,7 @@ async def api_studio_external_login_event(req: Request):
         log_key = f"{event}|{detail}"
         if sess.get("_last_log") != log_key:
             sess["_last_log"] = log_key
-            try:
-                with open(Path(__file__).resolve().parent / "external_login_debug.log", "a", encoding="utf-8") as lf:
-                    lf.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ID={sync_id} IP={client_ip} {event}: {detail}\n")
-            except Exception:
-                pass
+            _ext_log(sync_id, f"[bat] {event}: {detail}", client_ip)
 
         logger.info(f"[ExternalLogin] ID={sync_id} IP={client_ip} Event={event} Detail={detail}")
         return JSONResponse(content={"success": True, "command": cmd, "status": sess.get("status")})
@@ -789,6 +812,7 @@ async def api_studio_external_login_command(req: Request):
             return JSONResponse(status_code=404, content={"success": False, "error": "Không tìm thấy phiên đăng nhập."})
 
         sess["command"] = command
+        _ext_log(sync_id, f"[web] gửi lệnh: {command}")
         if command == "reopen_browser":
             sess["status"] = "waiting"
 
@@ -818,14 +842,19 @@ async def api_studio_external_login_sync(req: Request):
             cdict["sessionid_ss"] = sid_val
         cookie_str = studio_engine.cookie_to_header_str(cdict)
 
+    sync_ip = req.client.host if req.client else ""
+    _ext_log(sync_id, f"[server] nhận cookie từ bat: {len(cookie_str)} ký tự, có sessionid={bool(sid_val)}, proxy='{proxy}'", sync_ip)
+    t_sync = time.time()
     acc_info = await run_in_threadpool(studio_engine.get_account_info, cookie_str, proxy=proxy)
     if not acc_info or not (acc_info.get("uid") or acc_info.get("uniqueId") or acc_info.get("username")):
+        _ext_log(sync_id, f"[server] xác thực qua proxy lỗi: {(acc_info or {}).get('error', '')} -> thử không proxy")
         # Thử lại không qua proxy phòng trường hợp proxy server bị nghẽn
         if proxy:
             acc_info = await run_in_threadpool(studio_engine.get_account_info, cookie_str, proxy="")
 
     # Nếu Passport API tạm thời bị rate-limit hoặc chặn từ IP server, vẫn chấp nhận cookie tươi từ máy khách với profile dự phòng
     if not acc_info or not (acc_info.get("uid") or acc_info.get("uniqueId") or acc_info.get("username")):
+        _ext_log(sync_id, f"[server] Passport không xác thực được ({(acc_info or {}).get('error', '')}) -> dùng profile dự phòng")
         uid_val = str(cdict.get("uid_tt") or cdict.get("uid_tt_ss") or cdict.get("user_id") or "")
         if not uid_val and sid_val:
             uid_val = str(abs(hash(sid_val)))
@@ -857,6 +886,7 @@ async def api_studio_external_login_sync(req: Request):
                 pass
 
     with EXTERNAL_LOGIN_LOCK:
+        _ext_log(sync_id, f"[server] SUCCESS nick=@{acc_info.get('uniqueId')} uid={acc_info.get('uid')} avatar={'OK' if acc_info.get('avatar') else 'NONE'} ({time.time()-t_sync:.1f}s) -> chờ web nhận")
         EXTERNAL_LOGIN_SESSIONS[sync_id] = {
             "status": "success",
             "account": acc_info,
@@ -910,6 +940,7 @@ def api_studio_download_login_bat(req: Request, id: str = "", proxy: str = "", o
     clean_origin = str(origin or "").strip().rstrip("/")
     if not clean_origin:
         clean_origin = "https://checktiktok.site"
+    _ext_log(sync_id, f"[server] web tải file .bat (origin={clean_origin}, proxy='{proxy}')", client_ip)
 
     clean_proxy = str(proxy or "").strip()
 
@@ -1082,8 +1113,11 @@ function Send-Sync($cookieStr, $proxyStr) {{
         $resp.Close()
         
         $json = $respText | ConvertFrom-Json
+        if ($json.success -ne $true) {{ $global:syncErr = "server tra ve: " + $respText.Substring(0, [Math]::Min(200, $respText.Length)) }}
         return ($json.success -eq $true)
     }} catch {{
+        $global:syncErr = $_.Exception.GetBaseException().Message
+        Log-Local ("Send-Sync error: " + $global:syncErr)
         return $false
     }}
 }}
@@ -1289,6 +1323,9 @@ while (([DateTime]::UtcNow - $startTs).TotalSeconds -lt 900) {{
                 Send-State "success" "Đồng bộ tài khoản thành công!"
                 Log-Local "Sync success reported to web!"
                 break
+            }} else {{
+                $global:diag = "SYNC_FAIL: " + $global:syncErr
+                Log-Local $global:diag
             }}
         }}
     }}
