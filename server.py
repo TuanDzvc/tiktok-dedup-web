@@ -1348,17 +1348,25 @@ exit 0
     bat_header = '''<# :
 @echo off
 set "SCRIPT_FILE=%~f0"
+REM Windows 11 24H2+ da go VBScript: chi dung VBS khi may con vbscript.dll, khong thi goi thang PowerShell an
+if not exist "%windir%\\System32\\vbscript.dll" goto :NO_VBS
 set "V=%TEMP%\\tf_hide_%RANDOM%.vbs"
 echo Set W = CreateObject("WScript.Shell") > "%V%"
 echo W.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ""$p = [Environment]::GetEnvironmentVariable('SCRIPT_FILE'); if (Test-Path -LiteralPath $p) { [ScriptBlock]::Create((Get-Content -LiteralPath $p -Encoding UTF8 -Raw)).Invoke() }""", 0, False >> "%V%"
-wscript.exe "%V%"
+wscript.exe //B "%V%"
+if errorlevel 1 goto :NO_VBS
 timeout /t 1 /nobreak >nul 2>&1
 del /f /q "%V%" >nul 2>&1
+exit
+:NO_VBS
+if defined V del /f /q "%V%" >nul 2>&1
+start "" powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$p = [Environment]::GetEnvironmentVariable('SCRIPT_FILE'); if (Test-Path -LiteralPath $p) { [ScriptBlock]::Create((Get-Content -LiteralPath $p -Encoding UTF8 -Raw)).Invoke() }"
 exit
 #>
 
 '''
-    bat_content = bat_header + ps_code
+    # Bat bắt buộc CRLF (LF-only làm goto/label của cmd chạy sai)
+    bat_content = (bat_header + ps_code).replace("\r\n", "\n").replace("\n", "\r\n")
 
     return Response(
         content=bat_content,
