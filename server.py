@@ -33,6 +33,7 @@ import re
 import hmac
 import hashlib
 import time
+import datetime
 import json
 import base64
 import secrets
@@ -206,6 +207,81 @@ def _save_blocked_devices_unlocked(bmap: Dict[str, Dict[str, Any]]) -> None:
         os.replace(tmp_f, VIP_BLOCKED_DEVICES_FILE)
     except Exception as e:
         logger.error(f"[VIPAuth] Lỗi lưu vip_blocked_devices.json: {e}")
+
+
+FREE_QUOTA_FILE = BASE_DIR / "free_daily_quota.json"
+FREE_DAILY_LIMIT = 10
+_QUOTA_LOCK = threading.Lock()
+
+
+def _vn_date_key() -> str:
+    return (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%Y-%m-%d")
+
+
+def _load_free_quota_unlocked() -> Dict[str, Dict[str, int]]:
+    if FREE_QUOTA_FILE.exists():
+        try:
+            raw = json.loads(FREE_QUOTA_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return raw
+        except Exception:
+            pass
+    return {}
+
+
+def _save_free_quota_unlocked(qmap: Dict[str, Dict[str, int]], keep_day: str) -> None:
+    cleaned = {k: v for k, v in qmap.items() if k == keep_day and isinstance(v, dict)}
+    try:
+        tmp_f = FREE_QUOTA_FILE.with_suffix(".json.tmp")
+        tmp_f.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp_f, FREE_QUOTA_FILE)
+    except Exception as e:
+        logger.error(f"[FreeQuota] Lỗi lưu free_daily_quota.json: {e}")
+
+
+def _get_free_quota_status(dev_id: str, username: str = "") -> Dict[str, Any]:
+    day_k = _vn_date_key()
+    dev_k = f"dev:{dev_id}"
+    usr_k = f"usr:{username.strip().lower()}" if username else ""
+    with _QUOTA_LOCK:
+        qmap = _load_free_quota_unlocked()
+        bucket = qmap.get(day_k) if isinstance(qmap.get(day_k), dict) else {}
+        dev_used = int(bucket.get(dev_k) or 0)
+        usr_used = int(bucket.get(usr_k) or 0) if usr_k else 0
+        used = max(dev_used, usr_used)
+    return {
+        "date": day_k,
+        "used": used,
+        "limit": FREE_DAILY_LIMIT,
+        "remaining": max(0, FREE_DAILY_LIMIT - used),
+        "device_id": dev_id,
+    }
+
+
+def _consume_free_quota(dev_id: str, username: str = "") -> Dict[str, Any]:
+    day_k = _vn_date_key()
+    dev_k = f"dev:{dev_id}"
+    usr_k = f"usr:{username.strip().lower()}" if username else ""
+    with _QUOTA_LOCK:
+        qmap = _load_free_quota_unlocked()
+        bucket = qmap.get(day_k)
+        if not isinstance(bucket, dict):
+            bucket = {}
+            qmap[day_k] = bucket
+        dev_used = int(bucket.get(dev_k) or 0)
+        usr_used = int(bucket.get(usr_k) or 0) if usr_k else 0
+        new_used = max(dev_used, usr_used) + 1
+        bucket[dev_k] = new_used
+        if usr_k:
+            bucket[usr_k] = new_used
+        _save_free_quota_unlocked(qmap, day_k)
+    return {
+        "date": day_k,
+        "used": new_used,
+        "limit": FREE_DAILY_LIMIT,
+        "remaining": max(0, FREE_DAILY_LIMIT - new_used),
+        "device_id": dev_id,
+    }
 
 
 def _extract_device_info(req: Request, body: Optional[Dict[str, Any]] = None) -> tuple:
@@ -503,7 +579,7 @@ def start_cloudflare_tunnel(port: int = 8000):
         try:
             if os.name == "nt":
                 ps_chk = subprocess.check_output(
-                    ["powershell", "-NoProfile", "-Command", "(Get-CimInstance Win32_Process -Filter \"Name='cloudflared.exe'\" | Where-Object { $_.CommandLine -like '*tiktok-tool*' }).Count"],
+                    ["powershell", "-NoProfile", "-Command", "@(Get-CimInstance Win32_Process -Filter \"Name='cloudflared.exe'\" | Where-Object { $_.CommandLine -like '*tiktok-tool*' }).Count"],
                     text=True,
                     errors="ignore",
                     creationflags=subprocess.CREATE_NO_WINDOW,
@@ -727,22 +803,36 @@ async def api_vip_register(req: Request):
 
 @app.get("/api/vip/me")
 async def api_vip_me(req: Request):
+    dev_id, dev_label, client_ip = _extract_device_info(req)
     u_obj = _extract_vip_user(req)
     if not u_obj:
-        return JSONResponse(content={"success": True, "authenticated": False, "user": None})
-    dev_id, dev_label, client_ip = _extract_device_info(req)
+        return JSONResponse(content={
+            "success": True,
+            "authenticated": False,
+            "user": None,
+            "free_quota": _get_free_quota_status(dev_id),
+        })
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
         bmap = _load_blocked_devices_unlocked()
         cur = users.get(u_obj["username"])
         if not cur:
-            return JSONResponse(content={"success": True, "authenticated": False, "user": None})
+            return JSONResponse(content={
+                "success": True,
+                "authenticated": False,
+                "user": None,
+                "free_quota": _get_free_quota_status(dev_id),
+            })
         dev_err = _record_and_check_device_unlocked(cur, dev_id, dev_label, client_ip, bmap)
         _save_vip_users_unlocked(users)
         if dev_err:
             return JSONResponse(content={"success": True, "authenticated": False, "device_blocked": True, "error": dev_err, "user": None})
         pub = _public_vip_user(cur, bmap)
-    return JSONResponse(content={"success": True, "authenticated": True, "user": pub})
+        has_vip = _has_vip_privilege(cur)
+    resp_payload: Dict[str, Any] = {"success": True, "authenticated": True, "user": pub}
+    if not has_vip:
+        resp_payload["free_quota"] = _get_free_quota_status(dev_id, pub.get("username") or "")
+    return JSONResponse(content=resp_payload)
 
 
 @app.post("/api/vip/change-password")
@@ -1006,24 +1096,58 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     proxy = str(body.get("proxy") or "").strip()
     sec_uid = str(body.get("sec_uid") or "").strip()
 
-    # Kiểm tra quyền VIP / Admin thực sự + kiểm tra Mã máy có bị khóa / vượt giới hạn thiết bị không
+    # Kiểm tra quyền VIP / Admin thực sự + kiểm tra Mã máy có bị khóa / vượt giới hạn thiết bị hoặc hết 10 lượt Free/ngày không
     vip_user = _extract_vip_user(req, body)
+    raw_explicit_dev = re.sub(
+        r"[^A-Z0-9-]",
+        "",
+        str(req.headers.get("x-device-id") or (body.get("device_id") if isinstance(body, dict) else "") or "").strip().upper(),
+    )[:20]
     dev_id, dev_label, client_ip_chk = _extract_device_info(req, body)
-    allow_paid_groupid = False
-    if vip_user:
-        with _VIP_LOCK:
+    has_vip_access = False
+    checked_username = ""
+
+    with _VIP_LOCK:
+        bmap_db = _load_blocked_devices_unlocked()
+        if vip_user:
             users_db = _load_vip_users_unlocked()
-            bmap_db = _load_blocked_devices_unlocked()
             u_rec = users_db.get(vip_user["username"])
             if isinstance(u_rec, dict):
+                checked_username = str(u_rec.get("username") or "")
                 dev_err = _record_and_check_device_unlocked(u_rec, dev_id, dev_label, client_ip_chk, bmap_db)
                 if dev_err:
                     _save_vip_users_unlocked(users_db)
                     return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": dev_err})
-                allow_paid_groupid = _has_vip_privilege(u_rec)
-                if allow_paid_groupid and max_cursor == 0:
+                has_vip_access = _has_vip_privilege(u_rec)
+                if has_vip_access and max_cursor == 0:
                     u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + 1
                 _save_vip_users_unlocked(users_db)
+        elif dev_id in bmap_db:
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "device_blocked": True, "error": f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên khóa truy cập!"},
+            )
+
+    if not has_vip_access:
+        if not re.match(r"^DEV-[0-9A-Z]{6,12}$", raw_explicit_dev):
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Không xác thực được Mã máy thiết bị. Vui lòng tải lại trang web (Ctrl+F5) và thử lại!"},
+            )
+        q_stat = _get_free_quota_status(dev_id, checked_username)
+        if q_stat["used"] >= FREE_DAILY_LIMIT:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "success": False,
+                    "quota_exceeded": True,
+                    "free_quota": q_stat,
+                    "error": (
+                        f"⛔ Thiết bị của bạn (Mã máy: {dev_id}) đã dùng hết {FREE_DAILY_LIMIT}/{FREE_DAILY_LIMIT} lượt kiểm tra Miễn Phí hôm nay! "
+                        f"Vui lòng đăng nhập Tài khoản VIP để quét không giới hạn & mở khóa xem Video Gốc."
+                    ),
+                },
+            )
 
     force_ext = query.startswith("!")
     if force_ext:
@@ -1047,7 +1171,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
             record_user_check_async(clean_user, client_ip)
 
     # Chạy phân tích trong thread riêng tránh xung đột Playwright sync với asyncio loop
-    # Truyền nguyên bản query để core_dedup giải mã được cả @username, link kênh, link video, link rút gọn & ID video
+    # Cả Free (trong 10 lượt/ngày theo Mã máy) và VIP đều được check Trùng thực sự; riêng Free sẽ bị ẩn hoàn toàn link & ID Video Gốc ở phía server
     import asyncio
     res = await asyncio.to_thread(
         fetch_channel_info_and_posts,
@@ -1057,27 +1181,46 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         cookie_str=cookie,
         proxy_str="",
         max_videos=max_videos,
-        allow_paid_groupid=allow_paid_groupid,
+        allow_paid_groupid=True,
     )
-    
+
     internal_cost = res.pop("_internal_cost", None) if isinstance(res, dict) else None
-    if isinstance(res, dict) and allow_paid_groupid:
-        cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
-        c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
-        c_calls = int(cost_obj.get("api_calls") or 0)
-        c_cached = int(cost_obj.get("cached_hits") or 0)
-        c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
-        bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
-        res["admin_billing"] = {
-            "scan_cost_usd": c_usd,
-            "scan_cost_vnd": c_vnd,
-            "api_calls": c_calls,
-            "cached_hits": c_cached,
-            "balance_usd": bal_info["total_usd"],
-            "balance_vnd": bal_info["total_vnd"],
-            "est_scans_left": bal_info["est_scans_left"],
-            "usd_rate": _TIKHUB_USD_TO_VND,
-        }
+    if isinstance(res, dict) and res.get("success"):
+        if has_vip_access:
+            res["vip_mode"] = True
+            cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
+            c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
+            c_calls = int(cost_obj.get("api_calls") or 0)
+            c_cached = int(cost_obj.get("cached_hits") or 0)
+            c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
+            bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
+            res["admin_billing"] = {
+                "scan_cost_usd": c_usd,
+                "scan_cost_vnd": c_vnd,
+                "api_calls": c_calls,
+                "cached_hits": c_cached,
+                "balance_usd": bal_info["total_usd"],
+                "balance_vnd": bal_info["total_vnd"],
+                "est_scans_left": bal_info["est_scans_left"],
+                "usd_rate": _TIKHUB_USD_TO_VND,
+            }
+        else:
+            res["vip_mode"] = False
+            res["free_quota"] = _consume_free_quota(dev_id, checked_username)
+            for v_item in (res.get("list") or []):
+                if isinstance(v_item, dict):
+                    v_item["group_id"] = ""
+                    v_item["groupId"] = ""
+                    v_item["origin_url"] = ""
+                    v_item["has_origin_link"] = False
+                    if v_item.get("penalty_details"):
+                        v_item["penalty_details"] = re.sub(
+                            r"\s*\(Group:\s*\d+\)",
+                            "",
+                            str(v_item["penalty_details"]),
+                        ).replace("Trùng lặp Group ID", "Trùng lặp nội dung với video gốc trên TikTok")
+                    if v_item.get("shadowReason"):
+                        v_item["shadowReason"] = re.sub(r"\s*\(Group:\s*\d+\)", "", str(v_item["shadowReason"]))
 
     # Kích hoạt tải trước ảnh bìa vào RAM cache song song trong nền (0.001s khi trình duyệt yêu cầu)
     v_list = res.get("list", [])

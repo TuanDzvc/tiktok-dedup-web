@@ -562,30 +562,30 @@
                                 <span id="statTotal" class="text-2xl font-black text-white font-mono">0</span>
                                 <span id="statTotalSub" class="text-[10px] text-slate-400 font-semibold block mt-0.5">đã tải</span>
                             </div>
-                            <div id="statDupCard" onclick="if(!lastScanVipMode) openVipModal(true)" class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-rose-900/40 bg-rose-950/20 cursor-pointer">
+                            <div id="statDupCard" onclick="setFilter('dup')" class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-rose-900/40 bg-rose-950/20 cursor-pointer hover:border-rose-600/60 transition">
                                 <span class="text-rose-300 text-xs font-medium block">Video Trùng</span>
                                 <span id="statDup" class="text-2xl font-black text-rose-400 font-mono">0</span>
                                 <span id="statDupPercent" class="text-[10px] text-rose-300 block mt-0.5">0%</span>
                             </div>
-                            <div class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-amber-900/40 bg-amber-950/20">
+                            <div onclick="setFilter('penalty')" class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-amber-900/40 bg-amber-950/20 cursor-pointer hover:border-amber-600/60 transition">
                                 <span class="text-amber-300 text-xs font-medium block">Mất FYP / Kẹt View</span>
                                 <span id="statPenalty" class="text-2xl font-black text-amber-400 font-mono">0</span>
-                                <span class="text-[10px] text-amber-300 block mt-0.5">hạn chế</span>
+                                <span id="statPenaltySub" class="text-[10px] text-amber-300 block mt-0.5">hạn chế</span>
                             </div>
-                            <div class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-emerald-900/40 bg-emerald-950/20">
+                            <div onclick="setFilter('clean')" class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-emerald-900/40 bg-emerald-950/20 cursor-pointer hover:border-emerald-600/60 transition">
                                 <span class="text-emerald-300 text-xs font-medium block">Video Sạch</span>
                                 <span id="statClean" class="text-2xl font-black text-emerald-400 font-mono">0</span>
-                                <span class="text-[10px] text-emerald-300 block mt-0.5">an toàn 100%</span>
+                                <span id="statCleanPercent" class="text-[10px] text-emerald-300 block mt-0.5">an toàn 100%</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Thông báo chế độ Miễn phí chưa mở khóa Check Trùng VIP -->
+                    <!-- Thông báo chế độ Miễn phí (10 lượt/ngày theo Mã máy & khóa link Video Gốc) -->
                     <div id="freeModeUpgradeBanner" class="hidden px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-950/70 via-slate-900/90 to-rose-950/60 border border-amber-500/50 text-amber-100 text-xs sm:text-[13px] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 shadow-lg shadow-amber-950/25">
-                        <div class="flex items-center gap-2.5 lg:whitespace-nowrap">
+                        <div class="flex items-center gap-2.5">
                             <i class="fa-solid fa-lock text-amber-400 text-sm flex-shrink-0"></i>
-                            <span>
-                                Bạn đang check ở <b class="text-emerald-300">Chế độ Miễn Phí</b> (Chỉ check <b>Mất đề xuất FYP & Bản quyền</b>) — <b class="text-amber-300">Đăng nhập VIP</b> để check <b>Video Trùng</b> & mở link <b>Video Gốc (gốc ↗)</b>!
+                            <span id="freeModeUpgradeText">
+                                Bạn đang dùng <b class="text-emerald-300">Chế độ Miễn Phí (10 lượt/ngày theo Mã máy)</b> — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b> & mở khóa xem <b>Video Gốc (Gốc ↗)</b>!
                             </span>
                         </div>
                         <button type="button" onclick="openVipModal(true)" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs whitespace-nowrap shadow-md transition active:scale-95 flex items-center gap-1.5 flex-shrink-0">
@@ -754,6 +754,15 @@
                         <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                     </a>
                 </div>
+            </div>
+            <div id="modalOriginLockedBox" class="hidden p-3 rounded-xl bg-slate-950/90 border border-amber-500/50 text-amber-200 text-xs flex items-center justify-between gap-3 shadow-inner">
+                <span class="flex items-center gap-2 font-semibold">
+                    <i class="fa-solid fa-lock text-amber-400"></i>
+                    <span>Phải đăng nhập tài khoản <b>VIP</b> mới check ra được link <b>Video Gốc</b>!</span>
+                </span>
+                <button type="button" onclick="closeModal(); openVipModal(true);" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-[11px] whitespace-nowrap transition flex items-center gap-1 flex-shrink-0">
+                    <i class="fa-solid fa-crown text-yellow-200"></i> VIP
+                </button>
             </div>
             <div class="space-y-2">
                 <p id="modalDesc" class="text-sm text-slate-200 line-clamp-3 font-medium"></p>
@@ -1439,13 +1448,13 @@
                             <span class="px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-600/60 text-emerald-300 text-[11px] font-extrabold flex items-center gap-1.5">
                                 <i class="fa-solid fa-bolt"></i> CHẾ ĐỘ MIỄN PHÍ
                             </span>
-                            <span class="text-[11px] font-black text-emerald-400">Free 0đ</span>
+                            <span class="text-[11px] font-black text-emerald-400">10 lượt / ngày</span>
                         </div>
                         <ul class="space-y-2 text-xs text-slate-300 leading-snug pt-1">
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Mất đề xuất FYP / Shadowban</b></span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Vi phạm Bản quyền / Tắt tiếng</b></span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Thông tin kênh, Quốc gia, Ngày tạo</span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap text-rose-400"><i class="fa-solid fa-lock flex-shrink-0"></i><span><b>Không</b> check Trùng lặp & Video Gốc</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Trùng lặp Video & Mất đề xuất FYP</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Vi phạm Bản quyền / Tắt tiếng / Quốc gia</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap text-amber-300"><i class="fa-solid fa-clock flex-shrink-0"></i><span>Giới hạn <b>10 lượt / ngày</b> (tính theo <b>Mã máy</b>)</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap text-rose-400"><i class="fa-solid fa-lock flex-shrink-0"></i><span><b>Khóa</b> xem link Video Gốc (<b>🔒 Gốc ↗</b>)</span></li>
                         </ul>
                     </div>
 
@@ -1455,19 +1464,19 @@
                             <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 text-[11px] font-extrabold flex items-center gap-1.5">
                                 <i class="fa-solid fa-crown text-yellow-300"></i> TÀI KHOẢN VIP
                             </span>
-                            <span class="text-[11px] font-black text-amber-300">Cần Login</span>
+                            <span class="text-[11px] font-black text-amber-300">Không giới hạn</span>
                         </div>
                         <ul class="space-y-2 text-xs text-slate-200 leading-snug pt-1">
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Bao gồm toàn bộ tính năng Miễn Phí</span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span><b>Mở khóa Check Trùng Lặp Video</b></span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Hiện nút <b class="text-sky-300">gốc ↗</b> mở thẳng <b>Video Gốc</b></span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Quốc gia IP thực tế chuẩn từng video</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Quét <b>KHÔNG GIỚI HẠN</b> số lượt mỗi ngày</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span><b>Mở khóa nút <span class="text-sky-300">Gốc ↗</span></b> mở thẳng <b>Video Gốc</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Sao chép nhanh link gốc & xuất CSV đầy đủ</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Ưu tiên tốc độ xử lý & hỗ trợ trực tiếp 24/7</span></li>
                         </ul>
                     </div>
                 </div>
 
                 <p class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center sm:whitespace-nowrap">
-                    💡 Khách có tài khoản bấm nút <b class="text-amber-300">👑 Đăng Nhập VIP</b> ở góc phải trên màn hình để mở khóa Check Trùng.
+                    💡 Khách có tài khoản bấm nút <b class="text-amber-300">👑 Đăng Nhập VIP</b> ở góc phải trên màn hình để quét Không giới hạn & mở khóa Video Gốc.
                 </p>
 
                 <!-- Hàng nút full 100% diện tích chiều ngang popup -->
@@ -1778,7 +1787,25 @@
         let currentVideoNotice = '';
         let currentVipUser = null;
         let lastScanVipMode = false;
+        let currentFreeQuota = null;
         let _cachedHwDeviceId = '';
+
+        function updateFreeQuotaBannerUI(qObj) {
+            if (qObj && typeof qObj === 'object') {
+                currentFreeQuota = qObj;
+            }
+            const txtEl = document.getElementById('freeModeUpgradeText');
+            if (!txtEl) return;
+            const q = currentFreeQuota;
+            if (q && typeof q.used === 'number' && typeof q.limit === 'number') {
+                const rem = Math.max(0, Number(q.remaining ?? (q.limit - q.used)));
+                const dev = escapeHtml(q.device_id || getHardwareDeviceId());
+                const remCls = rem <= 2 ? 'text-rose-400' : 'text-cyan-300';
+                txtEl.innerHTML = `Chế độ <b class="text-emerald-300">Miễn Phí</b> (Mã máy <b class="font-mono text-slate-200">${dev}</b> • Đã dùng <b class="text-amber-300">${q.used}/${q.limit}</b> lượt hôm nay — Còn <b class="${remCls}">${rem} lượt</b>) — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b> & mở khóa xem <b>Video Gốc (Gốc ↗)</b>!`;
+            } else {
+                txtEl.innerHTML = `Bạn đang dùng <b class="text-emerald-300">Chế độ Miễn Phí (10 lượt/ngày theo Mã máy)</b> — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b> & mở khóa xem <b>Video Gốc (Gốc ↗)</b>!`;
+            }
+        }
 
         function getHardwareDeviceId() {
             if (_cachedHwDeviceId) return _cachedHwDeviceId;
@@ -2252,27 +2279,36 @@
             document.getElementById('adminScanCostBanner')?.classList.add('hidden');
             lastScanVipMode = false;
             renderVipNav();
-            showToast('Đã đăng xuất. Đang chuyển về Chế độ Miễn Phí (0đ).');
+            fetch('/api/vip/me', { headers: getDeviceHeaders(false) })
+                .then(r => r.json())
+                .then(d => { if (d && d.free_quota) { updateFreeQuotaBannerUI(d.free_quota); updateLoadMoreButtonState(); } })
+                .catch(() => {});
+            showToast('Đã đăng xuất. Đang chuyển về Chế độ Miễn Phí (10 lượt/ngày theo Mã máy).');
         }
 
         async function initVipAuthOnStartup() {
             const tok = getVipToken();
-            if (tok) {
-                try {
-                    const resp = await fetch('/api/vip/me', {
-                        headers: getDeviceHeaders(true)
-                    });
-                    const data = await resp.json();
-                    if (data && data.authenticated && data.user) {
-                        currentVipUser = data.user;
-                        renderVipNav();
-                        return;
-                    }
+            try {
+                const resp = await fetch('/api/vip/me', {
+                    headers: getDeviceHeaders(Boolean(tok))
+                });
+                const data = await resp.json();
+                if (data && data.free_quota) {
+                    updateFreeQuotaBannerUI(data.free_quota);
+                }
+                if (tok && data && data.authenticated && data.user) {
+                    currentVipUser = data.user;
+                    renderVipNav();
+                    return;
+                }
+                if (tok) {
                     if (data && data.device_blocked && data.error) {
                         showToast(data.error);
                     }
-                } catch (e) {}
-                localStorage.removeItem('tikflow_vip_token');
+                    localStorage.removeItem('tikflow_vip_token');
+                }
+            } catch (e) {
+                if (tok) localStorage.removeItem('tikflow_vip_token');
             }
             currentVipUser = null;
             renderVipNav();
@@ -2847,6 +2883,9 @@
                 });
 
                 const data = await safeParseJson(response);
+                if (data.free_quota) {
+                    updateFreeQuotaBannerUI(data.free_quota);
+                }
                 if (!data.success) {
                     if (data.device_blocked) {
                         localStorage.removeItem('tikflow_vip_token');
@@ -2854,6 +2893,10 @@
                         renderVipNav();
                     }
                     showError(data.error || "Không tìm thấy thông tin kênh TikTok.");
+                    if (data.quota_exceeded) {
+                        showToast('⛔ Đã hết 10/10 lượt Miễn Phí hôm nay trên thiết bị này! Vui lòng đăng nhập VIP.');
+                        openVipModal(true);
+                    }
                     return;
                 }
 
@@ -2937,7 +2980,14 @@
                 });
 
                 const data = await safeParseJson(response);
-                if (data.success && data.list && data.list.length > 0) {
+                if (data.free_quota) {
+                    updateFreeQuotaBannerUI(data.free_quota);
+                }
+                if (!data.success && data.quota_exceeded) {
+                    showError(data.error);
+                    showToast(data.error || '⛔ Đã hết 10/10 lượt Miễn Phí hôm nay!');
+                    openVipModal(true);
+                } else if (data.success && data.list && data.list.length > 0) {
                     currentVideos.push(...data.list);
                     currentMaxCursor = data.maxCursor || (currentMaxCursor + data.list.length);
                     hasMoreVideos = Boolean(data.hasMore);
@@ -3009,8 +3059,11 @@
                     if (canCurrentUserSeeBilling() && lastScanVipMode) {
                         costBadge.innerHTML = `⚡ $0.0010 • ~26đ <span class="text-emerald-300 font-semibold">(0đ nếu đã cache)</span>`;
                         costBadge.classList.remove('hidden');
+                    } else if (!lastScanVipMode && currentFreeQuota && typeof currentFreeQuota.remaining === 'number') {
+                        costBadge.innerHTML = `Trừ 1 lượt Free • Còn <span class="text-emerald-300 font-extrabold">${currentFreeQuota.remaining}/${currentFreeQuota.limit || 10}</span> lượt hôm nay`;
+                        costBadge.classList.remove('hidden');
                     } else {
-                        costBadge.innerHTML = `Free 0đ`;
+                        costBadge.innerHTML = `Trừ 1 lượt Free (Tối đa 10 lượt/ngày)`;
                         costBadge.classList.remove('hidden');
                     }
                 }
@@ -3053,15 +3106,9 @@
                 sub.innerText = channelTotal > 0 ? `trên ${channelTotal} video` : 'đã tải';
             }
 
-            if (lastScanVipMode) {
-                document.getElementById('statDup').innerText = dupCount;
-                document.getElementById('statDupPercent').innerText = `${total > 0 ? ((dupCount / total) * 100).toFixed(0) : 0}%`;
-                document.getElementById('countTabDup').innerText = dupCount;
-            } else {
-                document.getElementById('statDup').innerHTML = `<span class="text-base sm:text-lg text-amber-300">🔒 VIP</span>`;
-                document.getElementById('statDupPercent').innerText = `Đăng nhập để mở`;
-                document.getElementById('countTabDup').innerText = `🔒`;
-            }
+            document.getElementById('statDup').innerText = dupCount;
+            document.getElementById('statDupPercent').innerText = `${total > 0 ? ((dupCount / total) * 100).toFixed(0) : 0}%`;
+            document.getElementById('countTabDup').innerText = dupCount;
             document.getElementById('statPenalty').innerText = penCount;
             const penSub = document.getElementById('statPenaltySub');
             if (penSub) {
@@ -3070,9 +3117,7 @@
             document.getElementById('statClean').innerText = cleanCount;
             const cleanSub = document.getElementById('statCleanPercent');
             if (cleanSub) {
-                cleanSub.innerText = lastScanVipMode
-                    ? `an toàn ${total > 0 ? ((cleanCount / total) * 100).toFixed(0) : 100}%`
-                    : `FYP ổn (chưa check trùng)`;
+                cleanSub.innerText = `an toàn ${total > 0 ? ((cleanCount / total) * 100).toFixed(0) : 100}%`;
             }
 
             document.getElementById('countTabAll').innerText = total;
@@ -3179,6 +3224,7 @@
                 if (lastScanVipMode) {
                     freeBanner.classList.add('hidden');
                 } else {
+                    updateFreeQuotaBannerUI(data.free_quota || currentFreeQuota);
                     freeBanner.classList.remove('hidden');
                 }
             }
@@ -3201,10 +3247,6 @@
         }
 
         function setFilter(filterType) {
-            if (filterType === 'dup' && !lastScanVipMode) {
-                openVipModal(true);
-                return;
-            }
             currentFilter = filterType;
 
             const tabs = {
@@ -3359,7 +3401,7 @@
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị Trùng nội dung, vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
-                            ${origBtn}
+                            ${origBtn || (!lastScanVipMode ? lockedOrigBtn : '')}
                         </div>
                     `;
                 } else if (isThisDup) {
@@ -3373,13 +3415,6 @@
                     dupBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
                             <span data-tip="${penTitle || 'Bị TikTok chặn đề xuất lên trang Xu hướng (Mất FYP)'}" class="h-7 px-2.5 rounded-lg bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">🚨 Mất FYP</span>
-                        </div>
-                    `;
-                } else if (!lastScanVipMode) {
-                    dupBadge = `
-                        <div class="inline-flex flex-col items-center justify-center gap-1">
-                            <span data-tip="Không bị Mất đề xuất FYP & Không vi phạm Bản quyền (Đăng nhập VIP để kiểm tra thêm Trùng lặp & Video Gốc)" class="h-7 px-2.5 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-check"></i> FYP Sạch</span>
-                            <span onclick="openVipModal(true)" data-tip="🔒 Bấm đăng nhập VIP để kiểm tra Trùng lặp & lấy link Video Gốc!" class="px-2 py-0.5 rounded-md bg-slate-900/95 hover:bg-amber-950/70 border border-amber-500/40 text-amber-300 font-bold text-[10px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-pointer transition"><i class="fa-solid fa-lock text-[8px]"></i> Check Trùng</span>
                         </div>
                     `;
                 } else {
@@ -3573,8 +3608,6 @@
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🔴 KHÔNG NGUYÊN TÁC</span>`;
                 } else if (isDup) {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🔴 TRÙNG</span>`;
-                } else if (!lastScanVipMode) {
-                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-emerald-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-emerald-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🟢 FYP SẠCH</span>`;
                 } else {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-emerald-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-emerald-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🟢 SẠCH</span>`;
                 }
@@ -3699,6 +3732,7 @@
             }
 
             const origBox = document.getElementById('modalOriginBox');
+            const origLockedBox = document.getElementById('modalOriginLockedBox');
             const origInput = document.getElementById('modalOriginInput');
             const origLink = document.getElementById('modalOriginLink');
             const origGid = document.getElementById('modalOriginGroupId');
@@ -3708,8 +3742,16 @@
                 origLink.href = origUrl;
                 if (origGid) origGid.innerText = video.group_id ? `Group: ${video.group_id}` : '';
                 origBox.classList.remove('hidden');
-            } else if (origBox) {
-                origBox.classList.add('hidden');
+                if (origLockedBox) origLockedBox.classList.add('hidden');
+            } else {
+                if (origBox) origBox.classList.add('hidden');
+                if (origLockedBox) {
+                    if ((video.is_dup || video.is_crp_punished) && !lastScanVipMode) {
+                        origLockedBox.classList.remove('hidden');
+                    } else {
+                        origLockedBox.classList.add('hidden');
+                    }
+                }
             }
 
             document.getElementById('videoModal').classList.remove('hidden');

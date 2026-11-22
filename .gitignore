@@ -9,5 +9,6 @@ external_login_debug.log
 groupid_cache.json
 vip_users.json
 vip_blocked_devices.json
+free_daily_quota.json
 server.log
 PUBLIC_DOMAIN.txt
