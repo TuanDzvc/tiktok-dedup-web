@@ -151,13 +151,51 @@ def extract_clean_username(query: str) -> str:
         u = q.lstrip("@")
     return u.split("?")[0].split("#")[0].rstrip("/").strip().lstrip("@").lower()
 
-def record_user_check_async(user: str, ip: str):
-    """Gửi dữ liệu kiểm tra ngầm về Google Sheet không làm chậm trải nghiệm của khách."""
-    if not user or not SHEET_WEBHOOK_URL:
+def _get_sheet_webhook_url() -> str:
+    env_map = _read_local_env()
+    return (os.getenv("SHEET_WEBHOOK_URL") or env_map.get("SHEET_WEBHOOK_URL") or SHEET_WEBHOOK_URL or "").strip()
+
+
+def _sanitize_sheet_tab(account: str) -> str:
+    cleaned = re.sub(r'[\\/?*\[\]:]', '_', str(account or "").strip().lower())
+    return cleaned[:95] if cleaned else "Khach_Free"
+
+
+def init_user_sheet_async(account: str, role: str = "member", note: str = ""):
+    """Gửi lệnh tạo trang tính (tab) riêng trên Google Sheet cho tài khoản vừa đăng ký."""
+    hook_url = _get_sheet_webhook_url()
+    acc_raw = str(account or "").strip().lower()
+    if not acc_raw or not hook_url:
+        return
+    acc_sheet = _sanitize_sheet_tab(acc_raw)
+
+    def _worker():
+        try:
+            vn_time = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%d/%m/%Y %H:%M:%S")
+            payload = {
+                "action": "init_user_sheet",
+                "account": acc_sheet,
+                "sheet_name": acc_sheet,
+                "role": str(role or "member"),
+                "note": str(note or "")[:120],
+                "time": vn_time,
+            }
+            requests.post(hook_url, json=payload, timeout=10)
+        except Exception as e:
+            print(f"[Sheet Tracker] Lỗi khởi tạo trang tính cho {acc_sheet}: {e}")
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def record_user_check_async(user: str, ip: str, account: str = "", device_id: str = ""):
+    """Gửi dữ liệu kiểm tra ngầm về đúng trang tính Google Sheet mang tên tài khoản đã đăng ký."""
+    hook_url = _get_sheet_webhook_url()
+    if not user or not hook_url:
         return
 
+    acc_sheet = _sanitize_sheet_tab(account) if str(account or "").strip() else "Khach_Free"
     now = time.time()
-    cache_key = f"{ip}:{user}"
+    cache_key = f"{acc_sheet}:{ip}:{user}"
     last_time = _recent_logged_checks.get(cache_key, 0)
     if now - last_time < 60:
         return
@@ -165,16 +203,19 @@ def record_user_check_async(user: str, ip: str):
 
     def _worker():
         try:
-            import datetime
-            vn_time = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime("%d/%m/%Y %H:%M:%S")
+            vn_time = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%d/%m/%Y %H:%M:%S")
             payload = {
+                "action": "log_check",
+                "account": acc_sheet,
+                "sheet_name": acc_sheet,
                 "user": user,
                 "ip": ip,
-                "time": vn_time
+                "device_id": str(device_id or "").strip(),
+                "time": vn_time,
             }
-            requests.post(SHEET_WEBHOOK_URL, json=payload, timeout=8)
+            requests.post(hook_url, json=payload, timeout=8)
         except Exception as e:
-            print(f"[Sheet Tracker] Lỗi gửi log: {e}")
+            print(f"[Sheet Tracker] Lỗi gửi log ({acc_sheet}): {e}")
 
     threading.Thread(target=_worker, daemon=True).start()
 
@@ -798,6 +839,7 @@ async def api_vip_register(req: Request):
         tok = _create_vip_token(uname, 1)
         pub = _public_vip_user(new_rec, bmap)
 
+    init_user_sheet_async(uname, role="member", note=new_rec["note"])
     return JSONResponse(content={"success": True, "token": tok, "user": pub})
 
 
@@ -924,6 +966,83 @@ async def api_vip_admin_list_users(req: Request):
         out = [_public_vip_user(v, bmap, include_password=True) for v in users.values() if isinstance(v, dict)]
     out.sort(key=lambda x: (0 if x["role"] == "admin" else 1, -x["created_at"]))
     return JSONResponse(content={"success": True, "users": out})
+
+
+@app.get("/api/vip/admin/sheet-script")
+async def api_vip_admin_sheet_script(req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền xem script Google Sheet."})
+    gs_file = BASE_DIR / "google_sheet_apps_script.gs"
+    if not gs_file.exists():
+        return JSONResponse(status_code=404, content={"success": False, "error": "Không tìm thấy file google_sheet_apps_script.gs"})
+    return JSONResponse(content={
+        "success": True,
+        "script": gs_file.read_text(encoding="utf-8"),
+        "sheet_id": "1HRGpokdDkzyHFCvJBDishlkR7HaVp6BgyBJPxNCW2A0",
+    })
+
+
+@app.post("/api/vip/admin/sync-sheets")
+async def api_vip_admin_sync_sheets(req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền đồng bộ trang tính."})
+    hook_url = _get_sheet_webhook_url()
+    if not hook_url:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Chưa cấu hình SHEET_WEBHOOK_URL."})
+
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        targets = [
+            {"account": k, "role": str(v.get("role") or "member"), "note": str(v.get("note") or "")}
+            for k, v in users.items()
+            if isinstance(v, dict) and k
+        ]
+    targets.append({"account": "Khach_Free", "role": "guest", "note": "Khách chưa đăng nhập"})
+
+    def _sync_all():
+        vn_time = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%d/%m/%Y %H:%M:%S")
+        synced = []
+        script_supported = True
+        for item in targets:
+            acc_tab = "Khach_Free" if item["account"] == "Khach_Free" else _sanitize_sheet_tab(item["account"])
+            payload = {
+                "action": "init_user_sheet",
+                "account": acc_tab,
+                "sheet_name": acc_tab,
+                "role": item["role"],
+                "note": item["note"][:120],
+                "time": vn_time,
+            }
+            try:
+                r = requests.post(hook_url, json=payload, timeout=12)
+                ok_json = False
+                try:
+                    j = r.json()
+                    ok_json = bool(j.get("ok") and j.get("action") == "init_user_sheet")
+                except Exception:
+                    pass
+                if not ok_json:
+                    script_supported = False
+                synced.append({"sheet": acc_tab, "http": r.status_code, "created": ok_json})
+            except Exception as ex:
+                script_supported = False
+                synced.append({"sheet": acc_tab, "http": 0, "created": False, "error": str(ex)})
+        return synced, script_supported
+
+    import asyncio
+    synced_list, script_ok = await asyncio.to_thread(_sync_all)
+    return JSONResponse(content={
+        "success": True,
+        "script_supported": script_ok,
+        "synced": synced_list,
+        "message": (
+            f"✅ Đã đồng bộ xong {len(synced_list)} trang tính theo từng tài khoản!"
+            if script_ok
+            else "⚠️ Webhook Google Sheet hiện tại vẫn đang chạy code Apps Script cũ! Hãy bấm [Copy Code Apps Script] rồi dán cập nhật lên Google Sheet (Triển khai phiên bản mới) để tự tách trang tính."
+        ),
+    })
 
 
 @app.post("/api/vip/admin/device-action")
@@ -1055,6 +1174,8 @@ async def api_vip_admin_upsert_user(req: Request):
             saved_pub = _public_vip_user(new_rec, bmap)
         _save_vip_users_unlocked(users)
 
+    if not existing:
+        init_user_sheet_async(target_u, role=role, note=str(note_in or ""))
     return JSONResponse(content={"success": True, "user": saved_pub})
 
 
@@ -1164,11 +1285,11 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
             if not sec_uid and acc_entry.get("account", {}).get("sec_uid"):
                 sec_uid = acc_entry["account"]["sec_uid"]
 
-    # Ghi nhận người dùng kiểm tra ngầm về Google Sheet (chỉ ghi nhận ở lần quét đầu tiên max_cursor == 0)
+    # Ghi nhận người dùng kiểm tra ngầm về đúng trang tính Google Sheet theo tài khoản đã đăng ký (lần quét đầu max_cursor == 0)
     if max_cursor == 0:
         client_ip = get_client_ip(req)
         if clean_user:
-            record_user_check_async(clean_user, client_ip)
+            record_user_check_async(clean_user, client_ip, account=checked_username, device_id=dev_id)
 
     # Chạy phân tích trong thread riêng tránh xung đột Playwright sync với asyncio loop
     # Free được trải nghiệm trọn vẹn 100% tính năng (bao gồm cả Check Trùng & xem link Video Gốc) trong 10 lượt/ngày theo Mã máy
