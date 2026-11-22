@@ -216,7 +216,11 @@ def sync_items_penalty_data_native(pen_items: list, cookie_str: str, ua: str = "
         except Exception:
             pass
 
-    with ThreadPoolExecutor(max_workers=min(10, len(pen_items))) as executor:
+    from requests.adapters import HTTPAdapter
+    sess_pen = requests.Session()
+    sess_pen.mount("https://", HTTPAdapter(pool_connections=25, pool_maxsize=25))
+    sess_pen.mount("http://", HTTPAdapter(pool_connections=25, pool_maxsize=25))
+    with ThreadPoolExecutor(max_workers=min(24, len(pen_items))) as executor:
         list(executor.map(_sync_one, pen_items))
 
 def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "", proxy: str = "", region: str = "US"):
@@ -249,18 +253,23 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
     end_ts = str(now_ts)
 
     proxies = None
-    if proxy:
+    if proxy and proxy.strip() not in _DEAD_PROXIES:
         p_c = proxy.strip()
         if not p_c.startswith(("http://", "https://", "socks5://")):
             p_c = f"http://{p_c}"
         proxies = {"http": p_c, "https": p_c}
+
+    from requests.adapters import HTTPAdapter
+    sess = requests.Session()
+    sess.mount("https://", HTTPAdapter(pool_connections=25, pool_maxsize=25))
+    sess.mount("http://", HTTPAdapter(pool_connections=25, pool_maxsize=25))
 
     def _check_crp_one(p):
         vid = str(p.get("aweme_id") or p.get("item_id") or p.get("vid") or p.get("id") or "").strip()
         if not vid:
             return
         try:
-            r = requests.get(
+            r = sess.get(
                 "https://www.tiktok.com/tiktok/v1/creator/m10n_center/video_reward_analytics",
                 params={
                     "aid": "1988",
@@ -281,7 +290,7 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
                     "Accept": "application/json, text/plain, */*",
                 },
                 proxies=proxies,
-                timeout=6,
+                timeout=5,
             )
             if r.status_code == 200 and r.content:
                 j = r.json()
@@ -303,7 +312,7 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
         except Exception:
             pass
 
-    with ThreadPoolExecutor(max_workers=min(10, len(targets))) as executor:
+    with ThreadPoolExecutor(max_workers=min(24, len(targets))) as executor:
         list(executor.map(_check_crp_one, targets))
 
 def api_get_post_list_native(cookie_str: str, ua: str, proxy: str = "", sec_uid: str = "", max_cursor: int = 0, count: int = 50) -> dict:
@@ -837,7 +846,8 @@ def fetch_external_channel_videos_creator_api(
     if proxies:
         s.proxies.update(proxies)
 
-    max_loops = max(1, (max_videos // 15) + 1)
+    page_count = min(35, max(18, max_videos))
+    max_loops = max(1, (max_videos // page_count) + 1)
     for _ in range(max_loops):
         vfp = "verify_" + "".join(random.choices(string.hexdigits, k=7))
         query_params = {
@@ -851,7 +861,7 @@ def fetch_external_channel_videos_creator_api(
             "browser_version": "5.0 (Windows)",
             "channel": "tiktok_web",
             "cookie_enabled": "true",
-            "count": "15",
+            "count": str(page_count),
             "cursor": str(cursor),
             "device_id": str(random.randint(10**18, 10**19)),
             "device_platform": "web_pc",
@@ -908,11 +918,22 @@ def fetch_external_channel_videos_creator_api(
 
     return all_items
 
+_BORROWED_POOL_CACHE: Dict[str, Any] = {"ts": 0.0, "pool": []}
+_DEAD_PROXIES: set = set()
+
 def get_borrowed_cookies_pool() -> List[Tuple[str, str, str]]:
     """
     Thu thập danh sách các cookie hợp lệ từ Studio Web, ConfigStore và cookie_pool.json (đã xáo trộn)
     để xoay vòng khi quét kênh ngoài, tránh chết 1 cookie hoặc bị TikTok giới hạn tốc độ.
+    Có cache RAM 120s để không phải giải mã DPAPI / đọc đĩa lại mỗi lần quét.
     """
+    now_t = time.time()
+    cached_list = _BORROWED_POOL_CACHE.get("pool") or []
+    if cached_list and (now_t - float(_BORROWED_POOL_CACHE.get("ts") or 0)) < 120:
+        out_copy = list(cached_list)
+        random.shuffle(out_copy)
+        return out_copy
+
     pool_out: List[Tuple[str, str, str]] = []
     seen_sids = set()
 
@@ -972,6 +993,9 @@ def get_borrowed_cookies_pool() -> List[Tuple[str, str, str]]:
     if env_c:
         _add_cand(env_c, DEFAULT_UA, "")
 
+    if pool_out:
+        _BORROWED_POOL_CACHE["ts"] = now_t
+        _BORROWED_POOL_CACHE["pool"] = list(pool_out)
     random.shuffle(pool_out)
     return pool_out
 
@@ -1227,6 +1251,8 @@ def fetch_channel_info_and_posts(
                 "Referer": "https://www.tiktok.com/",
             }
             px_dict = {}
+            if matched_acc_proxy and matched_acc_proxy.strip() in _DEAD_PROXIES:
+                matched_acc_proxy = ""
             if matched_acc_proxy:
                 p_c = matched_acc_proxy.strip()
                 if not p_c.startswith(("http://", "https://", "socks5://")):
@@ -1240,9 +1266,10 @@ def fetch_channel_info_and_posts(
                         "https://www.tiktok.com/passport/web/account/info/",
                         headers=p_headers,
                         proxies=px_dict,
-                        timeout=4
+                        timeout=2.5
                     )
                 except Exception:
+                    _DEAD_PROXIES.add(matched_acc_proxy.strip())
                     matched_acc_proxy = ""
                     px_dict = {}
             if r_pass is None:

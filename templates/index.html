@@ -1736,14 +1736,14 @@
                 // Đảm bảo hoạt ảnh các bước 1 -> 2 -> 3 mượt mà trước khi hoàn tất
                 if (currentScanStage < 2) {
                     setScanStep(2);
-                    await new Promise(r => setTimeout(r, 220));
+                    await new Promise(r => setTimeout(r, 60));
                 }
                 if (currentScanStage < 3) {
                     setScanStep(3);
-                    await new Promise(r => setTimeout(r, 220));
+                    await new Promise(r => setTimeout(r, 60));
                 }
                 setScanStep('done');
-                await new Promise(r => setTimeout(r, 320));
+                await new Promise(r => setTimeout(r, 80));
 
                 channelData = data.channel || {};
                 if (channelData.uniqueId) {
