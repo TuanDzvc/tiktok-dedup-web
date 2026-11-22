@@ -154,10 +154,22 @@
                     </div>
                 </a>
             </div>
-            <div class="flex items-center gap-3">
-                <div class="hidden md:flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <div class="hidden lg:flex items-center gap-2 text-xs font-semibold text-slate-400">
                     <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span>Hệ thống sẵn sàng</span>
+                </div>
+                <!-- VIP / Admin Auth Nav -->
+                <div id="vipNavContainer" class="flex items-center gap-1.5 sm:gap-2">
+                    <button
+                        type="button"
+                        onclick="openVipModal(true)"
+                        class="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-amber-500/25 border border-amber-300/40 hover:scale-105 active:scale-95 transition-all duration-200"
+                        title="Đăng nhập tài khoản VIP hoặc Admin để mở khóa Check Trùng & Tìm Video Gốc"
+                    >
+                        <i class="fa-solid fa-crown text-yellow-200"></i>
+                        <span>Đăng Nhập VIP</span>
+                    </button>
                 </div>
                 <div id="authNavContainer" class="flex items-center">
                     <button 
@@ -560,7 +572,7 @@
                                 <span id="statTotal" class="text-2xl font-black text-white font-mono">0</span>
                                 <span id="statTotalSub" class="text-[10px] text-slate-400 font-semibold block mt-0.5">đã tải</span>
                             </div>
-                            <div class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-rose-900/40 bg-rose-950/20">
+                            <div id="statDupCard" onclick="if(!lastScanVipMode) openVipModal(true)" class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-rose-900/40 bg-rose-950/20 cursor-pointer">
                                 <span class="text-rose-300 text-xs font-medium block">Video Trùng</span>
                                 <span id="statDup" class="text-2xl font-black text-rose-400 font-mono">0</span>
                                 <span id="statDupPercent" class="text-[10px] text-rose-300 block mt-0.5">0%</span>
@@ -576,6 +588,20 @@
                                 <span class="text-[10px] text-emerald-300 block mt-0.5">an toàn 100%</span>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Thông báo chế độ Miễn phí chưa mở khóa Check Trùng VIP -->
+                    <div id="freeModeUpgradeBanner" class="hidden p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-950/70 via-slate-900/90 to-rose-950/60 border border-amber-500/50 text-amber-100 text-xs sm:text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-amber-950/25">
+                        <div class="flex items-start sm:items-center gap-2.5">
+                            <i class="fa-solid fa-lock text-amber-400 text-base sm:text-lg flex-shrink-0 mt-0.5 sm:mt-0"></i>
+                            <span class="leading-relaxed">
+                                Bạn đang quét ở <b class="text-emerald-300">Chế độ Miễn Phí</b> (Chỉ kiểm tra <b>Mất đề xuất FYP & Bản quyền</b>). Vui lòng <b class="text-amber-300">Đăng nhập VIP</b> để mở khóa quét <b>Video Trùng Lặp</b> & hiện nút <b>Video Gốc (gốc ↗)</b>!
+                            </span>
+                        </div>
+                        <button type="button" onclick="openVipModal(true)" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs whitespace-nowrap shadow-md transition active:scale-95 flex items-center gap-1.5">
+                            <i class="fa-solid fa-crown text-yellow-200"></i>
+                            <span>Đăng Nhập Mở Khóa</span>
+                        </button>
                     </div>
 
                     <!-- Thông báo trạng thái video của kênh (nếu không có video hoặc video riêng tư) -->
@@ -1385,6 +1411,203 @@
         </div>
     </div>
 
+    <!-- ============================================================================== -->
+    <!-- POPUP THÔNG BÁO CHẾ ĐỘ MIỄN PHÍ VS VIP & ĐĂNG NHẬP VIP / ADMIN -->
+    <!-- ============================================================================== -->
+    <div id="vipWelcomeModal" class="fixed inset-0 z-[95] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 transition-all duration-300 hidden">
+        <div class="relative max-w-2xl w-full max-h-[94vh] flex flex-col bg-dark-900 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden">
+            <div class="absolute -top-20 -right-20 w-56 h-56 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-20 -left-20 w-56 h-56 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
+
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-4 bg-dark-950/90 relative z-10 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/25 to-rose-500/25 border border-amber-400/50 flex items-center justify-center text-amber-300 text-lg shadow-inner">
+                        <i class="fa-solid fa-crown"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base sm:text-lg font-black text-white tracking-tight">Thông Báo Chế Độ Sử Dụng Hệ Thống</h3>
+                        <p class="text-[11px] sm:text-xs text-slate-400">Phân quyền Khách Miễn Phí & Tài khoản VIP / Admin</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeVipModal()" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800/80 transition" title="Đóng và dùng bản Miễn phí">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-4 sm:p-5 space-y-4 overflow-y-auto relative z-10 custom-scrollbar">
+                <!-- 2 cột so sánh rõ ràng -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- Cột Free -->
+                    <div class="p-4 rounded-2xl bg-slate-950/80 border border-slate-700/80 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-600/60 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
+                                <i class="fa-solid fa-bolt"></i> KHÁCH MIỄN PHÍ
+                            </span>
+                            <span class="text-xs font-black text-emerald-400">0đ / Không cần Login</span>
+                        </div>
+                        <ul class="space-y-1.5 text-xs text-slate-300 leading-relaxed pt-1">
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Kiểm tra <b>Mất đề xuất FYP / Bóp tương tác</b></span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Kiểm tra <b>Vi phạm Bản quyền / Tắt tiếng / Gỡ video</b></span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Xem thông tin kênh, Quốc gia, Ngày tạo UID</span></li>
+                            <li class="flex items-start gap-2 text-rose-400/90"><i class="fa-solid fa-lock text-rose-400 mt-0.5"></i><span><b>Không</b> quét Trùng lặp & không hiện link Video Gốc</span></li>
+                        </ul>
+                    </div>
+
+                    <!-- Cột VIP -->
+                    <div class="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-950/90 to-rose-950/40 border border-amber-500/60 space-y-2.5 shadow-lg shadow-amber-950/20">
+                        <div class="flex items-center justify-between">
+                            <span class="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 text-xs font-extrabold flex items-center gap-1.5">
+                                <i class="fa-solid fa-crown text-yellow-300"></i> KHÁCH VIP / ADMIN
+                            </span>
+                            <span class="text-xs font-black text-amber-300">Cần Đăng Nhập</span>
+                        </div>
+                        <ul class="space-y-1.5 text-xs text-slate-200 leading-relaxed pt-1">
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Bao gồm toàn bộ tính năng bản Miễn Phí</span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span><b>Quét Trùng Lặp Video (Group ID gốc Mobile)</b></span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Hiện nhãn <b class="text-rose-400">Trùng</b> & nút <b class="text-sky-300">gốc ↗</b> mở thẳng <b>Video Gốc</b></span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Bắt chuẩn Quốc gia IP thực tế của từng video</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Khung Đăng Nhập VIP / Admin ngay bên dưới -->
+                <form onsubmit="submitVipLogin(event); return false;" class="p-4 rounded-2xl bg-dark-950/90 border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs sm:text-sm font-extrabold text-amber-300 flex items-center gap-2">
+                            <i class="fa-solid fa-user-shield"></i> Đăng Nhập Tài Khoản VIP / Admin
+                        </span>
+                        <span class="text-[11px] text-slate-400">Mở khóa Check Trùng 100%</span>
+                    </div>
+                    <div id="vipLoginError" class="hidden p-2.5 rounded-xl bg-rose-950/80 border border-rose-600/70 text-rose-200 text-xs font-semibold"></div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div class="relative">
+                            <i class="fa-solid fa-user text-slate-500 text-xs absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                            <input
+                                type="text"
+                                id="vipUsernameInput"
+                                placeholder="Tài khoản VIP / Admin..."
+                                autocomplete="username"
+                                class="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
+                            />
+                        </div>
+                        <div class="relative">
+                            <i class="fa-solid fa-lock text-slate-500 text-xs absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                            <input
+                                type="password"
+                                id="vipPasswordInput"
+                                placeholder="Mật khẩu..."
+                                autocomplete="current-password"
+                                class="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
+                            />
+                        </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
+                        <button
+                            type="submit"
+                            id="btnVipLoginSubmit"
+                            class="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-amber-500/25 transition active:scale-95 flex items-center justify-center gap-2"
+                        >
+                            <i class="fa-solid fa-key text-yellow-200"></i>
+                            <span>Đăng Nhập Mở Khóa Check Trùng</span>
+                        </button>
+                        <button
+                            type="button"
+                            onclick="closeVipModal()"
+                            class="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600/80 text-slate-200 font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5"
+                        >
+                            <span>Dùng Bản Miễn Phí (Chỉ FYP)</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================================== -->
+    <!-- MODAL QUẢN TRỊ ADMIN (TẠO / XÓA NICK VIP CHO KHÁCH & ĐỔI MẬT KHẨU) -->
+    <!-- ============================================================================== -->
+    <div id="vipAdminModal" class="fixed inset-0 z-[96] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 transition-all duration-300 hidden">
+        <div class="relative max-w-3xl w-full max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-3.5 bg-dark-950/90 flex-shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                        <i class="fa-solid fa-users-gear"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-extrabold text-white">Quản Lý Tài Khoản Khách VIP & Mật Khẩu</h3>
+                        <p class="text-[11px] text-slate-400">Cấp tài khoản cho khách dùng API Check Trùng hoặc thu hồi bất cứ lúc nào</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeVipAdminModal()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+
+            <div class="p-4 sm:p-5 space-y-5 overflow-y-auto custom-scrollbar">
+                <!-- Khối tạo / cập nhật tài khoản VIP (Chỉ hiện cho Admin) -->
+                <div id="adminUserManagerSection" class="space-y-4">
+                    <form onsubmit="submitAdminSaveUser(event); return false;" class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-3">
+                        <div class="text-xs font-extrabold text-cyan-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-user-plus"></i> Tạo Mới / Cập Nhật Tài Khoản Khách VIP
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                            <input type="text" id="admNewUser" placeholder="Username (vd: khach01)" required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
+                            <input type="text" id="admNewPass" placeholder="Mật khẩu (ít nhất 4 ký tự)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
+                            <input type="number" id="admNewDays" placeholder="Số ngày (0 = Vĩnh viễn)" min="0" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
+                            <input type="text" id="admNewNote" placeholder="Ghi chú (tên khách/Zalo)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-floppy-disk"></i> Lưu / Cấp Tài Khoản VIP
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Danh sách tài khoản -->
+                    <div class="rounded-2xl border border-slate-800 overflow-hidden bg-slate-950/70">
+                        <div class="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs font-bold text-slate-300">
+                            <span>Danh Sách Tài Khoản Đang Cấp Quyền</span>
+                            <button type="button" onclick="loadVipUsersList()" class="text-cyan-400 hover:text-cyan-300 text-[11px] flex items-center gap-1">
+                                <i class="fa-solid fa-arrows-rotate"></i> Làm mới
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-800">
+                                    <tr>
+                                        <th class="px-3.5 py-2">Tài khoản</th>
+                                        <th class="px-3.5 py-2">Quyền</th>
+                                        <th class="px-3.5 py-2">Lượt quét</th>
+                                        <th class="px-3.5 py-2">Hạn dùng</th>
+                                        <th class="px-3.5 py-2">Ghi chú</th>
+                                        <th class="px-3.5 py-2 text-right">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vipUsersTableBody" class="divide-y divide-slate-800/70 text-slate-200"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Đổi mật khẩu cá nhân -->
+                <form onsubmit="submitChangeMyVipPassword(event); return false;" class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-3">
+                    <div class="text-xs font-extrabold text-amber-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-key"></i> Đổi Mật Khẩu Tài Khoản Đang Đăng Nhập
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <input type="password" id="chgOldPass" placeholder="Mật khẩu hiện tại..." required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400" />
+                        <input type="password" id="chgNewPass" placeholder="Mật khẩu mới..." required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400" />
+                        <button type="submit" class="py-2 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition">
+                            Cập Nhật Mật Khẩu
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="border-t border-slate-800/80 bg-dark-900/60 py-6 text-center text-xs text-slate-500 mt-12">
         <div class="max-w-7xl mx-auto px-4 space-y-1">
@@ -1417,6 +1640,283 @@
         let hasMoreVideos = false;
         let isLoadingMore = false;
         let currentVideoNotice = '';
+        let currentVipUser = null;
+        let lastScanVipMode = false;
+
+        function getVipToken() {
+            return localStorage.getItem('tikflow_vip_token') || '';
+        }
+
+        function renderVipNav() {
+            const nav = document.getElementById('vipNavContainer');
+            if (!nav) return;
+            if (!currentVipUser) {
+                nav.innerHTML = `
+                    <button
+                        type="button"
+                        onclick="openVipModal(true)"
+                        class="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-amber-500/25 border border-amber-300/40 hover:scale-105 active:scale-95 transition-all duration-200"
+                        title="Đăng nhập tài khoản VIP hoặc Admin để mở khóa Check Trùng & Tìm Video Gốc"
+                    >
+                        <i class="fa-solid fa-crown text-yellow-200"></i>
+                        <span>Đăng Nhập VIP</span>
+                    </button>
+                `;
+                return;
+            }
+            const isAdmin = currentVipUser.role === 'admin';
+            nav.innerHTML = `
+                <div class="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        onclick="openVipAdminModal()"
+                        class="px-2.5 sm:px-3 py-1.5 rounded-xl ${isAdmin ? 'bg-amber-950/90 border-amber-400/60 text-amber-200 hover:bg-amber-900/80' : 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200 hover:bg-emerald-900/80'} border font-extrabold text-xs flex items-center gap-1.5 transition"
+                        title="${isAdmin ? 'Bấm để Quản lý tài khoản VIP hoặc Đổi mật khẩu' : 'Bấm để Đổi mật khẩu tài khoản VIP'}"
+                    >
+                        <i class="fa-solid ${isAdmin ? 'fa-user-shield text-amber-300' : 'fa-crown text-yellow-300'}"></i>
+                        <span>${isAdmin ? 'Admin' : 'VIP'}: ${escapeHtml(currentVipUser.username)}</span>
+                    </button>
+                    <button
+                        type="button"
+                        onclick="vipLogout()"
+                        class="px-2 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950 border border-slate-700 hover:border-rose-600/60 text-slate-300 hover:text-rose-300 text-xs font-bold transition"
+                        title="Đăng xuất tài khoản VIP"
+                    >
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        function openVipModal(focusInput = false) {
+            const m = document.getElementById('vipWelcomeModal');
+            if (!m) return;
+            const errBox = document.getElementById('vipLoginError');
+            if (errBox) errBox.classList.add('hidden');
+            m.classList.remove('hidden');
+            if (focusInput) {
+                setTimeout(() => document.getElementById('vipUsernameInput')?.focus(), 100);
+            }
+        }
+
+        function closeVipModal() {
+            document.getElementById('vipWelcomeModal')?.classList.add('hidden');
+        }
+
+        async function submitVipLogin(e) {
+            if (e) e.preventDefault();
+            const u = (document.getElementById('vipUsernameInput')?.value || '').trim();
+            const p = document.getElementById('vipPasswordInput')?.value || '';
+            const errBox = document.getElementById('vipLoginError');
+            const btn = document.getElementById('btnVipLoginSubmit');
+            if (!u || !p) {
+                if (errBox) {
+                    errBox.innerText = 'Vui lòng nhập đầy đủ Tài khoản và Mật khẩu!';
+                    errBox.classList.remove('hidden');
+                }
+                return;
+            }
+            if (btn) btn.disabled = true;
+            try {
+                const resp = await fetch('/api/vip/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u, password: p })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    if (errBox) {
+                        errBox.innerText = data.error || 'Đăng nhập thất bại!';
+                        errBox.classList.remove('hidden');
+                    }
+                    return;
+                }
+                localStorage.setItem('tikflow_vip_token', data.token);
+                currentVipUser = data.user;
+                document.getElementById('vipPasswordInput').value = '';
+                renderVipNav();
+                closeVipModal();
+                showToast(`🎉 Đăng nhập thành công (${currentVipUser.role === 'admin' ? 'Admin' : 'VIP'}: ${currentVipUser.username})! Đã mở khóa Check Trùng & Video Gốc.`);
+                if (currentQuery && !document.getElementById('resultSection')?.classList.contains('hidden')) {
+                    handleCheck();
+                }
+            } catch (err) {
+                if (errBox) {
+                    errBox.innerText = 'Lỗi kết nối máy chủ: ' + err.message;
+                    errBox.classList.remove('hidden');
+                }
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        function vipLogout() {
+            localStorage.removeItem('tikflow_vip_token');
+            currentVipUser = null;
+            lastScanVipMode = false;
+            renderVipNav();
+            showToast('Đã đăng xuất. Đang chuyển về Chế độ Miễn Phí (0đ).');
+        }
+
+        async function initVipAuthOnStartup() {
+            const tok = getVipToken();
+            if (tok) {
+                try {
+                    const resp = await fetch('/api/vip/me', {
+                        headers: { 'Authorization': 'Bearer ' + tok }
+                    });
+                    const data = await resp.json();
+                    if (data && data.authenticated && data.user) {
+                        currentVipUser = data.user;
+                        renderVipNav();
+                        return;
+                    }
+                } catch (e) {}
+                localStorage.removeItem('tikflow_vip_token');
+            }
+            currentVipUser = null;
+            renderVipNav();
+            // Hiện Popup thông báo phân quyền Free vs VIP ngay khi mở trang web nếu chưa login
+            openVipModal(false);
+        }
+
+        function openVipAdminModal() {
+            if (!currentVipUser) {
+                openVipModal(true);
+                return;
+            }
+            const m = document.getElementById('vipAdminModal');
+            const admSec = document.getElementById('adminUserManagerSection');
+            if (admSec) {
+                if (currentVipUser.role === 'admin') {
+                    admSec.classList.remove('hidden');
+                    loadVipUsersList();
+                } else {
+                    admSec.classList.add('hidden');
+                }
+            }
+            m?.classList.remove('hidden');
+        }
+
+        function closeVipAdminModal() {
+            document.getElementById('vipAdminModal')?.classList.add('hidden');
+        }
+
+        async function loadVipUsersList() {
+            const tbody = document.getElementById('vipUsersTableBody');
+            if (!tbody) return;
+            try {
+                const resp = await fetch('/api/vip/admin/users', {
+                    headers: { 'Authorization': 'Bearer ' + getVipToken() }
+                });
+                const data = await resp.json();
+                if (!data.success) return;
+                const list = data.users || [];
+                tbody.innerHTML = list.map(u => {
+                    const expStr = u.expires_at > 0
+                        ? new Date(u.expires_at * 1000).toLocaleDateString('vi-VN')
+                        : '<span class="text-emerald-400 font-semibold">Vĩnh viễn</span>';
+                    const isSelf = currentVipUser && u.username === currentVipUser.username;
+                    return `
+                        <tr class="hover:bg-slate-900/60">
+                            <td class="px-3.5 py-2.5 font-mono font-bold text-white">${escapeHtml(u.username)}</td>
+                            <td class="px-3.5 py-2.5">${u.role === 'admin' ? '<span class="px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-600/50 font-bold">Admin</span>' : '<span class="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-600/50 font-bold">VIP</span>'}</td>
+                            <td class="px-3.5 py-2.5 font-mono text-cyan-300 font-bold">${u.scan_count || 0}</td>
+                            <td class="px-3.5 py-2.5">${expStr}</td>
+                            <td class="px-3.5 py-2.5 text-slate-400">${escapeHtml(u.note || '—')}</td>
+                            <td class="px-3.5 py-2.5 text-right">
+                                ${isSelf ? '<span class="text-[11px] text-slate-500">Đang dùng</span>' : `<button type="button" onclick="deleteVipUser('${escapeHtml(u.username)}')" class="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-800 text-rose-300 border border-rose-700/60 font-bold transition">Xóa</button>`}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {}
+        }
+
+        async function submitAdminSaveUser(e) {
+            if (e) e.preventDefault();
+            const username = (document.getElementById('admNewUser')?.value || '').trim();
+            const password = (document.getElementById('admNewPass')?.value || '').trim();
+            const daysRaw = (document.getElementById('admNewDays')?.value || '').trim();
+            const note = (document.getElementById('admNewNote')?.value || '').trim();
+            try {
+                const resp = await fetch('/api/vip/admin/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + getVipToken()
+                    },
+                    body: JSON.stringify({
+                        username,
+                        password,
+                        days: daysRaw === '' ? 0 : parseInt(daysRaw),
+                        note,
+                        active: true
+                    })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    showToast('❌ ' + (data.error || 'Lỗi lưu tài khoản'));
+                    return;
+                }
+                document.getElementById('admNewUser').value = '';
+                document.getElementById('admNewPass').value = '';
+                document.getElementById('admNewDays').value = '';
+                document.getElementById('admNewNote').value = '';
+                showToast(`✅ Đã cấp quyền VIP cho tài khoản: ${data.user.username}`);
+                loadVipUsersList();
+            } catch (err) {
+                showToast('❌ Lỗi kết nối: ' + err.message);
+            }
+        }
+
+        async function deleteVipUser(uname) {
+            if (!confirm(`Xóa quyền truy cập VIP của tài khoản "${uname}"?`)) return;
+            try {
+                const resp = await fetch(`/api/vip/admin/users/${encodeURIComponent(uname)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + getVipToken() }
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    showToast(`🗑️ Đã xóa tài khoản VIP: ${uname}`);
+                    loadVipUsersList();
+                } else {
+                    showToast('❌ ' + (data.error || 'Không xóa được'));
+                }
+            } catch (err) {}
+        }
+
+        async function submitChangeMyVipPassword(e) {
+            if (e) e.preventDefault();
+            const old_password = document.getElementById('chgOldPass')?.value || '';
+            const new_password = document.getElementById('chgNewPass')?.value || '';
+            try {
+                const resp = await fetch('/api/vip/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + getVipToken()
+                    },
+                    body: JSON.stringify({ old_password, new_password })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    showToast('❌ ' + (data.error || 'Đổi mật khẩu thất bại'));
+                    return;
+                }
+                localStorage.setItem('tikflow_vip_token', data.token);
+                document.getElementById('chgOldPass').value = '';
+                document.getElementById('chgNewPass').value = '';
+                showToast('✅ Đã cập nhật mật khẩu mới thành công!');
+            } catch (err) {
+                showToast('❌ Lỗi kết nối: ' + err.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initVipAuthOnStartup();
+        });
 
         function getCountryFlag(code) {
             if (!code) return `<span class="text-base select-none">🌐</span>`;
@@ -1710,16 +2210,20 @@
             }
 
             try {
+                const vipTok = getVipToken();
+                const reqHeaders = { 'Content-Type': 'application/json' };
+                if (vipTok) reqHeaders['Authorization'] = 'Bearer ' + vipTok;
                 const response = await fetch('/api/check', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: reqHeaders,
                     body: JSON.stringify({
                         query: cleanHandle,
                         max_cursor: 0,
                         max_videos: limit,
                         cookie: currentCheckCookie,
                         proxy: currentCheckProxy,
-                        sec_uid: currentCheckSecUid
+                        sec_uid: currentCheckSecUid,
+                        vip_token: vipTok
                     })
                 });
 
@@ -1745,6 +2249,7 @@
                 setScanStep('done');
                 await new Promise(r => setTimeout(r, 80));
 
+                lastScanVipMode = Boolean(data.vip_mode);
                 channelData = data.channel || {};
                 if (channelData.uniqueId) {
                     currentQuery = '@' + String(channelData.uniqueId).replace(/^@+/, '').trim();
@@ -1788,16 +2293,20 @@
             text.innerText = "Đang quét thêm 18 video tiếp theo...";
 
             try {
+                const vipTokMore = getVipToken();
+                const reqHeadersMore = { 'Content-Type': 'application/json' };
+                if (vipTokMore) reqHeadersMore['Authorization'] = 'Bearer ' + vipTokMore;
                 const response = await fetch('/api/check', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: reqHeadersMore,
                     body: JSON.stringify({
                         query: currentQuery,
                         max_cursor: currentMaxCursor,
                         max_videos: 18,
                         cookie: currentCheckCookie,
                         proxy: currentCheckProxy,
-                        sec_uid: currentCheckSecUid
+                        sec_uid: currentCheckSecUid,
+                        vip_token: vipTokMore
                     })
                 });
 
@@ -1905,8 +2414,15 @@
                 sub.innerText = channelTotal > 0 ? `trên ${channelTotal} video` : 'đã tải';
             }
 
-            document.getElementById('statDup').innerText = dupCount;
-            document.getElementById('statDupPercent').innerText = `${total > 0 ? ((dupCount / total) * 100).toFixed(0) : 0}%`;
+            if (lastScanVipMode) {
+                document.getElementById('statDup').innerText = dupCount;
+                document.getElementById('statDupPercent').innerText = `${total > 0 ? ((dupCount / total) * 100).toFixed(0) : 0}%`;
+                document.getElementById('countTabDup').innerText = dupCount;
+            } else {
+                document.getElementById('statDup').innerHTML = `<span class="text-base sm:text-lg text-amber-300">🔒 VIP</span>`;
+                document.getElementById('statDupPercent').innerText = `Đăng nhập để mở`;
+                document.getElementById('countTabDup').innerText = `🔒`;
+            }
             document.getElementById('statPenalty').innerText = penCount;
             const penSub = document.getElementById('statPenaltySub');
             if (penSub) {
@@ -1919,7 +2435,6 @@
             }
 
             document.getElementById('countTabAll').innerText = total;
-            document.getElementById('countTabDup').innerText = dupCount;
             document.getElementById('countTabPenalty').innerText = penCount;
             document.getElementById('countTabClean').innerText = cleanCount;
         }
@@ -2013,6 +2528,15 @@
             // 3. Stats & Videos
             updateSummaryStats();
 
+            const freeBanner = document.getElementById('freeModeUpgradeBanner');
+            if (freeBanner) {
+                if (lastScanVipMode) {
+                    freeBanner.classList.add('hidden');
+                } else {
+                    freeBanner.classList.remove('hidden');
+                }
+            }
+
             // Video status notice banner (private or 0 videos)
             const noticeBanner = document.getElementById('channelVideoNoticeBanner');
             const noticeText = document.getElementById('channelVideoNoticeText');
@@ -2031,6 +2555,10 @@
         }
 
         function setFilter(filterType) {
+            if (filterType === 'dup' && !lastScanVipMode) {
+                openVipModal(true);
+                return;
+            }
             currentFilter = filterType;
 
             const tabs = {

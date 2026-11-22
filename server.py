@@ -30,13 +30,15 @@ except Exception:
     pass
 
 import re
+import hmac
+import hashlib
 import time
 import json
 import base64
 import secrets
 import threading
 import subprocess
-from typing import Optional
+from typing import Optional, Dict, Any
 from pathlib import Path
 
 import uvicorn
@@ -179,6 +181,146 @@ STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 CLOUDFLARED_PATH = Path("E:/Tool/cloudflared.exe")
 DOMAIN_FILE = BASE_DIR / "PUBLIC_DOMAIN.txt"
+VIP_USERS_FILE = BASE_DIR / "vip_users.json"
+ENV_FILE = BASE_DIR / ".env"
+_VIP_LOCK = threading.Lock()
+
+
+def _read_local_env() -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    try:
+        if ENV_FILE.exists():
+            for line in ENV_FILE.read_text(encoding="utf-8", errors="ignore").splitlines():
+                s = line.strip()
+                if not s or s.startswith("#") or "=" not in s:
+                    continue
+                k, v = s.split("=", 1)
+                out[k.strip()] = v.strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return out
+
+
+def _get_vip_secret() -> bytes:
+    env_map = _read_local_env()
+    sec = os.environ.get("VIP_AUTH_SECRET") or env_map.get("VIP_AUTH_SECRET") or "tikflow-vip-secret-key-2026"
+    return sec.encode("utf-8")
+
+
+def _hash_password(password: str, salt_hex: Optional[str] = None) -> str:
+    salt = bytes.fromhex(salt_hex) if salt_hex else secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120_000)
+    return f"{salt.hex()}:{dk.hex()}"
+
+
+def _verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        salt_hex, dk_hex = stored_hash.split(":", 1)
+        cand = _hash_password(password, salt_hex)
+        return hmac.compare_digest(cand, f"{salt_hex}:{dk_hex}")
+    except Exception:
+        return False
+
+
+def _load_vip_users_unlocked() -> Dict[str, Dict[str, Any]]:
+    users: Dict[str, Dict[str, Any]] = {}
+    if VIP_USERS_FILE.exists():
+        try:
+            raw = json.loads(VIP_USERS_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                users = raw
+        except Exception:
+            users = {}
+    if not users:
+        env_map = _read_local_env()
+        adm_u = (os.environ.get("ADMIN_DEFAULT_USER") or env_map.get("ADMIN_DEFAULT_USER") or "admin").strip().lower()
+        adm_p = os.environ.get("ADMIN_DEFAULT_PASS") or env_map.get("ADMIN_DEFAULT_PASS") or "Admin@2026"
+        users[adm_u] = {
+            "username": adm_u,
+            "password_hash": _hash_password(adm_p),
+            "role": "admin",
+            "active": True,
+            "expires_at": 0,
+            "note": "Quản trị viên hệ thống",
+            "scan_count": 0,
+            "created_at": int(time.time()),
+            "token_ver": 1,
+        }
+        _save_vip_users_unlocked(users)
+    return users
+
+
+def _save_vip_users_unlocked(users: Dict[str, Dict[str, Any]]) -> None:
+    try:
+        tmp_f = VIP_USERS_FILE.with_suffix(".json.tmp")
+        tmp_f.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp_f, VIP_USERS_FILE)
+    except Exception as e:
+        logger.error(f"[VIPAuth] Lỗi lưu vip_users.json: {e}")
+
+
+def _create_vip_token(username: str, token_ver: int = 1, ttl_days: int = 30) -> str:
+    payload = {
+        "u": username.lower(),
+        "v": int(token_ver),
+        "exp": int(time.time()) + ttl_days * 86400,
+    }
+    b64 = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("ascii").rstrip("=")
+    sig = hmac.new(_get_vip_secret(), b64.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{b64}.{sig}"
+
+
+def _verify_vip_token(token: str) -> Optional[Dict[str, Any]]:
+    if not token or "." not in token:
+        return None
+    try:
+        b64, sig = token.strip().split(".", 1)
+        expected_sig = hmac.new(_get_vip_secret(), b64.encode("ascii"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        pad = "=" * (-len(b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(b64 + pad).decode("utf-8"))
+        if int(payload.get("exp") or 0) < int(time.time()):
+            return None
+        uname = str(payload.get("u") or "").strip().lower()
+        t_ver = int(payload.get("v") or 1)
+        with _VIP_LOCK:
+            users = _load_vip_users_unlocked()
+            u_obj = users.get(uname)
+            if not isinstance(u_obj, dict):
+                return None
+            if not u_obj.get("active", True):
+                return None
+            if int(u_obj.get("token_ver") or 1) != t_ver:
+                return None
+            exp_at = int(u_obj.get("expires_at") or 0)
+            if exp_at > 0 and exp_at < int(time.time()):
+                return None
+            return dict(u_obj)
+    except Exception:
+        return None
+
+
+def _extract_vip_user(req: Request, body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    tok = ""
+    auth_hdr = req.headers.get("authorization") or req.headers.get("Authorization") or ""
+    if auth_hdr.lower().startswith("bearer "):
+        tok = auth_hdr[7:].strip()
+    if not tok and isinstance(body, dict):
+        tok = str(body.get("vip_token") or "").strip()
+    return _verify_vip_token(tok)
+
+
+def _public_vip_user(u: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "username": u.get("username"),
+        "role": u.get("role", "vip"),
+        "active": bool(u.get("active", True)),
+        "expires_at": int(u.get("expires_at") or 0),
+        "note": str(u.get("note") or ""),
+        "scan_count": int(u.get("scan_count") or 0),
+        "created_at": int(u.get("created_at") or 0),
+    }
 
 app = FastAPI(title="TikTok Dedup Studio Web", version="2.0")
 
@@ -346,6 +488,157 @@ def get_tunnel_info():
         "error": tunnel_state["error"]
     }
 
+@app.post("/api/vip/login")
+async def api_vip_login(req: Request):
+    """Đăng nhập tài khoản VIP hoặc Admin để mở khóa quét trùng lặp Group ID & tìm Video Gốc."""
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+
+    uname = str(body.get("username") or "").strip().lower()
+    pwd = str(body.get("password") or "")
+    if not uname or not pwd:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Vui lòng nhập đầy đủ Tài khoản và Mật khẩu!"})
+
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        u_obj = users.get(uname)
+        if not u_obj or not _verify_password(pwd, str(u_obj.get("password_hash") or "")):
+            return JSONResponse(status_code=401, content={"success": False, "error": "Sai tên tài khoản hoặc mật khẩu!"})
+        if not u_obj.get("active", True):
+            return JSONResponse(status_code=403, content={"success": False, "error": "Tài khoản này đã bị tạm khóa."})
+        exp_at = int(u_obj.get("expires_at") or 0)
+        if exp_at > 0 and exp_at < int(time.time()):
+            return JSONResponse(status_code=403, content={"success": False, "error": "Tài khoản VIP của bạn đã hết hạn sử dụng."})
+        tok = _create_vip_token(uname, int(u_obj.get("token_ver") or 1))
+        pub = _public_vip_user(u_obj)
+
+    return JSONResponse(content={"success": True, "token": tok, "user": pub})
+
+
+@app.get("/api/vip/me")
+async def api_vip_me(req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj:
+        return JSONResponse(content={"success": True, "authenticated": False, "user": None})
+    return JSONResponse(content={"success": True, "authenticated": True, "user": _public_vip_user(u_obj)})
+
+
+@app.post("/api/vip/change-password")
+async def api_vip_change_password(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+    u_obj = _extract_vip_user(req, body)
+    if not u_obj:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Phiên đăng nhập không hợp lệ."})
+    old_pwd = str(body.get("old_password") or "")
+    new_pwd = str(body.get("new_password") or "")
+    if len(new_pwd) < 4:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Mật khẩu mới phải từ 4 ký tự trở lên."})
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        cur = users.get(u_obj["username"])
+        if not cur or not _verify_password(old_pwd, str(cur.get("password_hash") or "")):
+            return JSONResponse(status_code=400, content={"success": False, "error": "Mật khẩu hiện tại không đúng!"})
+        cur["password_hash"] = _hash_password(new_pwd)
+        cur["token_ver"] = int(cur.get("token_ver") or 1) + 1
+        _save_vip_users_unlocked(users)
+        new_tok = _create_vip_token(cur["username"], cur["token_ver"])
+    return JSONResponse(content={"success": True, "token": new_tok, "message": "Đã đổi mật khẩu thành công!"})
+
+
+@app.get("/api/vip/admin/users")
+async def api_vip_admin_list_users(req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền quản lý tài khoản VIP."})
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        out = [_public_vip_user(v) for v in users.values() if isinstance(v, dict)]
+    out.sort(key=lambda x: (0 if x["role"] == "admin" else 1, -x["created_at"]))
+    return JSONResponse(content={"success": True, "users": out})
+
+
+@app.post("/api/vip/admin/users")
+async def api_vip_admin_upsert_user(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+    u_obj = _extract_vip_user(req, body)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền tạo/sửa tài khoản VIP."})
+
+    target_u = re.sub(r"[^a-z0-9_.-]", "", str(body.get("username") or "").strip().lower())
+    pwd = str(body.get("password") or "").strip()
+    role = "admin" if str(body.get("role") or "vip").lower() == "admin" else "vip"
+    note = str(body.get("note") or "").strip()[:120]
+    active = bool(body.get("active", True))
+    days = body.get("days")
+
+    if not target_u or len(target_u) < 2:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản phải từ 2 ký tự trở lên (chữ/số)."})
+
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        existing = users.get(target_u)
+        if not existing and len(pwd) < 4:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Vui lòng đặt mật khẩu ít nhất 4 ký tự cho tài khoản mới."})
+
+        exp_ts = int(existing.get("expires_at") or 0) if existing else 0
+        if days is not None and str(days).strip() != "":
+            d_val = int(days)
+            exp_ts = 0 if d_val <= 0 else int(time.time()) + d_val * 86400
+
+        if existing:
+            if pwd:
+                existing["password_hash"] = _hash_password(pwd)
+                existing["token_ver"] = int(existing.get("token_ver") or 1) + 1
+            if target_u != u_obj["username"]:
+                existing["role"] = role
+                existing["active"] = active
+            existing["expires_at"] = exp_ts
+            existing["note"] = note
+            saved_pub = _public_vip_user(existing)
+        else:
+            new_rec = {
+                "username": target_u,
+                "password_hash": _hash_password(pwd),
+                "role": role,
+                "active": active,
+                "expires_at": exp_ts,
+                "note": note,
+                "scan_count": 0,
+                "created_at": int(time.time()),
+                "token_ver": 1,
+            }
+            users[target_u] = new_rec
+            saved_pub = _public_vip_user(new_rec)
+        _save_vip_users_unlocked(users)
+
+    return JSONResponse(content={"success": True, "user": saved_pub})
+
+
+@app.delete("/api/vip/admin/users/{target_user}")
+async def api_vip_admin_delete_user(target_user: str, req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền xóa tài khoản VIP."})
+    t_clean = str(target_user or "").strip().lower()
+    if t_clean == u_obj["username"]:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Không thể tự xóa tài khoản Admin đang đăng nhập!"})
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        if t_clean not in users:
+            return JSONResponse(status_code=404, content={"success": False, "error": "Không tìm thấy tài khoản này."})
+        users.pop(t_clean, None)
+        _save_vip_users_unlocked(users)
+    return JSONResponse(content={"success": True})
+
+
 @app.post("/api/check")
 async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     """
@@ -366,6 +659,17 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     cookie = str(body.get("cookie") or "").strip()
     proxy = str(body.get("proxy") or "").strip()
     sec_uid = str(body.get("sec_uid") or "").strip()
+
+    # Kiểm tra quyền VIP / Admin để quyết định mở khóa API quét trùng Group ID hay chạy Free 0đ
+    vip_user = _extract_vip_user(req, body)
+    allow_paid_groupid = bool(vip_user)
+    if vip_user and max_cursor == 0:
+        with _VIP_LOCK:
+            users_db = _load_vip_users_unlocked()
+            u_rec = users_db.get(vip_user["username"])
+            if isinstance(u_rec, dict):
+                u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + 1
+                _save_vip_users_unlocked(users_db)
 
     force_ext = query.startswith("!")
     if force_ext:
@@ -398,7 +702,8 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         max_cursor=max_cursor,
         cookie_str=cookie,
         proxy_str="",
-        max_videos=max_videos
+        max_videos=max_videos,
+        allow_paid_groupid=allow_paid_groupid,
     )
     
     # Kích hoạt tải trước ảnh bìa vào RAM cache song song trong nền (0.001s khi trình duyệt yêu cầu)

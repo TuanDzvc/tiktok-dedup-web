@@ -1423,6 +1423,7 @@ def fetch_channel_info_and_posts(
     ua_str: str = "",
     proxy_str: str = "",
     max_videos: int = 18,
+    allow_paid_groupid: bool = False,
 ) -> Dict[str, Any]:
     """
     Hàm kiểm tra trùng lặp & quét thông tin kênh TikTok.
@@ -2055,7 +2056,7 @@ def fetch_channel_info_and_posts(
                             }
                     except Exception:
                         pass
-                if not fallback_target_item and _get_tikhub_api_key():
+                if not fallback_target_item and allow_paid_groupid and _get_tikhub_api_key():
                     try:
                         th_map = _fetch_tikhub_multi_awemes([target_vid])
                         th_aw = th_map.get(str(target_vid))
@@ -2145,9 +2146,13 @@ def fetch_channel_info_and_posts(
                 check_user_info["create_date"] = dt_str
 
     # 5. Định dạng và kiểm tra trùng lặp cho từng video
+    # Chỉ tài khoản đã đăng nhập (VIP / Admin) mới kích hoạt quét trùng lặp Group ID & API trả phí
     video_list = []
-    tkm_cache = _load_tiktokmanager_cache()
-    sync_items_tikhub_groupid(raw_items, tkm_cache, sec_uid=sec_uid, is_load_more=(max_cursor > 0))
+    if allow_paid_groupid:
+        tkm_cache = _load_tiktokmanager_cache()
+        sync_items_tikhub_groupid(raw_items, tkm_cache, sec_uid=sec_uid, is_load_more=(max_cursor > 0))
+    else:
+        tkm_cache = {}
     ch_followers = int(channel_info.get("followers") or 0)
 
     for it in raw_items:
@@ -2262,7 +2267,7 @@ def fetch_channel_info_and_posts(
         ch_reg = str(channel_info.get("region") or "US").upper()
         region = str(it.get("region") or it.get("locationCreated") or it.get("country_code") or it.get("geo") or cached_meta.get("region") or ch_reg).upper()
 
-        group_id = str(it.get("group_id") or it.get("groupId") or cached_meta.get("group_id") or "")
+        group_id = str(it.get("group_id") or it.get("groupId") or cached_meta.get("group_id") or "") if allow_paid_groupid else ""
 
         # Mã trạng thái kiểm duyệt TikTok (Mã 141 = Khiếu nại bản quyền, 140-149 = Bị gỡ bỏ / Vi phạm)
         st_val = it.get("status")
@@ -2595,6 +2600,7 @@ def fetch_channel_info_and_posts(
 
     return {
         "success": True,
+        "vip_mode": bool(allow_paid_groupid),
         "channel": channel_info,
         "secUid": sec_uid,
         "list": video_list,
