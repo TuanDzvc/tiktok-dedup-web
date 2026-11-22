@@ -1578,18 +1578,45 @@
                         />
                     </div>
                     <div class="relative">
-                        <i class="fa-solid fa-phone text-slate-500 text-xs absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                        <i class="fa-solid fa-shield-halved text-slate-500 text-xs absolute left-3.5 top-1/2 -translate-y-1/2"></i>
                         <input
-                            type="text"
-                            id="regNoteInput"
-                            placeholder="Zalo / SĐT của bạn (để Admin duyệt VIP)..."
+                            type="password"
+                            id="regPasswordConfirmInput"
+                            minlength="6"
+                            placeholder="Nhập lại mật khẩu xác nhận..."
+                            autocomplete="new-password"
                             class="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
                         />
                     </div>
                 </div>
-                <p class="text-[11px] text-slate-400 bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 leading-relaxed">
-                    ℹ️ Sau khi tạo tài khoản, báo tên tài khoản cho <b>Admin</b> để được kích hoạt gói <b>VIP Check Trùng</b>.
-                </p>
+                <div class="bg-slate-950/90 border border-slate-800 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3">
+                    <span class="text-[11px] text-slate-300 leading-snug">
+                        ℹ️ Tạo nick xong bấm icon bên cạnh nhắn <b>Admin</b> kích hoạt <b>VIP</b>:
+                    </span>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <a
+                            href="https://zalo.me/0963282278"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Liên hệ Zalo Admin"
+                            class="w-9 h-9 rounded-xl bg-[#0068FF] hover:bg-[#0057d9] text-white shadow-lg shadow-blue-500/30 border border-sky-300/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+                        >
+                            <svg class="w-6 h-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M24 6C13.507 6 5 13.387 5 22.5C5 27.57 7.64 32.103 11.83 35.125C11.53 37.39 10.42 40.32 10.33 40.55C10.16 40.98 10.56 41.39 11.01 41.27C13.65 40.57 16.95 39.18 18.59 38.35C20.32 38.77 22.13 39 24 39C34.493 39 43 31.613 43 22.5C43 13.387 34.493 6 24 6Z" fill="white"/>
+                                <text x="24" y="25.8" text-anchor="middle" fill="#0068FF" font-size="11.5" font-weight="900" font-family="Arial, sans-serif">Zalo</text>
+                            </svg>
+                        </a>
+                        <a
+                            href="https://www.facebook.com/levantuan.dzvc"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Liên hệ Facebook Admin"
+                            class="w-9 h-9 rounded-xl bg-[#1877F2] hover:bg-[#1666d1] text-white shadow-lg shadow-blue-600/30 border border-blue-300/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+                        >
+                            <i class="fa-brands fa-facebook-f text-base"></i>
+                        </a>
+                    </div>
+                </div>
                 <button
                     type="submit"
                     id="btnVipRegisterSubmit"
@@ -2039,12 +2066,26 @@
             if (e) e.preventDefault();
             const u = (document.getElementById('regUsernameInput')?.value || '').trim();
             const p = document.getElementById('regPasswordInput')?.value || '';
-            const note = (document.getElementById('regNoteInput')?.value || '').trim();
+            const p2 = document.getElementById('regPasswordConfirmInput')?.value || '';
             const errBox = document.getElementById('vipRegisterError');
             const btn = document.getElementById('btnVipRegisterSubmit');
-            if (!u || !p) {
+            if (!u || !p || !p2) {
                 if (errBox) {
-                    errBox.innerText = 'Vui lòng nhập Tên tài khoản và Mật khẩu!';
+                    errBox.innerText = 'Vui lòng nhập đầy đủ Tên tài khoản và 2 lần Mật khẩu!';
+                    errBox.classList.remove('hidden');
+                }
+                return;
+            }
+            if (p.length < 6) {
+                if (errBox) {
+                    errBox.innerText = 'Mật khẩu phải có ít nhất 6 ký tự!';
+                    errBox.classList.remove('hidden');
+                }
+                return;
+            }
+            if (p !== p2) {
+                if (errBox) {
+                    errBox.innerText = 'Mật khẩu nhập lại không khớp! Vui lòng kiểm tra lại.';
                     errBox.classList.remove('hidden');
                 }
                 return;
@@ -2054,7 +2095,7 @@
                 const resp = await fetch('/api/vip/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...getDeviceHeaders() },
-                    body: JSON.stringify({ username: u, password: p, note, device_id: getHardwareDeviceId(), device_label: getDeviceLabel() })
+                    body: JSON.stringify({ username: u, password: p, note: '', device_id: getHardwareDeviceId(), device_label: getDeviceLabel() })
                 });
                 const data = await resp.json();
                 if (!data.success) {
@@ -2067,9 +2108,11 @@
                 localStorage.setItem('tikflow_vip_token', data.token);
                 currentVipUser = data.user;
                 document.getElementById('regPasswordInput').value = '';
+                const p2El = document.getElementById('regPasswordConfirmInput');
+                if (p2El) p2El.value = '';
                 renderVipNav();
                 closeVipModal();
-                showToast(`✅ Đã tạo tài khoản "${currentVipUser.username}"! Liên hệ Admin để kích hoạt quyền VIP Check Trùng.`);
+                showToast(`✅ Đã tạo tài khoản "${currentVipUser.username}"! Liên hệ Admin qua Zalo/FB để kích hoạt VIP.`);
             } catch (err) {
                 if (errBox) {
                     errBox.innerText = 'Lỗi kết nối máy chủ: ' + err.message;
@@ -6204,6 +6247,34 @@
             }
         }
 </script>
+
+    <!-- Thanh nổi Liên hệ/Hỗ trợ sát mép phải màn hình (chạy theo khi cuộn chuột) -->
+    <div class="fixed right-2 sm:right-3.5 top-1/2 -translate-y-1/2 z-[60] glass-panel rounded-2xl px-2 py-2.5 border border-cyan-500/40 shadow-[0_12px_35px_rgba(0,0,0,0.75)] flex flex-col items-center gap-2 select-none">
+        <span class="text-[10px] font-extrabold text-cyan-300 text-center leading-tight tracking-tight px-0.5">
+            Liên hệ/<br />Hỗ trợ
+        </span>
+        <a
+            href="https://zalo.me/0963282278"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Liên hệ Zalo Hỗ trợ"
+            class="w-10 h-10 rounded-xl bg-[#0068FF] hover:bg-[#0057d9] text-white shadow-lg shadow-blue-500/35 border border-sky-300/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200"
+        >
+            <svg class="w-7 h-7" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M24 6C13.507 6 5 13.387 5 22.5C5 27.57 7.64 32.103 11.83 35.125C11.53 37.39 10.42 40.32 10.33 40.55C10.16 40.98 10.56 41.39 11.01 41.27C13.65 40.57 16.95 39.18 18.59 38.35C20.32 38.77 22.13 39 24 39C34.493 39 43 31.613 43 22.5C43 13.387 34.493 6 24 6Z" fill="white"/>
+                <text x="24" y="25.8" text-anchor="middle" fill="#0068FF" font-size="11.5" font-weight="900" font-family="Arial, sans-serif">Zalo</text>
+            </svg>
+        </a>
+        <a
+            href="https://www.facebook.com/levantuan.dzvc"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Liên hệ Facebook Hỗ trợ"
+            class="w-10 h-10 rounded-xl bg-[#1877F2] hover:bg-[#1666d1] text-white shadow-lg shadow-blue-600/35 border border-blue-300/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200"
+        >
+            <i class="fa-brands fa-facebook-f text-lg"></i>
+        </a>
+    </div>
 
     <!-- Nút cuộn lên đầu trang (Back to top) bên phải màn hình -->
     <button 
