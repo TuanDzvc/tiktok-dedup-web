@@ -1677,8 +1677,19 @@
         function renderVipNav() {
             const nav = document.getElementById('vipNavContainer');
             if (!nav) return;
+            const noticeBtn = `
+                <button
+                    type="button"
+                    onclick="openNoticeModal()"
+                    class="px-2.5 py-1.5 sm:py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 hover:border-amber-400/50 text-amber-300 text-xs sm:text-sm transition"
+                    title="Xem lại Bảng Thông Báo Chế Độ Sử Dụng"
+                >
+                    <i class="fa-solid fa-bullhorn"></i>
+                </button>
+            `;
             if (!currentVipUser) {
                 nav.innerHTML = `
+                    ${noticeBtn}
                     <button
                         type="button"
                         onclick="openVipModal(true)"
@@ -1694,6 +1705,7 @@
             const isAdmin = currentVipUser.role === 'admin';
             nav.innerHTML = `
                 <div class="flex items-center gap-1.5">
+                    ${noticeBtn}
                     <button
                         type="button"
                         onclick="openVipAdminModal()"
@@ -1721,8 +1733,8 @@
         }
 
         function isNoticeDismissedToday() {
-            const savedDate = localStorage.getItem('tikflow_notice_hide_date') || '';
-            const savedUntil = parseInt(localStorage.getItem('tikflow_notice_hide_until') || '0', 10);
+            const savedDate = localStorage.getItem('tikflow_notice_hide_date_v2') || '';
+            const savedUntil = parseInt(localStorage.getItem('tikflow_notice_hide_until_v2') || '0', 10);
             if (!savedDate) return false;
             // Sang ngày mới hoặc hết 24h là tự hiện lại
             return savedDate === getLocalDateKey() && Date.now() < savedUntil;
@@ -1737,10 +1749,10 @@
         }
 
         function dismissNoticeForToday() {
-            localStorage.setItem('tikflow_notice_hide_date', getLocalDateKey());
-            localStorage.setItem('tikflow_notice_hide_until', String(Date.now() + 24 * 3600 * 1000));
+            localStorage.setItem('tikflow_notice_hide_date_v2', getLocalDateKey());
+            localStorage.setItem('tikflow_notice_hide_until_v2', String(Date.now() + 24 * 3600 * 1000));
             closeNoticeModal();
-            showToast('🔕 Đã tắt thông báo hôm nay (sẽ tự hiển thị lại khi sang ngày mới).');
+            showToast('🔕 Đã tắt thông báo hôm nay (bấm icon 📢 góc trên nếu muốn xem lại).');
         }
 
         function openVipModal(focusInput = true) {
