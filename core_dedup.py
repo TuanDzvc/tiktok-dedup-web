@@ -1158,7 +1158,7 @@ def fetch_channel_info_and_posts(
     }
 
     matched_acc_cookie = cookie_str
-    matched_acc_proxy = proxy_str
+    matched_acc_proxy = ""
     matched_acc_ua = ua_str or DEFAULT_UA
     is_self_account = bool(matched_acc_cookie)
 
@@ -1182,10 +1182,6 @@ def fetch_channel_info_and_posts(
                     if un and un == username.strip().lower():
                         is_self_account = True
                         matched_acc_cookie = getattr(a, "tiktok_cookie", "")
-                        saved_px = str(getattr(a, "proxy", "") or "").strip()
-                        # Không dùng cổng tunnel cục bộ 127.0.0.1 của tool desktop (thường tắt hoặc nghẽn cổ chai khi bắn 30-40 request song song)
-                        if saved_px and "127.0.0.1" not in saved_px and "localhost" not in saved_px:
-                            matched_acc_proxy = saved_px
                         if getattr(a, "user_agent", ""):
                             matched_acc_ua = getattr(a, "user_agent", "")
                         break
@@ -1200,8 +1196,6 @@ def fetch_channel_info_and_posts(
                 a_info = accs_map[u_clean]
                 is_self_account = True
                 matched_acc_cookie = a_info.get("cookie", "")
-                if a_info.get("proxy"):
-                    matched_acc_proxy = a_info["proxy"]
                 if a_info.get("user_agent"):
                     matched_acc_ua = a_info["user_agent"]
                 if a_info.get("sec_uid") and not sec_uid:
@@ -1220,8 +1214,6 @@ def fetch_channel_info_and_posts(
                     if a_un and a_un == u_clean:
                         is_self_account = True
                         matched_acc_cookie = s_info.get("cookie", "")
-                        if s_info.get("proxy") and not matched_acc_proxy:
-                            matched_acc_proxy = s_info["proxy"]
                         if acc_obj.get("sec_uid") and not sec_uid:
                             sec_uid = acc_obj["sec_uid"]
                         break
@@ -1602,11 +1594,11 @@ def fetch_channel_info_and_posts(
         cookie_candidates: List[Tuple[str, str, str]] = []
         seen_ck = set()
         if effective_cookie:
-            cookie_candidates.append((effective_cookie, matched_acc_ua, matched_acc_proxy or proxy_str))
+            cookie_candidates.append((effective_cookie, matched_acc_ua, ""))
             seen_ck.add(effective_cookie)
-        for p_c, p_ua, p_px in get_borrowed_cookies_pool():
+        for p_c, p_ua, _ in get_borrowed_cookies_pool():
             if p_c and p_c not in seen_ck:
-                cookie_candidates.append((p_c, p_ua or matched_acc_ua, p_px or matched_acc_proxy or proxy_str))
+                cookie_candidates.append((p_c, p_ua or matched_acc_ua, ""))
                 seen_ck.add(p_c)
             if len(cookie_candidates) >= 4:
                 break
@@ -1666,7 +1658,7 @@ def fetch_channel_info_and_posts(
         pw_items = fetch_external_channel_videos_playwright(
             channel_url,
             cookie_str=pw_cookie,
-            proxy_str=matched_acc_proxy or proxy_str,
+            proxy_str="",
             max_videos=max_videos + max_cursor,
             channel_info=channel_info,
         )

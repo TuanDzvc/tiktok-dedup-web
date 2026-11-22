@@ -397,7 +397,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         sec_uid=sec_uid,
         max_cursor=max_cursor,
         cookie_str=cookie,
-        proxy_str=proxy,
+        proxy_str="",
         max_videos=max_videos
     )
     
