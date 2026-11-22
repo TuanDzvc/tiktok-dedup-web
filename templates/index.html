@@ -1616,7 +1616,7 @@
     <!-- 3. MODAL QUẢN TRỊ ADMIN (TẠO / XÓA NICK VIP CHO KHÁCH & ĐỔI MẬT KHẨU) -->
     <!-- ============================================================================== -->
     <div id="vipAdminModal" onclick="if(event.target===this) closeVipAdminModal()" class="fixed inset-0 z-[96] bg-black/60 backdrop-blur-lg flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
-        <div class="relative max-w-4xl w-full max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden">
+        <div class="relative max-w-6xl w-full max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden">
             <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-3.5 bg-dark-950/90 flex-shrink-0">
                 <div class="flex items-center gap-2.5">
                     <div class="w-9 h-9 rounded-xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
@@ -1639,10 +1639,11 @@
                         <div class="text-xs font-extrabold text-cyan-300 flex items-center gap-1.5">
                             <i class="fa-solid fa-user-plus"></i> Tạo Mới / Cập Nhật Tài Khoản Khách VIP
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
                             <input type="text" id="admNewUser" placeholder="Username (vd: khach01)" required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="text" id="admNewPass" minlength="6" placeholder="Mật khẩu (từ 6 ký tự)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="number" id="admNewDays" placeholder="Số ngày (0 = Vĩnh viễn)" min="0" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
+                            <input type="number" id="admNewMaxDevs" placeholder="Số máy tối đa (mặc định: 2)" min="1" max="20" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="text" id="admNewNote" placeholder="Ghi chú (tên khách/Zalo)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                         </div>
                         <div class="flex justify-end">
@@ -1668,6 +1669,7 @@
                                         <th class="px-3 py-2.5 text-center">Quyền</th>
                                         <th class="px-3 py-2.5 text-center">Lượt quét</th>
                                         <th class="px-3 py-2.5 text-center">Hạn dùng</th>
+                                        <th class="px-3 py-2.5 text-center">Mã Máy & IP (Chống Share)</th>
                                         <th class="px-3 py-2.5 text-center">Ghi chú</th>
                                         <th class="px-3 py-2.5 text-center">Thao tác</th>
                                     </tr>
@@ -1729,6 +1731,68 @@
         let currentVideoNotice = '';
         let currentVipUser = null;
         let lastScanVipMode = false;
+        let _cachedHwDeviceId = '';
+
+        function getHardwareDeviceId() {
+            if (_cachedHwDeviceId) return _cachedHwDeviceId;
+            try {
+                let glRenderer = '';
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                    glRenderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '') : String(gl.getParameter(gl.RENDERER) || '');
+                }
+                const rawTraits = [
+                    navigator.platform || '',
+                    navigator.hardwareConcurrency || 0,
+                    navigator.deviceMemory || 0,
+                    `${screen.width}x${screen.height}x${screen.colorDepth}`,
+                    Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+                    glRenderer
+                ].join('|');
+                let h1 = 0x811c9dc5, h2 = 0x01000193;
+                for (let i = 0; i < rawTraits.length; i++) {
+                    const c = rawTraits.charCodeAt(i);
+                    h1 ^= c;
+                    h1 = Math.imul(h1, 0x01000193) >>> 0;
+                    h2 ^= (c + i);
+                    h2 = Math.imul(h2, 0x85ebca6b) >>> 0;
+                }
+                _cachedHwDeviceId = 'DEV-' + h1.toString(16).toUpperCase().padStart(8, '0').slice(0, 4) + h2.toString(16).toUpperCase().padStart(8, '0').slice(0, 4);
+            } catch (e) {
+                _cachedHwDeviceId = localStorage.getItem('tikflow_fallback_dev') || ('DEV-' + Math.random().toString(16).slice(2, 10).toUpperCase());
+                localStorage.setItem('tikflow_fallback_dev', _cachedHwDeviceId);
+            }
+            return _cachedHwDeviceId;
+        }
+
+        function getDeviceLabel() {
+            const ua = navigator.userAgent || '';
+            let os = 'PC';
+            if (/Windows/i.test(ua)) os = 'Windows';
+            else if (/iPhone|iPad/i.test(ua)) os = 'iOS';
+            else if (/Android/i.test(ua)) os = 'Android';
+            else if (/Mac/i.test(ua)) os = 'Mac';
+            let br = 'Web';
+            if (/Edg\//i.test(ua)) br = 'Edge';
+            else if (/Chrome\//i.test(ua)) br = 'Chrome';
+            else if (/Safari\//i.test(ua)) br = 'Safari';
+            else if (/Firefox\//i.test(ua)) br = 'Firefox';
+            return `${os} · ${br}`;
+        }
+
+        function getDeviceHeaders(includeAuth = false) {
+            const h = {
+                'X-Device-Id': getHardwareDeviceId(),
+                'X-Device-Label': getDeviceLabel()
+            };
+            if (includeAuth) {
+                const tok = getVipToken();
+                if (tok) h['Authorization'] = 'Bearer ' + tok;
+            }
+            return h;
+        }
 
         function getVipToken() {
             return localStorage.getItem('tikflow_vip_token') || '';
@@ -1880,8 +1944,8 @@
             try {
                 const resp = await fetch('/api/vip/register', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: u, password: p, note })
+                    headers: { 'Content-Type': 'application/json', ...getDeviceHeaders() },
+                    body: JSON.stringify({ username: u, password: p, note, device_id: getHardwareDeviceId(), device_label: getDeviceLabel() })
                 });
                 const data = await resp.json();
                 if (!data.success) {
@@ -1924,8 +1988,8 @@
             try {
                 const resp = await fetch('/api/vip/login', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: u, password: p })
+                    headers: { 'Content-Type': 'application/json', ...getDeviceHeaders() },
+                    body: JSON.stringify({ username: u, password: p, device_id: getHardwareDeviceId(), device_label: getDeviceLabel() })
                 });
                 const data = await resp.json();
                 if (!data.success) {
@@ -1973,13 +2037,16 @@
             if (tok) {
                 try {
                     const resp = await fetch('/api/vip/me', {
-                        headers: { 'Authorization': 'Bearer ' + tok }
+                        headers: getDeviceHeaders(true)
                     });
                     const data = await resp.json();
                     if (data && data.authenticated && data.user) {
                         currentVipUser = data.user;
                         renderVipNav();
                         return;
+                    }
+                    if (data && data.device_blocked && data.error) {
+                        showToast(data.error);
                     }
                 } catch (e) {}
                 localStorage.removeItem('tikflow_vip_token');
@@ -2045,13 +2112,37 @@
                             ${u.is_vip ? `<button type="button" onclick="quickSetVipRole('${escapeHtml(u.username)}', 'member', 0)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-500 font-bold transition" title="Hạ về tài khoản Thường (Free)">Khóa VIP</button>` : ''}
                             <button type="button" onclick="deleteVipUser('${escapeHtml(u.username)}')" class="px-2.5 py-1 rounded-lg bg-rose-950/90 hover:bg-rose-800 text-rose-200 border border-rose-600/70 font-bold transition" title="Xóa tài khoản">Xóa</button>
                         </div>`;
+                    const devs = Array.isArray(u.devices) ? u.devices : [];
+                    const activeDevCount = devs.filter(d => !d.blocked).length;
+                    const maxDevsLabel = u.role === 'admin' ? '∞' : (u.max_devices || 2);
+                    let devicesHtml = '<span class="text-slate-400 text-[11px]">Chưa đăng nhập máy nào</span>';
+                    if (devs.length > 0) {
+                        const headerChip = `<div class="text-[11px] font-bold mb-1 ${u.role !== 'admin' && devs.length > (u.max_devices || 2) ? 'text-rose-400' : 'text-cyan-300'}">
+                            Đã ghi nhận: ${activeDevCount}/${maxDevsLabel} máy
+                            ${!isSelf ? `<button type="button" onclick="adminDeviceAction('${escapeHtml(u.username)}', '', 'reset_all')" class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white border border-slate-600" title="Xóa lịch sử máy cũ khi khách đổi thiết bị">🔄 Reset</button>` : ''}
+                        </div>`;
+                        const rowsChip = devs.map(d => {
+                            const blk = Boolean(d.blocked);
+                            return `<div class="flex items-center justify-center gap-1.5 py-0.5 whitespace-nowrap">
+                                <span class="px-2 py-0.5 rounded font-mono text-[11px] font-bold border ${blk ? 'bg-rose-950/90 border-rose-600 text-rose-200 line-through' : 'bg-slate-900 border-slate-700 text-white'}" title="${escapeHtml(d.label || '')}">
+                                    ${escapeHtml(d.id)}${d.ip ? ` · <span class="text-cyan-300 font-normal">${escapeHtml(d.ip)}</span>` : ''}
+                                </span>
+                                ${!isSelf ? (blk
+                                    ? `<button type="button" onclick="adminDeviceAction('${escapeHtml(u.username)}', '${escapeHtml(d.id)}', 'unblock')" class="px-2 py-0.5 rounded bg-emerald-950 hover:bg-emerald-800 text-emerald-300 border border-emerald-600/70 text-[10px] font-extrabold transition">Mở</button>`
+                                    : `<button type="button" onclick="adminDeviceAction('${escapeHtml(u.username)}', '${escapeHtml(d.id)}', 'block')" class="px-2 py-0.5 rounded bg-rose-950 hover:bg-rose-800 text-rose-200 border border-rose-600/70 text-[10px] font-extrabold transition">Khóa máy</button>`
+                                ) : ''}
+                            </div>`;
+                        }).join('');
+                        devicesHtml = `<div>${headerChip}<div class="space-y-1 max-h-24 overflow-y-auto custom-scrollbar">${rowsChip}</div></div>`;
+                    }
                     return `
                         <tr class="hover:bg-slate-900/60 align-middle">
                             <td class="px-3 py-2.5 font-mono font-bold text-white text-center align-middle whitespace-nowrap">${escapeHtml(u.username)}</td>
                             <td class="px-3 py-2.5 text-center align-middle whitespace-nowrap">${roleBadge}</td>
                             <td class="px-3 py-2.5 font-mono text-cyan-300 font-extrabold text-center align-middle whitespace-nowrap">${u.scan_count || 0}</td>
                             <td class="px-3 py-2.5 text-center align-middle whitespace-nowrap">${expStr}</td>
-                            <td class="px-3 py-2.5 text-center align-middle min-w-[180px] max-w-[240px]">
+                            <td class="px-3 py-2.5 text-center align-middle min-w-[230px]">${devicesHtml}</td>
+                            <td class="px-3 py-2.5 text-center align-middle min-w-[170px] max-w-[220px]">
                                 <div class="line-clamp-2 leading-snug text-white font-medium mx-auto">${escapeHtml(u.note || '—')}</div>
                             </td>
                             <td class="px-3 py-2.5 text-center align-middle whitespace-nowrap">${actionsHtml}</td>
@@ -2059,6 +2150,32 @@
                     `;
                 }).join('');
             } catch (e) {}
+        }
+
+        async function adminDeviceAction(uname, devId, action) {
+            if (action === 'block' && !confirm(`Khóa cứng thiết bị "${devId}" không cho đăng nhập vào hệ thống?`)) return;
+            if (action === 'reset_all' && !confirm(`Reset toàn bộ danh sách thiết bị đã lưu của tài khoản "${uname}"?`)) return;
+            try {
+                const resp = await fetch('/api/vip/admin/device-action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + getVipToken()
+                    },
+                    body: JSON.stringify({ username: uname, device_id: devId, action })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    showToast('❌ ' + (data.error || 'Thao tác thất bại'));
+                    return;
+                }
+                if (action === 'block') showToast(`🚫 Đã khóa cứng Mã máy ${devId}! Thiết bị này sẽ bị từ chối đăng nhập.`);
+                else if (action === 'unblock') showToast(`🔓 Đã mở khóa cho Mã máy ${devId}!`);
+                else showToast(`🔄 Đã reset danh sách thiết bị của "${uname}".`);
+                loadVipUsersList();
+            } catch (err) {
+                showToast('❌ Lỗi kết nối: ' + err.message);
+            }
         }
 
         async function quickSetVipRole(uname, role, days) {
@@ -2088,6 +2205,7 @@
             const username = (document.getElementById('admNewUser')?.value || '').trim();
             const password = (document.getElementById('admNewPass')?.value || '').trim();
             const daysRaw = (document.getElementById('admNewDays')?.value || '').trim();
+            const maxDevsRaw = (document.getElementById('admNewMaxDevs')?.value || '').trim();
             const note = (document.getElementById('admNewNote')?.value || '').trim();
             try {
                 const resp = await fetch('/api/vip/admin/users', {
@@ -2100,6 +2218,7 @@
                         username,
                         password,
                         days: daysRaw === '' ? 0 : parseInt(daysRaw),
+                        max_devices: maxDevsRaw === '' ? undefined : parseInt(maxDevsRaw),
                         note,
                         active: true
                     })
@@ -2112,6 +2231,7 @@
                 document.getElementById('admNewUser').value = '';
                 document.getElementById('admNewPass').value = '';
                 document.getElementById('admNewDays').value = '';
+                if (document.getElementById('admNewMaxDevs')) document.getElementById('admNewMaxDevs').value = '';
                 document.getElementById('admNewNote').value = '';
                 showToast(`✅ Đã cấp quyền VIP cho tài khoản: ${data.user.username}`);
                 loadVipUsersList();
@@ -2461,8 +2581,7 @@
 
             try {
                 const vipTok = getVipToken();
-                const reqHeaders = { 'Content-Type': 'application/json' };
-                if (vipTok) reqHeaders['Authorization'] = 'Bearer ' + vipTok;
+                const reqHeaders = { 'Content-Type': 'application/json', ...getDeviceHeaders(true) };
                 const response = await fetch('/api/check', {
                     method: 'POST',
                     headers: reqHeaders,
@@ -2473,12 +2592,19 @@
                         cookie: currentCheckCookie,
                         proxy: currentCheckProxy,
                         sec_uid: currentCheckSecUid,
-                        vip_token: vipTok
+                        vip_token: vipTok,
+                        device_id: getHardwareDeviceId(),
+                        device_label: getDeviceLabel()
                     })
                 });
 
                 const data = await safeParseJson(response);
                 if (!data.success) {
+                    if (data.device_blocked) {
+                        localStorage.removeItem('tikflow_vip_token');
+                        currentVipUser = null;
+                        renderVipNav();
+                    }
                     showError(data.error || "Không tìm thấy thông tin kênh TikTok.");
                     return;
                 }
@@ -2544,8 +2670,7 @@
 
             try {
                 const vipTokMore = getVipToken();
-                const reqHeadersMore = { 'Content-Type': 'application/json' };
-                if (vipTokMore) reqHeadersMore['Authorization'] = 'Bearer ' + vipTokMore;
+                const reqHeadersMore = { 'Content-Type': 'application/json', ...getDeviceHeaders(true) };
                 const response = await fetch('/api/check', {
                     method: 'POST',
                     headers: reqHeadersMore,
@@ -2556,7 +2681,9 @@
                         cookie: currentCheckCookie,
                         proxy: currentCheckProxy,
                         sec_uid: currentCheckSecUid,
-                        vip_token: vipTokMore
+                        vip_token: vipTokMore,
+                        device_id: getHardwareDeviceId(),
+                        device_label: getDeviceLabel()
                     })
                 });
 

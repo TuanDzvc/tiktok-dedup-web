@@ -8,5 +8,6 @@ __pycache__/
 external_login_debug.log
 groupid_cache.json
 vip_users.json
+vip_blocked_devices.json
 server.log
 PUBLIC_DOMAIN.txt

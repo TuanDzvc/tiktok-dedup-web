@@ -182,8 +182,108 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 CLOUDFLARED_PATH = Path("E:/Tool/cloudflared.exe")
 DOMAIN_FILE = BASE_DIR / "PUBLIC_DOMAIN.txt"
 VIP_USERS_FILE = BASE_DIR / "vip_users.json"
+VIP_BLOCKED_DEVICES_FILE = BASE_DIR / "vip_blocked_devices.json"
 ENV_FILE = BASE_DIR / ".env"
 _VIP_LOCK = threading.Lock()
+
+
+def _load_blocked_devices_unlocked() -> Dict[str, Dict[str, Any]]:
+    if VIP_BLOCKED_DEVICES_FILE.exists():
+        try:
+            raw = json.loads(VIP_BLOCKED_DEVICES_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return raw
+        except Exception:
+            pass
+    return {}
+
+
+def _save_blocked_devices_unlocked(bmap: Dict[str, Dict[str, Any]]) -> None:
+    try:
+        tmp_f = VIP_BLOCKED_DEVICES_FILE.with_suffix(".json.tmp")
+        tmp_f.write_text(json.dumps(bmap, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp_f, VIP_BLOCKED_DEVICES_FILE)
+    except Exception as e:
+        logger.error(f"[VIPAuth] Lỗi lưu vip_blocked_devices.json: {e}")
+
+
+def _extract_device_info(req: Request, body: Optional[Dict[str, Any]] = None) -> tuple:
+    raw_id = req.headers.get("x-device-id") or (body.get("device_id") if isinstance(body, dict) else "") or ""
+    clean_id = re.sub(r"[^A-Z0-9-]", "", str(raw_id).strip().upper())[:20]
+    client_ip = get_client_ip(req)
+    if not clean_id or len(clean_id) < 6:
+        ua = req.headers.get("user-agent") or ""
+        h = hashlib.sha256(f"{client_ip}|{ua}".encode("utf-8")).hexdigest()[:8].upper()
+        clean_id = f"DEV-{h}"
+    raw_lbl = req.headers.get("x-device-label") or (body.get("device_label") if isinstance(body, dict) else "") or ""
+    clean_lbl = str(raw_lbl).strip()[:36]
+    return clean_id, clean_lbl, client_ip
+
+
+def _record_and_check_device_unlocked(
+    u_rec: Dict[str, Any],
+    dev_id: str,
+    dev_label: str,
+    client_ip: str,
+    blocked_map: Dict[str, Dict[str, Any]],
+) -> Optional[str]:
+    """Kiểm tra mã máy có bị khóa / vượt giới hạn thiết bị không và ghi nhận lịch sử thiết bị + IP."""
+    devs = u_rec.get("devices")
+    if not isinstance(devs, dict):
+        devs = {}
+        u_rec["devices"] = devs
+
+    now_ts = int(time.time())
+    prev = devs.get(dev_id) if isinstance(devs.get(dev_id), dict) else {}
+
+    # Chủ hệ thống (Admin) luôn được phép, không bao giờ tự khóa máy chủ web
+    if str(u_rec.get("role") or "").lower() == "admin":
+        devs[dev_id] = {
+            "id": dev_id,
+            "label": dev_label or prev.get("label") or "PC Admin",
+            "ip": client_ip,
+            "last_seen": now_ts,
+            "blocked": False,
+        }
+        return None
+
+    # Kiểm tra danh sách mã máy bị Admin khóa cứng hoặc bị khóa trên tài khoản này
+    if dev_id in blocked_map or bool(prev.get("blocked")):
+        devs[dev_id] = {
+            "id": dev_id,
+            "label": dev_label or prev.get("label") or "",
+            "ip": client_ip,
+            "last_seen": now_ts,
+            "blocked": True,
+            "auto_limit": bool(prev.get("auto_limit", False)) and (dev_id not in blocked_map),
+        }
+        if dev_id in blocked_map:
+            return f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên khóa truy cập!"
+        return f"⛔ Thiết bị {dev_id} đã bị từ chối đăng nhập trên tài khoản này (Chống chia sẻ tài khoản)!"
+
+    # Kiểm tra giới hạn số lượng máy tối đa trên 1 tài khoản (mặc định 2 máy)
+    max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else 2)
+    if dev_id not in devs and max_devs > 0:
+        active_ids = [k for k, v in devs.items() if isinstance(v, dict) and not v.get("blocked")]
+        if len(active_ids) >= max_devs:
+            devs[dev_id] = {
+                "id": dev_id,
+                "label": dev_label,
+                "ip": client_ip,
+                "last_seen": now_ts,
+                "blocked": True,
+                "auto_limit": True,
+            }
+            return f"⛔ Tài khoản chỉ cho phép tối đa {max_devs} thiết bị! Mã máy mới ({dev_id}) bị chặn để chống share acc."
+
+    devs[dev_id] = {
+        "id": dev_id,
+        "label": dev_label or prev.get("label") or "",
+        "ip": client_ip,
+        "last_seen": now_ts,
+        "blocked": False,
+    }
+    return None
 
 
 def _read_local_env() -> Dict[str, str]:
@@ -320,7 +420,22 @@ def _extract_vip_user(req: Request, body: Optional[Dict[str, Any]] = None) -> Op
     return _verify_vip_token(tok)
 
 
-def _public_vip_user(u: Dict[str, Any]) -> Dict[str, Any]:
+def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    raw_devs = u.get("devices") if isinstance(u.get("devices"), dict) else {}
+    bmap = blocked_map or {}
+    dev_list = []
+    for did, dinfo in raw_devs.items():
+        if not isinstance(dinfo, dict):
+            continue
+        is_blk = bool(dinfo.get("blocked")) or (did in bmap)
+        dev_list.append({
+            "id": str(dinfo.get("id") or did),
+            "label": str(dinfo.get("label") or ""),
+            "ip": str(dinfo.get("ip") or ""),
+            "last_seen": int(dinfo.get("last_seen") or 0),
+            "blocked": is_blk,
+        })
+    dev_list.sort(key=lambda x: -x["last_seen"])
     return {
         "username": u.get("username"),
         "role": u.get("role", "member"),
@@ -330,6 +445,8 @@ def _public_vip_user(u: Dict[str, Any]) -> Dict[str, Any]:
         "note": str(u.get("note") or ""),
         "scan_count": int(u.get("scan_count") or 0),
         "created_at": int(u.get("created_at") or 0),
+        "max_devices": int(u.get("max_devices") if u.get("max_devices") is not None else (0 if u.get("role") == "admin" else 2)),
+        "devices": dev_list,
     }
 
 app = FastAPI(title="TikTok Dedup Studio Web", version="2.0")
@@ -511,15 +628,22 @@ async def api_vip_login(req: Request):
     if not uname or not pwd:
         return JSONResponse(status_code=400, content={"success": False, "error": "Vui lòng nhập đầy đủ Tài khoản và Mật khẩu!"})
 
+    dev_id, dev_label, client_ip = _extract_device_info(req, body)
+
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
+        bmap = _load_blocked_devices_unlocked()
         u_obj = users.get(uname)
         if not u_obj or not _verify_password(pwd, str(u_obj.get("password_hash") or "")):
             return JSONResponse(status_code=401, content={"success": False, "error": "Sai tên tài khoản hoặc mật khẩu!"})
         if not u_obj.get("active", True):
             return JSONResponse(status_code=403, content={"success": False, "error": "Tài khoản này đã bị tạm khóa."})
+        dev_err = _record_and_check_device_unlocked(u_obj, dev_id, dev_label, client_ip, bmap)
+        _save_vip_users_unlocked(users)
+        if dev_err:
+            return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": dev_err})
         tok = _create_vip_token(uname, int(u_obj.get("token_ver") or 1))
-        pub = _public_vip_user(u_obj)
+        pub = _public_vip_user(u_obj, bmap)
 
     return JSONResponse(content={"success": True, "token": tok, "user": pub})
 
@@ -536,6 +660,7 @@ async def api_vip_register(req: Request):
     uname = re.sub(r"[^a-z0-9_.-]", "", raw_u)
     pwd = str(body.get("password") or "")
     note = str(body.get("note") or "").strip()[:100]
+    dev_id, dev_label, client_ip = _extract_device_info(req, body)
 
     if len(uname) < 3 or uname != raw_u:
         return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản từ 3 ký tự trở lên (chỉ dùng chữ thường, số, dấu chấm hoặc gạch dưới)."})
@@ -543,9 +668,13 @@ async def api_vip_register(req: Request):
         return JSONResponse(status_code=400, content={"success": False, "error": "Mật khẩu phải từ 6 ký tự trở lên."})
 
     with _VIP_LOCK:
+        bmap = _load_blocked_devices_unlocked()
+        if dev_id in bmap:
+            return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên từ chối đăng ký!"})
         users = _load_vip_users_unlocked()
         if uname in users:
             return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản này đã có người đăng ký! Vui lòng chọn tên khác."})
+        now_ts = int(time.time())
         new_rec = {
             "username": uname,
             "password_hash": _hash_password(pwd),
@@ -554,13 +683,23 @@ async def api_vip_register(req: Request):
             "expires_at": 0,
             "note": note or "Tự đăng ký trên web",
             "scan_count": 0,
-            "created_at": int(time.time()),
+            "created_at": now_ts,
             "token_ver": 1,
+            "max_devices": 2,
+            "devices": {
+                dev_id: {
+                    "id": dev_id,
+                    "label": dev_label,
+                    "ip": client_ip,
+                    "last_seen": now_ts,
+                    "blocked": False,
+                }
+            },
         }
         users[uname] = new_rec
         _save_vip_users_unlocked(users)
         tok = _create_vip_token(uname, 1)
-        pub = _public_vip_user(new_rec)
+        pub = _public_vip_user(new_rec, bmap)
 
     return JSONResponse(content={"success": True, "token": tok, "user": pub})
 
@@ -570,7 +709,19 @@ async def api_vip_me(req: Request):
     u_obj = _extract_vip_user(req)
     if not u_obj:
         return JSONResponse(content={"success": True, "authenticated": False, "user": None})
-    return JSONResponse(content={"success": True, "authenticated": True, "user": _public_vip_user(u_obj)})
+    dev_id, dev_label, client_ip = _extract_device_info(req)
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        bmap = _load_blocked_devices_unlocked()
+        cur = users.get(u_obj["username"])
+        if not cur:
+            return JSONResponse(content={"success": True, "authenticated": False, "user": None})
+        dev_err = _record_and_check_device_unlocked(cur, dev_id, dev_label, client_ip, bmap)
+        _save_vip_users_unlocked(users)
+        if dev_err:
+            return JSONResponse(content={"success": True, "authenticated": False, "device_blocked": True, "error": dev_err, "user": None})
+        pub = _public_vip_user(cur, bmap)
+    return JSONResponse(content={"success": True, "authenticated": True, "user": pub})
 
 
 @app.post("/api/vip/change-password")
@@ -605,9 +756,67 @@ async def api_vip_admin_list_users(req: Request):
         return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền quản lý tài khoản VIP."})
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
-        out = [_public_vip_user(v) for v in users.values() if isinstance(v, dict)]
+        bmap = _load_blocked_devices_unlocked()
+        out = [_public_vip_user(v, bmap) for v in users.values() if isinstance(v, dict)]
     out.sort(key=lambda x: (0 if x["role"] == "admin" else 1, -x["created_at"]))
     return JSONResponse(content={"success": True, "users": out})
+
+
+@app.post("/api/vip/admin/device-action")
+async def api_vip_admin_device_action(req: Request):
+    """Admin khóa / mở khóa một Mã máy cụ thể hoặc reset danh sách thiết bị cho khách đổi máy."""
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+    u_obj = _extract_vip_user(req, body)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền khóa/mở thiết bị."})
+
+    target_u = str(body.get("username") or "").strip().lower()
+    dev_id = re.sub(r"[^A-Z0-9-]", "", str(body.get("device_id") or "").strip().upper())
+    action = str(body.get("action") or "").strip().lower()
+
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        bmap = _load_blocked_devices_unlocked()
+        rec = users.get(target_u)
+        if not isinstance(rec, dict):
+            return JSONResponse(status_code=404, content={"success": False, "error": "Không tìm thấy tài khoản này."})
+        if rec.get("role") == "admin":
+            return JSONResponse(status_code=400, content={"success": False, "error": "Không thể khóa thiết bị của Chủ hệ thống!"})
+
+        devs = rec.setdefault("devices", {})
+        if action == "reset_all":
+            rec["devices"] = {}
+            _save_vip_users_unlocked(users)
+            return JSONResponse(content={"success": True, "message": f"Đã reset toàn bộ thiết bị cho {target_u}."})
+
+        if not dev_id:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Thiếu mã máy (device_id)."})
+
+        d_entry = devs.get(dev_id) if isinstance(devs.get(dev_id), dict) else {"id": dev_id, "last_seen": int(time.time())}
+        if action == "block":
+            d_entry["blocked"] = True
+            devs[dev_id] = d_entry
+            bmap[dev_id] = {
+                "device_id": dev_id,
+                "blocked_at": int(time.time()),
+                "username": target_u,
+                "ip": d_entry.get("ip", ""),
+            }
+        elif action == "unblock":
+            d_entry["blocked"] = False
+            d_entry.pop("auto_limit", None)
+            devs[dev_id] = d_entry
+            bmap.pop(dev_id, None)
+        else:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Hành động không hợp lệ."})
+
+        _save_vip_users_unlocked(users)
+        _save_blocked_devices_unlocked(bmap)
+
+    return JSONResponse(content={"success": True})
 
 
 @app.post("/api/vip/admin/users")
@@ -627,6 +836,7 @@ async def api_vip_admin_upsert_user(req: Request):
     note_in = body.get("note")
     active = bool(body.get("active", True))
     days = body.get("days")
+    max_devs_in = body.get("max_devices")
 
     if not target_u or len(target_u) < 2:
         return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản phải từ 2 ký tự trở lên (chữ/số)."})
@@ -644,6 +854,7 @@ async def api_vip_admin_upsert_user(req: Request):
             d_val = int(days)
             exp_ts = 0 if d_val <= 0 else int(time.time()) + d_val * 86400
 
+        bmap = _load_blocked_devices_unlocked()
         if existing:
             if pwd:
                 existing["password_hash"] = _hash_password(pwd)
@@ -654,8 +865,13 @@ async def api_vip_admin_upsert_user(req: Request):
             existing["expires_at"] = exp_ts
             if note_in is not None:
                 existing["note"] = str(note_in).strip()[:120]
-            saved_pub = _public_vip_user(existing)
+            if max_devs_in is not None and str(max_devs_in).strip() != "":
+                existing["max_devices"] = max(1, int(max_devs_in))
+            saved_pub = _public_vip_user(existing, bmap)
         else:
+            m_dev = 2
+            if max_devs_in is not None and str(max_devs_in).strip() != "":
+                m_dev = max(1, int(max_devs_in))
             new_rec = {
                 "username": target_u,
                 "password_hash": _hash_password(pwd),
@@ -666,9 +882,11 @@ async def api_vip_admin_upsert_user(req: Request):
                 "scan_count": 0,
                 "created_at": int(time.time()),
                 "token_ver": 1,
+                "max_devices": m_dev,
+                "devices": {},
             }
             users[target_u] = new_rec
-            saved_pub = _public_vip_user(new_rec)
+            saved_pub = _public_vip_user(new_rec, bmap)
         _save_vip_users_unlocked(users)
 
     return JSONResponse(content={"success": True, "user": saved_pub})
@@ -712,15 +930,23 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     proxy = str(body.get("proxy") or "").strip()
     sec_uid = str(body.get("sec_uid") or "").strip()
 
-    # Kiểm tra quyền VIP / Admin thực sự (đã kích hoạt VIP & còn hạn) để mở khóa API quét trùng Group ID
+    # Kiểm tra quyền VIP / Admin thực sự + kiểm tra Mã máy có bị khóa / vượt giới hạn thiết bị không
     vip_user = _extract_vip_user(req, body)
-    allow_paid_groupid = _has_vip_privilege(vip_user)
-    if allow_paid_groupid and vip_user and max_cursor == 0:
+    dev_id, dev_label, client_ip_chk = _extract_device_info(req, body)
+    allow_paid_groupid = False
+    if vip_user:
         with _VIP_LOCK:
             users_db = _load_vip_users_unlocked()
+            bmap_db = _load_blocked_devices_unlocked()
             u_rec = users_db.get(vip_user["username"])
             if isinstance(u_rec, dict):
-                u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + 1
+                dev_err = _record_and_check_device_unlocked(u_rec, dev_id, dev_label, client_ip_chk, bmap_db)
+                if dev_err:
+                    _save_vip_users_unlocked(users_db)
+                    return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": dev_err})
+                allow_paid_groupid = _has_vip_privilege(u_rec)
+                if allow_paid_groupid and max_cursor == 0:
+                    u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + 1
                 _save_vip_users_unlocked(users_db)
 
     force_ext = query.startswith("!")
