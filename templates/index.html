@@ -3377,8 +3377,9 @@
                     `;
                 } else if (!lastScanVipMode) {
                     dupBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
-                            <span onclick="openVipModal(true)" data-tip="🔒 Chưa đăng nhập VIP nên chưa kiểm tra Trùng lặp & Video Gốc — Bấm để đăng nhập VIP!" class="h-7 px-2.5 rounded-lg bg-slate-900/95 hover:bg-amber-950/70 border border-amber-500/45 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-pointer leading-normal transition"><i class="fa-solid fa-lock text-[10px]"></i> VIP Check</span>
+                        <div class="inline-flex flex-col items-center justify-center gap-1">
+                            <span data-tip="Không bị Mất đề xuất FYP & Không vi phạm Bản quyền (Đăng nhập VIP để kiểm tra thêm Trùng lặp & Video Gốc)" class="h-7 px-2.5 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-check"></i> FYP Sạch</span>
+                            <span onclick="openVipModal(true)" data-tip="🔒 Bấm đăng nhập VIP để kiểm tra Trùng lặp & lấy link Video Gốc!" class="px-2 py-0.5 rounded-md bg-slate-900/95 hover:bg-amber-950/70 border border-amber-500/40 text-amber-300 font-bold text-[10px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-pointer transition"><i class="fa-solid fa-lock text-[8px]"></i> Check Trùng</span>
                         </div>
                     `;
                 } else {
@@ -3573,7 +3574,7 @@
                 } else if (isDup) {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🔴 TRÙNG</span>`;
                 } else if (!lastScanVipMode) {
-                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-slate-900/95 text-amber-300 font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border border-amber-400/70 drop-shadow flex items-center gap-1 backdrop-blur-md">🔒 CẦN VIP</span>`;
+                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-emerald-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-emerald-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🟢 FYP SẠCH</span>`;
                 } else {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-emerald-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-emerald-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🟢 SẠCH</span>`;
                 }
