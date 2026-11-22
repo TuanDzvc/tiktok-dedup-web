@@ -664,16 +664,14 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
 def _fetch_tikhub_multi_awemes(
     video_ids: List[str],
     sec_uid: str = "",
+    unique_id: str = "",
     start_cursor_ms: int = 0,
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Lấy group_id, region & NFF chuẩn Mobile với cơ chế tự động chọn cổng rẻ nhất:
-    1. Nếu tài khoản có số dư nạp (Balance): ưu tiên fetch_user_post_videos ($0.001 cho cả 20 video/lần ~ 25đ/kênh).
-    2. Nếu đang dùng Free Credit (402 $0đ) hoặc còn sót video:
-       - Ít video (<= 8 video): gọi fetch_one_video ($0.001/video, tránh mất $0.01 cả gói 10).
-       - Nhiều video (>= 9 video): gom lô fetch_multi_video ($0.01/10 video).
+    Lấy group_id, region & NFF chuẩn Mobile với khóa trần chi phí cứng (~26đ = $0.001 / lượt quét kênh 18 video):
+    - Dùng fetch_user_post_videos_v3 (count=20): trả đủ cả 20 video (hỗ trợ cả kênh US Oracle lẫn Global/VN/UK) chỉ trong ĐÚNG 1 request ($0.001 ~ 26đ).
+    - Tuyệt đối KHÔNG gọi fetch_multi_video ($0.01) hay bắn hàng loạt fetch_one_video gây tốn tiền oan.
     """
-    global _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL
     api_key = _get_tikhub_api_key()
     clean_ids = [str(v).strip() for v in video_ids if str(v).strip().isdigit()]
     if not api_key or not clean_ids:
@@ -689,28 +687,29 @@ def _fetch_tikhub_multi_awemes(
                 cost_ctx["cost_usd"] = round(float(cost_ctx.get("cost_usd") or 0.0) + usd_val, 6)
                 cost_ctx["api_calls"] = int(cost_ctx.get("api_calls") or 0) + 1
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+    clean_uname = str(unique_id or "").lstrip("@").strip()
+    is_channel_scan = bool(sec_uid or clean_uname)
 
-    # 1. Cổng siêu rẻ $0.001 / trang (rẻ gấp 10 lần fetch_multi_video $0.01/10 video)
-    clean_id_set = set(clean_ids)
-    if sec_uid and len(clean_ids) >= 2 and time.time() >= _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL:
+    # 1. Quét kênh (>= 1 video): gọi fetch_user_post_videos_v3 ($0.001 / 20 video ~ 26 VNĐ cho cả kênh 18 video!)
+    if is_channel_scan:
+        clean_id_set = set(clean_ids)
         cur_val = int(start_cursor_ms or 0)
-        max_pages = min(4, max(1, (len(clean_ids) + 8) // 9))
+        # Lượt đầu cố định 1 trang (20 video = $0.001 ~ 26đ); chỉ cho tối đa 2 trang nếu lật trang sâu
+        max_pages = 1 if cur_val == 0 else 2
         for _page_idx in range(max_pages):
-            missing_now = [vid for vid in clean_ids if vid not in results]
-            # Nếu chỉ còn đúng 1 video lẻ (VD video ghim cũ), gọi thẳng fetch_one_video ($0.001) chính xác 100% thay vì lật trang mò
-            if len(missing_now) <= 1:
+            if all(vid in results for vid in clean_ids):
                 break
+            req_params: Dict[str, Any] = {"count": 20, "max_cursor": cur_val, "sort_type": 0}
+            if sec_uid:
+                req_params["sec_user_id"] = sec_uid
+            else:
+                req_params["unique_id"] = clean_uname
             try:
                 r_post = requests.get(
-                    "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos",
-                    params={"sec_user_id": sec_uid, "count": 20, "max_cursor": cur_val, "sort_type": 0},
+                    "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos_v3",
+                    params=req_params,
                     headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-                    timeout=8,
+                    timeout=9,
                 )
                 if r_post.status_code == 200:
                     _add_api_cost(0.001)
@@ -722,89 +721,36 @@ def _fetch_tikhub_multi_awemes(
                     after_hits = sum(1 for vid in clean_id_set if vid in results)
                     has_more_p = bool(p_data.get("has_more")) if isinstance(p_data, dict) else False
                     next_cur_p = int(p_data.get("max_cursor") or 0) if isinstance(p_data, dict) else 0
-                    if next_cur_p > 0:
+                    if sec_uid and next_cur_p > 0:
                         _TIKHUB_SECUID_NEXT_CURSOR[sec_uid] = next_cur_p
-                    # Dừng ngay nếu trang vừa lấy không khớp thêm video mục tiêu nào hoặc đã hết trang
                     if not aw_list or (after_hits == before_hits) or not has_more_p or next_cur_p <= 0 or next_cur_p == cur_val:
                         break
                     cur_val = next_cur_p
-                elif r_post.status_code == 402:
-                    # Tài khoản đang dùng Free Credit -> tạm nghỉ thử cổng này 5 phút (402 không bị trừ tiền)
-                    _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL = time.time() + 300
-                    break
                 else:
                     break
             except Exception:
                 break
-
-    remaining_ids = [vid for vid in clean_ids if vid not in results]
-    if not remaining_ids:
+        # Khóa cứng chi phí: Khi quét kênh chỉ dùng đúng cổng v3 ($0.001 ~ 26đ), KHÔNG fallback bắn lẻ 18 video!
         return results
 
-    def _call_one(vid: str) -> Optional[Dict[str, Any]]:
-        try:
-            resp = requests.get(
-                "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video",
-                params={"aweme_id": vid},
-                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-                timeout=8,
-            )
-            if resp.status_code == 200:
-                _add_api_cost(0.001)
-                d = (resp.json() or {}).get("data") or {}
-                if isinstance(d, dict):
-                    aw = d.get("aweme_detail") if isinstance(d.get("aweme_detail"), dict) else d
-                    if aw.get("aweme_id") or aw.get("id"):
-                        return aw
-        except Exception:
-            pass
-        return None
-
-    def _call_chunk(chunk_ids: List[str]) -> List[Dict[str, Any]]:
-        if len(chunk_ids) <= 8:
-            out_ones: List[Dict[str, Any]] = []
-            if len(chunk_ids) == 1:
-                one_res = _call_one(chunk_ids[0])
-                if one_res:
-                    out_ones.append(one_res)
-            else:
-                with ThreadPoolExecutor(max_workers=min(6, len(chunk_ids))) as one_pool:
-                    for one_res in one_pool.map(_call_one, chunk_ids):
-                        if one_res:
-                            out_ones.append(one_res)
-            return out_ones
-        try:
-            resp = requests.post(
-                "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_multi_video",
-                json=chunk_ids,
-                headers=headers,
-                timeout=8,
-            )
-            if resp.status_code == 200:
-                _add_api_cost(0.01)
-                payload = resp.json()
-                data = payload.get("data")
-                if isinstance(data, list):
-                    return [x for x in data if isinstance(x, dict)]
-                if isinstance(data, dict):
-                    arr = data.get("aweme_details") or data.get("aweme_list") or []
-                    return [x for x in arr if isinstance(x, dict)]
-            else:
-                print(f"[TikHubGroupId] HTTP {resp.status_code} khi lấy batch {len(chunk_ids)} video")
-        except Exception as err:
-            print(f"[TikHubGroupId] Lỗi kết nối batch: {err}")
-        return []
-
-    chunks = [remaining_ids[i:i + 10] for i in range(0, len(remaining_ids), 10)]
-    raw_awemes: List[Dict[str, Any]] = []
-    if len(chunks) == 1:
-        raw_awemes = _call_chunk(chunks[0])
-    else:
-        with ThreadPoolExecutor(max_workers=min(3, len(chunks))) as pool:
-            for res_list in pool.map(_call_chunk, chunks):
-                raw_awemes.extend(res_list)
-
-    _cache_and_collect_awemes(raw_awemes, results)
+    # 2. Trường hợp khách dán lẻ đúng 1 link / ID video duy nhất (không phải quét kênh): 1 request = $0.001 (~26đ)
+    vid_single = clean_ids[0]
+    try:
+        resp = requests.get(
+            "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video_v3",
+            params={"aweme_id": vid_single, "region": "US"},
+            headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+            timeout=8,
+        )
+        if resp.status_code == 200:
+            _add_api_cost(0.001)
+            d = (resp.json() or {}).get("data") or {}
+            if isinstance(d, dict):
+                aw = d.get("aweme_detail") if isinstance(d.get("aweme_detail"), dict) else d
+                if aw.get("aweme_id") or aw.get("id"):
+                    _cache_and_collect_awemes([aw], results)
+    except Exception:
+        pass
     return results
 
 
@@ -812,6 +758,7 @@ def sync_items_tikhub_groupid(
     raw_items: List[Dict[str, Any]],
     tkm_cache: Optional[Dict[str, Any]] = None,
     sec_uid: str = "",
+    unique_id: str = "",
     is_load_more: bool = False,
 ) -> None:
     """Đồng bộ trực tiếp group_id, region và cờ is_nff_or_nr cho danh sách video (ưu tiên cache 0đ trước)."""
@@ -872,7 +819,7 @@ def sync_items_tikhub_groupid(
             if newest_ct > 1_000_000_000:
                 start_cur_ms = (newest_ct + 1) * 1000
 
-    fetched_awemes = _fetch_tikhub_multi_awemes(missing_ids, sec_uid=sec_uid, start_cursor_ms=start_cur_ms)
+    fetched_awemes = _fetch_tikhub_multi_awemes(missing_ids, sec_uid=sec_uid, unique_id=unique_id, start_cursor_ms=start_cur_ms)
     if not fetched_awemes:
         return
 
@@ -2191,7 +2138,13 @@ def fetch_channel_info_and_posts(
     video_list = []
     if allow_paid_groupid:
         tkm_cache = _load_tiktokmanager_cache()
-        sync_items_tikhub_groupid(raw_items, tkm_cache, sec_uid=sec_uid, is_load_more=(max_cursor > 0))
+        sync_items_tikhub_groupid(
+            raw_items,
+            tkm_cache,
+            sec_uid=sec_uid,
+            unique_id=str(channel_info.get("uniqueId") or username or ""),
+            is_load_more=(max_cursor > 0),
+        )
     else:
         tkm_cache = {}
     ch_followers = int(channel_info.get("followers") or 0)
