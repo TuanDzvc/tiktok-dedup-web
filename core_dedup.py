@@ -749,6 +749,76 @@ def _get_scan_cost_ctx() -> Optional[Dict[str, Any]]:
     return getattr(_SCAN_COST_TLS, "ctx", None)
 
 
+def _extract_aweme_quality_label(vid_obj: Any) -> str:
+    """Trích xuất nhãn độ phân giải thực (1080p/720p/540p/480p...) từ metadata video Mobile & Web."""
+    if not isinstance(vid_obj, dict):
+        return ""
+    best_short = 0
+
+    def _consider_wh(w_val: Any, h_val: Any) -> None:
+        nonlocal best_short
+        try:
+            w = int(w_val or 0)
+            h = int(h_val or 0)
+            if w > 0 and h > 0:
+                short_side = min(w, h)
+            elif w > 0 or h > 0:
+                short_side = max(w, h)
+            else:
+                return
+            if short_side > best_short:
+                best_short = short_side
+        except Exception:
+            pass
+
+    _consider_wh(vid_obj.get("width"), vid_obj.get("height"))
+
+    p_addr = vid_obj.get("play_addr") or vid_obj.get("playAddr")
+    if isinstance(p_addr, dict):
+        _consider_wh(p_addr.get("width") or p_addr.get("Width"), p_addr.get("height") or p_addr.get("Height"))
+
+    for br_key in ("bit_rate", "bitrateInfo"):
+        br_list = vid_obj.get(br_key)
+        if not isinstance(br_list, list):
+            continue
+        for br in br_list:
+            if not isinstance(br, dict):
+                continue
+            pa = br.get("play_addr") or br.get("PlayAddr")
+            if isinstance(pa, dict):
+                _consider_wh(pa.get("width") or pa.get("Width"), pa.get("height") or pa.get("Height"))
+            gear = str(br.get("gear_name") or br.get("GearName") or "").lower()
+            m_g = re.search(r"(?:^|[_-])(2160|1440|1080|720|540|480|360)(?:p|[_-]|$)", gear)
+            if m_g and best_short == 0:
+                best_short = int(m_g.group(1))
+
+    if best_short >= 2160:
+        return "4K"
+    if best_short >= 1440:
+        return "2K"
+    if best_short >= 1000:
+        return "1080p"
+    if best_short >= 700:
+        return "720p"
+    if best_short >= 520:
+        return "540p"
+    if best_short >= 460:
+        return "480p"
+    if best_short > 0:
+        return f"{best_short}p"
+
+    ratio = str(vid_obj.get("ratio") or "").strip().lower()
+    m_r = re.search(r"(2160|1440|1080|720|540|480|360)", ratio)
+    if m_r:
+        r_num = int(m_r.group(1))
+        if r_num >= 2160:
+            return "4K"
+        if r_num >= 1440:
+            return "2K"
+        return f"{r_num}p"
+    return ""
+
+
 def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[str, Dict[str, Any]]) -> None:
     now_ts = int(time.time())
     cache_ref = _load_persistent_groupid_cache()
@@ -767,6 +837,7 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
         au_uid = str(au_obj.get("uid") or "").strip()
         dur_ms = int(vid_obj.get("duration") or 0)
         d_size = int(((vid_obj.get("play_addr") or {}).get("data_size")) or 0)
+        qual_lbl = _extract_aweme_quality_label(vid_obj)
         results[aid] = aw
         if gid:
             with _GROUPID_CACHE_LOCK:
@@ -777,6 +848,7 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
                     "author_uid": au_uid,
                     "dur_ms": dur_ms,
                     "data_size": d_size,
+                    "quality": qual_lbl,
                     "ts": now_ts,
                 }
                 changed = True
@@ -916,6 +988,10 @@ def sync_items_tikhub_groupid(
                 it["region"] = c_reg
             if c_entry.get("is_nff_or_nr") is True:
                 it["is_nff_or_nr"] = True
+            if c_entry.get("quality") and not it.get("quality"):
+                it["quality"] = str(c_entry["quality"])
+            if not it.get("duration") and int(c_entry.get("dur_ms") or 0) > 0:
+                it["duration"] = int(c_entry["dur_ms"])
             continue
 
         existing_gid = str(it.get("group_id") or it.get("groupId") or (tkm_map.get(aid) or {}).get("group_id") or "").strip()
@@ -959,6 +1035,12 @@ def sync_items_tikhub_groupid(
             it["region"] = reg
         if aw.get("is_nff_or_nr") is True:
             it["is_nff_or_nr"] = True
+        aw_vid = aw.get("video") if isinstance(aw.get("video"), dict) else {}
+        q_lbl = _extract_aweme_quality_label(aw_vid)
+        if q_lbl:
+            it["quality"] = q_lbl
+        if not it.get("duration") and int(aw_vid.get("duration") or 0) > 0:
+            it["duration"] = int(aw_vid["duration"])
 
 class TikTokPlaywrightWorker:
     """
@@ -2391,15 +2473,7 @@ def fetch_channel_info_and_posts(
 
 
         video_obj = it.get("video") if isinstance(it.get("video"), dict) else {}
-
-
-        v_h = int(video_obj.get("height") or 0)
-
-
-        v_w = int(video_obj.get("width") or 0)
-
-
-        quality_str = "1080p" if v_h >= 1080 else ("720p" if v_h >= 720 else ("480p" if v_h >= 480 else (f"{v_w}x{v_h}" if v_h > 0 else "Chuẩn")))
+        quality_str = str(it.get("quality") or "").strip() or _extract_aweme_quality_label(video_obj) or "Chuẩn"
 
         ch_reg = normalize_country_code(channel_info.get("region") or "US")
         cached_free_reg = ((p_gid_cache_ref.get(aweme_id) or {}).get("region") if isinstance(p_gid_cache_ref, dict) else "")
@@ -2546,7 +2620,7 @@ def fetch_channel_info_and_posts(
             if has_real_group_dup:
                 dup_origin_vid = group_id
         elif has_real_group_dup:
-            dup_reason = f"Trùng lặp Group ID (Group: {group_id})"
+            dup_reason = "Trùng lặp nội dung với video gốc trên TikTok"
             dup_origin_vid = group_id
         elif cached_meta.get("is_dup"):
             dup_reason = "Trùng lặp nội dung (Khớp cache TikTok Manager)"

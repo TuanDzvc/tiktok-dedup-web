@@ -754,6 +754,9 @@
                         <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                     </a>
                 </div>
+                <p class="text-[11px] text-amber-300/95 font-medium leading-snug">
+                    💡 Lưu ý: Nếu bấm mở thấy báo <b>"Video hiện không khả dụng"</b> tức là video gốc đã bị xóa hoặc ẩn riêng tư.
+                </p>
             </div>
             <div id="modalOriginLockedBox" class="hidden p-3 rounded-xl bg-slate-950/90 border border-amber-500/50 text-amber-200 text-xs flex items-center justify-between gap-3 shadow-inner">
                 <span class="flex items-center gap-2 font-semibold">
@@ -3473,11 +3476,11 @@
                     origBtn = `
                         <div class="relative inline-flex items-center justify-center">
                             <a href="${origLink}" target="_blank" rel="noopener noreferrer" 
-                               title="Mở video gốc trên TikTok:\n${origLink}"
+                               data-tip="Bấm để mở xem Video Gốc trên TikTok&#10;💡 Nếu hiện &quot;Video hiện không khả dụng&quot; tức là video gốc đã bị xóa hoặc ẩn riêng tư"
                                class="w-[84px] h-7 px-2.5 rounded-lg bg-sky-950/95 hover:bg-sky-900 border border-sky-500/75 text-sky-300 hover:text-white text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 transition shadow-sm">
                                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Gốc ↗
                             </a>
-                            <button onclick="copyText('${origLink}')" title="Sao chép link video gốc" 
+                            <button onclick="copyText('${origLink}')" data-tip="Sao chép link video gốc" 
                                class="absolute left-full ml-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-300 transition text-xs">
                                 <i class="fa-regular fa-copy"></i>
                             </button>
@@ -3520,14 +3523,14 @@
                 } else if (v.is_fyp_restricted && isThisDup) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị Trùng nội dung, vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
+                            <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị trùng nội dung với video gốc&#10;Vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
                             ${origBtn}
                         </div>
                     `;
                 } else if (isThisDup) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="Chỉ bị Trùng nội dung (Trùng Group ID với video gốc) — Hiện KHÔNG bị mất đề xuất FYP" class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng</span>
+                            <span data-tip="Chỉ bị trùng nội dung với video gốc&#10;Hiện KHÔNG bị mất đề xuất FYP" class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng</span>
                             ${origBtn}
                         </div>
                     `;
@@ -3601,17 +3604,17 @@
                                     <i class="fa-solid fa-copyright text-rose-400"></i> Khiếu nại bản quyền
                                 </span>
                             ` : ''}
-                            <span class="px-1.5 py-0.5 rounded font-medium bg-slate-800/90 text-slate-200 border border-slate-700/80 flex items-center gap-1" title="Thiết bị đăng">
+                            <span class="px-1.5 py-0.5 rounded font-medium bg-slate-800/90 text-slate-200 border border-slate-700/80 flex items-center gap-1 cursor-help" data-tip="Thiết bị / nguồn tải video lên">
                                 <i class="fa-solid ${v.source_icon || 'fa-mobile-screen'} text-cyan-400 text-[10px]"></i>
                                 <span>${v.source || 'Mobile'}</span>
                             </span>
-                            ${v.quality ? `<span class="px-1.5 py-0.5 rounded font-mono font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-700/70" title="Độ phân giải">${v.quality}</span>` : ''}
+                            ${v.quality ? `<span class="px-1.5 py-0.5 rounded font-mono font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-700/70 cursor-help" data-tip="Độ phân giải video">${v.quality}</span>` : ''}
                             ${v.is_muted ? `
-                                <span class="px-1.5 py-0.5 rounded font-medium bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1" title="Âm thanh bị tắt do bản quyền nhạc">
+                                <span class="px-1.5 py-0.5 rounded font-medium bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1 cursor-help" data-tip="Âm thanh bị tắt do bản quyền nhạc">
                                     <i class="fa-solid fa-volume-xmark text-rose-400"></i> Tắt âm: Có
                                 </span>
                             ` : `
-                                <span class="px-1.5 py-0.5 rounded font-medium bg-emerald-950/70 text-emerald-400 border border-emerald-800/60 flex items-center gap-1" title="Âm thanh bình thường">
+                                <span class="px-1.5 py-0.5 rounded font-medium bg-emerald-950/70 text-emerald-400 border border-emerald-800/60 flex items-center gap-1 cursor-help" data-tip="Âm thanh bình thường">
                                     <i class="fa-solid fa-volume-high text-emerald-400"></i> Tắt âm: Không
                                 </span>
                             `}
@@ -3787,10 +3790,10 @@
                             </span>
                             ${(v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null')) ? `
                             <div class="flex items-center gap-1">
-                                <button onclick="event.stopPropagation(); copyText('${v.origin_url || `https://www.tiktok.com/@tiktok/video/${v.group_id}`}')" title="Copy link video gốc" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition">
+                                <button onclick="event.stopPropagation(); copyText('${v.origin_url || `https://www.tiktok.com/@tiktok/video/${v.group_id}`}')" data-tip="Sao chép link video gốc" class="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition">
                                     <i class="fa-regular fa-copy"></i>
                                 </button>
-                                <a href="${v.origin_url || `https://www.tiktok.com/@tiktok/video/${v.group_id}`}" target="_blank" onclick="event.stopPropagation()" rel="noopener noreferrer" title="Mở video gốc trên TikTok" class="px-2 py-0.5 rounded bg-sky-950 hover:bg-sky-900 border border-sky-600/70 text-sky-300 hover:text-white font-bold flex items-center gap-1 transition shadow-sm">
+                                <a href="${v.origin_url || `https://www.tiktok.com/@tiktok/video/${v.group_id}`}" target="_blank" onclick="event.stopPropagation()" rel="noopener noreferrer" data-tip="Bấm để mở xem Video Gốc trên TikTok&#10;💡 Nếu hiện &quot;Video hiện không khả dụng&quot; tức là video gốc đã bị xóa hoặc ẩn riêng tư" class="px-2 py-0.5 rounded bg-sky-950 hover:bg-sky-900 border border-sky-600/70 text-sky-300 hover:text-white font-bold flex items-center gap-1 transition shadow-sm">
                                     <span>Gốc</span> <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
                                 </a>
                             </div>
@@ -6538,7 +6541,7 @@
     <!-- Tooltip nổi căn chính giữa bên dưới nhãn trạng thái -->
     <div id="tikCenteredTooltip" class="fixed z-[999999] pointer-events-none hidden transition-opacity duration-100" style="left:0;top:0;">
         <div id="tikCenteredTooltipArrow" class="w-2.5 h-2.5 bg-[#0b1326] border-l border-t border-cyan-400/60 rotate-45 -mb-1.5 mx-auto"></div>
-        <div id="tikCenteredTooltipBody" class="px-3 py-1.5 rounded-xl bg-[#0b1326]/98 border border-cyan-400/60 text-white text-xs font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.85)] text-center max-w-[320px] leading-snug backdrop-blur-md"></div>
+        <div id="tikCenteredTooltipBody" class="px-3.5 py-2 rounded-xl bg-[#0b1326]/98 border border-cyan-400/60 text-white text-xs font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.85)] text-center max-w-[360px] whitespace-pre-line leading-snug backdrop-blur-md"></div>
     </div>
     <script>
         (function initCenteredTooltip() {
