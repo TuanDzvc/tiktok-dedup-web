@@ -203,8 +203,9 @@
                     <span class="text-white">Kiểm Tra Trùng Lặp</span>
                     <span class="bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent"> & Trạng Thái FYP</span>
                 </h1>
-                <p class="text-sm sm:text-base text-slate-400">
-                    Quét trùng lặp Group ID, phát hiện bản quyền, kiểm tra hạn chế FYP & Check Post quản lý hàng loạt (Xóa / Ẩn Riêng Tư / Bạn Bè video).
+                <p class="text-sm sm:text-base text-slate-400 leading-relaxed">
+                    Quét trùng lặp Group ID, phát hiện bản quyền, kiểm tra hạn chế FYP & Check Post quản lý hàng loạt<br />
+                    <span class="text-slate-300 font-medium">(Xóa / Ẩn Riêng Tư / Bạn Bè video).</span>
                 </p>
 
                 <!-- Input form: 2 Dòng riêng biệt rộng rãi, không bị lẹm placeholder -->
@@ -291,24 +292,14 @@
                         </div>
                     </div>
 
-                    <!-- DÒNG 2: Tùy chọn số lượng quét bên trái + Nút Kiểm Tra Ngay bên phải -->
-                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
-                        <!-- Mức quét cố định 18 video (không cho đổi) -->
-                        <div class="flex items-center gap-2 w-full sm:w-auto select-none">
-                            <input type="hidden" id="scanLimitSelect" value="18" />
-                            <span class="text-xs font-semibold text-slate-400 whitespace-nowrap hidden sm:inline-block">Số lượng quét:</span>
-                            <div class="w-full sm:w-auto bg-slate-900/80 border border-slate-700/80 text-slate-200 text-xs sm:text-sm font-bold rounded-xl px-3.5 py-2.5 shadow-inner flex items-center justify-center sm:justify-start gap-2">
-                                <i class="fa-solid fa-bolt text-amber-400 text-xs"></i>
-                                <span>18 video gần nhất / lượt (Mặc định)</span>
-                            </div>
-                        </div>
-
-                        <!-- Nút Kiểm Tra Ngay (To, rõ ràng, không bị co ép) -->
+                    <!-- DÒNG 2: Nút Kiểm Tra Ngay căn chính giữa (mặc định ngầm 18 video) -->
+                    <div class="flex items-center justify-center pt-1.5">
+                        <input type="hidden" id="scanLimitSelect" value="18" />
                         <button 
                             type="button" 
                             id="btnSubmit" 
                             onclick="handleCheck()"
-                            class="w-full sm:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-sm tracking-wide shadow-xl shadow-cyan-500/25 transition duration-200 flex items-center justify-center gap-2.5 whitespace-nowrap active:scale-95"
+                            class="w-full sm:w-auto px-10 py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-sm tracking-wide shadow-xl shadow-cyan-500/25 transition duration-200 flex items-center justify-center gap-2.5 whitespace-nowrap active:scale-95"
                         >
                             <i class="fa-solid fa-bolt text-amber-300"></i>
                             <span>Kiểm Tra Ngay</span>
