@@ -259,17 +259,22 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
             p_c = f"http://{p_c}"
         proxies = {"http": p_c, "https": p_c}
 
-    from requests.adapters import HTTPAdapter
-    sess = requests.Session()
-    sess.mount("https://", HTTPAdapter(pool_connections=25, pool_maxsize=25))
-    sess.mount("http://", HTTPAdapter(pool_connections=25, pool_maxsize=25))
+    import threading
+    _tls = threading.local()
+
+    def _get_crp_sess() -> requests.Session:
+        s = getattr(_tls, "sess", None)
+        if s is None:
+            s = requests.Session()
+            _tls.sess = s
+        return s
 
     def _check_crp_one(p):
         vid = str(p.get("aweme_id") or p.get("item_id") or p.get("vid") or p.get("id") or "").strip()
         if not vid:
             return
         try:
-            r = sess.get(
+            r = _get_crp_sess().get(
                 "https://www.tiktok.com/tiktok/v1/creator/m10n_center/video_reward_analytics",
                 params={
                     "aid": "1988",
@@ -312,7 +317,7 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
         except Exception:
             pass
 
-    with ThreadPoolExecutor(max_workers=min(24, len(targets))) as executor:
+    with ThreadPoolExecutor(max_workers=min(12, len(targets))) as executor:
         list(executor.map(_check_crp_one, targets))
 
 def api_get_post_list_native(cookie_str: str, ua: str, proxy: str = "", sec_uid: str = "", max_cursor: int = 0, count: int = 50) -> dict:
@@ -846,8 +851,7 @@ def fetch_external_channel_videos_creator_api(
     if proxies:
         s.proxies.update(proxies)
 
-    page_count = min(35, max(18, max_videos))
-    max_loops = max(1, (max_videos // page_count) + 1)
+    max_loops = max(1, (max_videos // 15) + 1)
     for _ in range(max_loops):
         vfp = "verify_" + "".join(random.choices(string.hexdigits, k=7))
         query_params = {
@@ -861,7 +865,7 @@ def fetch_external_channel_videos_creator_api(
             "browser_version": "5.0 (Windows)",
             "channel": "tiktok_web",
             "cookie_enabled": "true",
-            "count": str(page_count),
+            "count": "15",
             "cursor": str(cursor),
             "device_id": str(random.randint(10**18, 10**19)),
             "device_platform": "web_pc",
@@ -1178,8 +1182,10 @@ def fetch_channel_info_and_posts(
                     if un and un == username.strip().lower():
                         is_self_account = True
                         matched_acc_cookie = getattr(a, "tiktok_cookie", "")
-                        if getattr(a, "proxy", ""):
-                            matched_acc_proxy = getattr(a, "proxy", "")
+                        saved_px = str(getattr(a, "proxy", "") or "").strip()
+                        # Không dùng cổng tunnel cục bộ 127.0.0.1 của tool desktop (thường tắt hoặc nghẽn cổ chai khi bắn 30-40 request song song)
+                        if saved_px and "127.0.0.1" not in saved_px and "localhost" not in saved_px:
+                            matched_acc_proxy = saved_px
                         if getattr(a, "user_agent", ""):
                             matched_acc_ua = getattr(a, "user_agent", "")
                         break
