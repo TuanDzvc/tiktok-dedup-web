@@ -689,10 +689,13 @@
                                 type="button" 
                                 id="btnLoadMore" 
                                 onclick="loadMoreVideos()"
-                                class="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 transition duration-200 inline-flex items-center justify-center gap-2.5 active:scale-95 border border-cyan-400/30"
+                                class="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 transition duration-200 inline-flex flex-wrap items-center justify-center gap-2.5 active:scale-95 border border-cyan-400/30"
                             >
                                 <i id="loadMoreIcon" class="fa-solid fa-arrows-rotate"></i>
                                 <span id="loadMoreText">➕ Quét thêm 18 video tiếp theo</span>
+                                <span id="loadMoreCostBadge" class="hidden px-2.5 py-0.5 rounded-lg bg-dark-950/75 border border-cyan-300/40 text-[11px] font-extrabold text-amber-300 tabular-nums shadow-inner">
+                                    $0.0010 • ~26đ
+                                </span>
                             </button>
                             <p id="loadMoreEndMsg" class="hidden text-sm text-emerald-400 font-bold mt-2 tracking-wide flex items-center justify-center gap-1.5">
                                 <i class="fa-solid fa-circle-check"></i>
@@ -2910,6 +2913,7 @@
             btn.disabled = true;
             icon.className = "fa-solid fa-spinner animate-spin";
             text.innerText = "Đang quét thêm 18 video tiếp theo...";
+            document.getElementById('loadMoreCostBadge')?.classList.add('hidden');
 
             try {
                 const vipTokMore = getVipToken();
@@ -2998,6 +3002,16 @@
             } else {
                 btn.classList.remove('hidden');
                 endMsg.classList.add('hidden');
+                const costBadge = document.getElementById('loadMoreCostBadge');
+                if (costBadge) {
+                    if (canCurrentUserSeeBilling() && lastScanVipMode) {
+                        costBadge.innerHTML = `⚡ $0.0010 • ~26đ <span class="text-emerald-300 font-semibold">(0đ nếu đã cache)</span>`;
+                        costBadge.classList.remove('hidden');
+                    } else {
+                        costBadge.innerHTML = `Free 0đ`;
+                        costBadge.classList.remove('hidden');
+                    }
+                }
             }
         }
 
