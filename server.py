@@ -499,6 +499,21 @@ def start_cloudflare_tunnel(port: int = 8000):
         except Exception:
             pass
 
+        # Tránh sinh trùng hàng chục tiến trình cloudflared.exe của chính tunnel tiktok-tool (bỏ qua service hệ thống rỗng CommandLine)
+        try:
+            if os.name == "nt":
+                ps_chk = subprocess.check_output(
+                    ["powershell", "-NoProfile", "-Command", "(Get-CimInstance Win32_Process -Filter \"Name='cloudflared.exe'\" | Where-Object { $_.CommandLine -like '*tiktok-tool*' }).Count"],
+                    text=True,
+                    errors="ignore",
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                ).strip()
+                if ps_chk.isdigit() and int(ps_chk) >= 1:
+                    print(f"[Tunnel] Đã có {ps_chk} tiến trình cloudflared tiktok-tool đang chạy -> tái sử dụng ngay!", flush=True)
+                    return
+        except Exception:
+            pass
+
         cmd = [
             str(CLOUDFLARED_PATH),
             "tunnel",
