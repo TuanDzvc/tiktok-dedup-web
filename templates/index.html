@@ -3070,7 +3070,9 @@
             document.getElementById('statClean').innerText = cleanCount;
             const cleanSub = document.getElementById('statCleanPercent');
             if (cleanSub) {
-                cleanSub.innerText = `an toàn ${total > 0 ? ((cleanCount / total) * 100).toFixed(0) : 100}%`;
+                cleanSub.innerText = lastScanVipMode
+                    ? `an toàn ${total > 0 ? ((cleanCount / total) * 100).toFixed(0) : 100}%`
+                    : `FYP ổn (chưa check trùng)`;
             }
 
             document.getElementById('countTabAll').innerText = total;
@@ -3321,6 +3323,15 @@
                     `;
                 }
 
+                const lockedOrigBtn = `
+                    <div class="relative inline-flex items-center justify-center">
+                        <span data-tip="🔒 Phải đăng nhập tài khoản VIP mới check ra được video gốc!"
+                              class="w-[84px] h-7 px-2.5 rounded-lg bg-slate-900/95 border border-slate-600/80 text-slate-400 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-not-allowed select-none opacity-85 shadow-inner">
+                            <i class="fa-solid fa-lock text-[9px] text-amber-400"></i> Gốc ↗
+                        </span>
+                    </div>
+                `;
+
                 const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
                 const isCopyright = Boolean(v.is_copyright || v.status_code === 141 || (v.penalty_details && v.penalty_details.toLowerCase().includes('bản quyền')));
                 let dupBadge = '';
@@ -3334,14 +3345,14 @@
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span data-tip="${penTitle || 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT & Mất đề xuất FYP'}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-ban text-rose-400"></i> Không nguyên tác & Mất FYP</span>
-                            ${origBtn}
+                            ${origBtn || (!lastScanVipMode ? lockedOrigBtn : '')}
                         </div>
                     `;
                 } else if (v.is_crp_punished) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span data-tip="Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Hiện KHÔNG bị mất đề xuất FYP)" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> Không nguyên tác</span>
-                            ${origBtn}
+                            ${origBtn || (!lastScanVipMode ? lockedOrigBtn : '')}
                         </div>
                     `;
                 } else if (v.is_fyp_restricted && isThisDup) {
@@ -3355,13 +3366,19 @@
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span data-tip="Chỉ bị Trùng nội dung (Trùng Group ID với video gốc) — Hiện KHÔNG bị mất đề xuất FYP" class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng</span>
-                            ${origBtn}
+                            ${origBtn || (!lastScanVipMode ? lockedOrigBtn : '')}
                         </div>
                     `;
                 } else if (v.is_fyp_restricted) {
                     dupBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
                             <span data-tip="${penTitle || 'Bị TikTok chặn đề xuất lên trang Xu hướng (Mất FYP)'}" class="h-7 px-2.5 rounded-lg bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">🚨 Mất FYP</span>
+                        </div>
+                    `;
+                } else if (!lastScanVipMode) {
+                    dupBadge = `
+                        <div class="relative inline-flex items-center justify-center h-7">
+                            <span onclick="openVipModal(true)" data-tip="🔒 Chưa đăng nhập VIP nên chưa kiểm tra Trùng lặp & Video Gốc — Bấm để đăng nhập VIP!" class="h-7 px-2.5 rounded-lg bg-slate-900/95 hover:bg-amber-950/70 border border-amber-500/45 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-pointer leading-normal transition"><i class="fa-solid fa-lock text-[10px]"></i> VIP Check</span>
                         </div>
                     `;
                 } else {
@@ -3424,7 +3441,7 @@
                         </div>
                         <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
                             ${isCopyright ? `
-                                <span class="px-1.5 py-0.5 rounded font-bold bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1 shadow-sm" title="Video bị khiếu nại bản quyền âm thanh / hình ảnh (Mã 141)">
+                                <span class="px-1.5 py-0.5 rounded font-bold bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1 shadow-sm" title="Video bị khiếu nại bản quyền âm thanh / hình ảnh">
                                     <i class="fa-solid fa-copyright text-rose-400"></i> Khiếu nại bản quyền
                                 </span>
                             ` : ''}
@@ -3555,6 +3572,8 @@
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🔴 KHÔNG NGUYÊN TÁC</span>`;
                 } else if (isDup) {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🔴 TRÙNG</span>`;
+                } else if (!lastScanVipMode) {
+                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-slate-900/95 text-amber-300 font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border border-amber-400/70 drop-shadow flex items-center gap-1 backdrop-blur-md">🔒 CẦN VIP</span>`;
                 } else {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-emerald-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-emerald-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🟢 SẠCH</span>`;
                 }
@@ -3621,7 +3640,11 @@
                                     <span>Gốc</span> <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
                                 </a>
                             </div>
-                            ` : ''}
+                            ` : (!lastScanVipMode ? `
+                            <span data-tip="🔒 Phải đăng nhập tài khoản VIP mới check ra được video gốc!" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-600/80 text-slate-400 font-bold flex items-center gap-1 cursor-not-allowed select-none opacity-85">
+                                <i class="fa-solid fa-lock text-[9px] text-amber-400"></i> <span>Gốc ↗</span>
+                            </span>
+                            ` : '')}
                         </div>
                         ` : ''}
                     </div>

@@ -2287,7 +2287,8 @@ def fetch_channel_info_and_posts(
         quality_str = "1080p" if v_h >= 1080 else ("720p" if v_h >= 720 else ("480p" if v_h >= 480 else (f"{v_w}x{v_h}" if v_h > 0 else "Chuẩn")))
 
         ch_reg = normalize_country_code(channel_info.get("region") or "US")
-        region = normalize_country_code(it.get("region") or it.get("locationCreated") or it.get("country_code") or it.get("geo") or cached_meta.get("region") or ch_reg)
+        cached_free_reg = ((p_gid_cache_ref.get(aweme_id) or {}).get("region") if isinstance(p_gid_cache_ref, dict) else "")
+        region = normalize_country_code(it.get("region") or it.get("locationCreated") or it.get("country_code") or it.get("geo") or cached_free_reg or cached_meta.get("region") or ch_reg)
 
         group_id = str(it.get("group_id") or it.get("groupId") or cached_meta.get("group_id") or "") if allow_paid_groupid else ""
 
