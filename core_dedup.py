@@ -647,6 +647,11 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
         gid = str(aw.get("group_id") or aw.get("groupId") or "").strip()
         reg = normalize_country_code(aw.get("region"))
         nff = bool(aw.get("is_nff_or_nr"))
+        au_obj = aw.get("author") if isinstance(aw.get("author"), dict) else {}
+        vid_obj = aw.get("video") if isinstance(aw.get("video"), dict) else {}
+        au_uid = str(au_obj.get("uid") or "").strip()
+        dur_ms = int(vid_obj.get("duration") or 0)
+        d_size = int(((vid_obj.get("play_addr") or {}).get("data_size")) or 0)
         results[aid] = aw
         if gid:
             with _GROUPID_CACHE_LOCK:
@@ -654,6 +659,9 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
                     "group_id": gid,
                     "region": reg,
                     "is_nff_or_nr": nff,
+                    "author_uid": au_uid,
+                    "dur_ms": dur_ms,
+                    "data_size": d_size,
                     "ts": now_ts,
                 }
                 changed = True
@@ -2149,6 +2157,26 @@ def fetch_channel_info_and_posts(
         tkm_cache = {}
     ch_followers = int(channel_info.get("followers") or 0)
 
+    # Bản đồ toàn bộ video thuộc chính kênh đang quét (để loại trừ báo giả khi kênh cắt nhiều phần Part 1, Part 2... từ cùng 1 tập/bối cảnh)
+    def _extract_item_dur_sec(x_item: Dict[str, Any]) -> float:
+        v_sub = x_item.get("video") if isinstance(x_item.get("video"), dict) else {}
+        raw_d = float(x_item.get("duration") or v_sub.get("duration") or 0)
+        return (raw_d / 1000.0) if raw_d > 3600 else raw_d
+
+    own_channel_map: Dict[str, Dict[str, Any]] = {}
+    for x_it in (all_fetched_api_items or []) + (all_studio_items or []) + (raw_items or []):
+        if isinstance(x_it, dict):
+            x_id = str(x_it.get("id") or x_it.get("aweme_id") or x_it.get("item_id") or "").strip()
+            if x_id:
+                v_sub = x_it.get("video") if isinstance(x_it.get("video"), dict) else {}
+                own_channel_map[x_id] = {
+                    "dur_s": _extract_item_dur_sec(x_it),
+                    "size": int(v_sub.get("size") or ((v_sub.get("playAddr") or {}).get("DataSize") if isinstance(v_sub.get("playAddr"), dict) else 0) or 0),
+                    "ct": int(x_it.get("createTime") or x_it.get("create_time") or x_it.get("post_time") or 0),
+                }
+    p_gid_cache_ref = _load_persistent_groupid_cache()
+    cur_ch_uid = str(check_user_info.get("uid") or "").strip()
+
     for it in raw_items:
         aweme_id = str(it.get("id") or it.get("aweme_id") or it.get("item_id") or "")
         if not aweme_id:
@@ -2262,6 +2290,34 @@ def fetch_channel_info_and_posts(
         region = normalize_country_code(it.get("region") or it.get("locationCreated") or it.get("country_code") or it.get("geo") or cached_meta.get("region") or ch_reg)
 
         group_id = str(it.get("group_id") or it.get("groupId") or cached_meta.get("group_id") or "") if allow_paid_groupid else ""
+
+        # Lọc bỏ báo trùng ảo (Same-Channel Series Cluster):
+        # Khi cùng 1 kênh cắt nhiều phần khác nhau (Part 1, Part 2...) của cùng 1 show/bối cảnh & đăng cùng tiêu đề,
+        # TikTok gom chung vào GroupdIdList trỏ về phần trước trên CHÍNH KÊNH ĐÓ dù 2 video dài ngắn / nội dung khác hẳn nhau.
+        if group_id and group_id != aweme_id and group_id not in ("0", "None", "null"):
+            this_dur_s = _extract_item_dur_sec(it)
+            c_this = p_gid_cache_ref.get(aweme_id) if isinstance(p_gid_cache_ref, dict) else None
+            c_orig = p_gid_cache_ref.get(group_id) if isinstance(p_gid_cache_ref, dict) else None
+            is_same_channel_origin = (group_id in own_channel_map) or bool(
+                cur_ch_uid and cur_ch_uid != "---" and isinstance(c_orig, dict) and c_orig.get("author_uid") == cur_ch_uid
+            )
+            if is_same_channel_origin:
+                orig_info = own_channel_map.get(group_id) or {}
+                orig_dur_s = float(orig_info.get("dur_s") or 0)
+                if orig_dur_s <= 0 and isinstance(c_orig, dict) and int(c_orig.get("dur_ms") or 0) > 0:
+                    orig_dur_s = float(c_orig["dur_ms"]) / 1000.0
+                this_ms = int(c_this.get("dur_ms") or 0) if isinstance(c_this, dict) else 0
+                orig_ms = int(c_orig.get("dur_ms") or 0) if isinstance(c_orig, dict) else 0
+                this_sz = int((c_this or {}).get("data_size") or (own_channel_map.get(aweme_id) or {}).get("size") or 0)
+                orig_sz = int((c_orig or {}).get("data_size") or orig_info.get("size") or 0)
+                is_exact_self_repost = False
+                if this_ms > 0 and orig_ms > 0:
+                    is_exact_self_repost = abs(this_ms - orig_ms) <= 400 and (this_sz == 0 or orig_sz == 0 or abs(this_sz - orig_sz) / max(this_sz, orig_sz) < 0.03)
+                elif this_dur_s > 0 and orig_dur_s > 0:
+                    is_exact_self_repost = abs(this_dur_s - orig_dur_s) < 1.0 and (this_sz == 0 or orig_sz == 0 or abs(this_sz - orig_sz) / max(this_sz, orig_sz) < 0.03)
+                if not is_exact_self_repost:
+                    # Là 2 phần video khác nhau trên chính kênh này (không phải đăng đúp cùng 1 video, không phải reup kênh khác)
+                    group_id = aweme_id
 
         # Mã trạng thái kiểm duyệt TikTok (Mã 141 = Khiếu nại bản quyền, 140-149 = Bị gỡ bỏ / Vi phạm)
         st_val = it.get("status")
@@ -2378,14 +2434,11 @@ def fetch_channel_info_and_posts(
         # Phân biệt rõ:
         # 1. Trùng lặp / Không nguyên tác (is_dup / is_crp_punished): trùng Group ID hoặc bị đánh gậy Không nguyên tác BKT
         # 2. Án phạt FYP (has_fyp_pen): vi phạm tiêu chuẩn cộng đồng, TNS penalty, tắt tiếng bản quyền
-        # 3. Mất FYP (is_fyp): video không đủ điều kiện vào For You feed
-        # 4. Shadowban (is_shadow): hạn chế phân phối đề xuất FYP
+        # 3. Mất FYP (is_fyp): CHỈ bật khi TikTok thực sự cắm cờ hạn chế FYP (NFF/TNS/Bản quyền/Án phạt), KHÔNG tự bịa Mất FYP nếu chỉ mới Trùng!
         is_non_crp_dup = bool(is_dup and not is_crp_punished)
         is_fyp = bool(
             is_copyright
             or is_takedown
-            or is_non_crp_dup
-            or has_real_group_dup
             or is_tns_fyp_ban
             or is_muted
             or (can_repost is False)
@@ -2431,9 +2484,6 @@ def fetch_channel_info_and_posts(
             shadow_reason = shadow_reason or "Án phạt kiểm duyệt nội dung TikTok (Hạn chế FYP)"
             is_fyp = True
             is_shadow = True
-        elif is_non_crp_dup or has_real_group_dup:
-            shadow_reason = shadow_reason or dup_reason or "Nội dung trùng lặp (Không đủ điều kiện FYP)"
-            is_fyp = True
 
         raw_pen_str = str(it.get("penalty_details") or "")
         if "kháng về thành công" in raw_pen_str.lower() and (has_pen or is_dup):
