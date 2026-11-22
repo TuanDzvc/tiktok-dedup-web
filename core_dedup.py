@@ -693,9 +693,12 @@ def fetch_external_channel_videos_creator_api(
     ua_str: str = "",
     proxy_str: str = "",
     max_videos: int = 18,
-    max_cursor: int = 0
+    max_cursor: int = 0,
+    result_meta: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
-    """Quét video siêu tốc qua API creator/item_list (0.5s - 1.5s, không tốn RAM Playwright)."""
+    """Quét video siêu tốc qua API creator/item_list (0.5s - 1.5s, không tốn RAM Playwright).
+    result_meta["confirmed_empty"] = True khi TikTok trả statusCode=0 nhưng không có video công khai nào
+    (kênh để toàn bộ video ở chế độ Bạn bè / Riêng tư)."""
     if not sec_uid or not cookie_str:
         return []
     
@@ -762,6 +765,10 @@ def fetch_external_channel_videos_creator_api(
                 data = r.json()
                 items = data.get("itemList") or []
                 if not items:
+                    if (not all_items and str(cursor) == str(max_cursor or 0)
+                            and str(data.get("statusCode", data.get("status_code", ""))) == "0"
+                            and result_meta is not None):
+                        result_meta["confirmed_empty"] = True
                     break
                 for it in items:
                     iid = str(it.get("id") or "")
@@ -1219,6 +1226,7 @@ def fetch_channel_info_and_posts(
             print(f"[CheckDupWeb] Lỗi api_get_post_list: {e_studio}")
 
     # Trường hợp B1: Thử quét siêu tốc qua Creator API (chỉ mất ~1s, không tốn RAM)
+    creator_meta: Dict[str, Any] = {}
     if not raw_items and sec_uid and effective_cookie:
         api_items = fetch_external_channel_videos_creator_api(
             sec_uid=sec_uid,
@@ -1226,7 +1234,8 @@ def fetch_channel_info_and_posts(
             ua_str=matched_acc_ua,
             proxy_str=matched_acc_proxy or proxy_str,
             max_videos=max_videos + max_cursor,
-            max_cursor=max_cursor
+            max_cursor=max_cursor,
+            result_meta=creator_meta
         )
         if api_items:
             offset = int(max_cursor) if max_cursor > 0 else 0
@@ -1239,8 +1248,17 @@ def fetch_channel_info_and_posts(
                 has_more = len(api_items) > next_cursor or len(raw_items) >= max_videos
             print(f"[CheckDupWeb] Quét siêu tốc qua Creator API thành công: {len(raw_items)} video cho @{username}")
 
+    # Kênh có video nhưng TikTok xác nhận không có video công khai nào (toàn bộ để Bạn bè / Riêng tư)
+    # -> không quét Playwright vô ích (~30s), báo ngay cho người dùng.
+    no_public_videos = bool(
+        not raw_items and creator_meta.get("confirmed_empty")
+        and int(channel_info.get("videoCount") or 0) > 0 and max_cursor == 0
+    )
+    if no_public_videos:
+        print(f"[CheckDupWeb] @{username}: TikTok xác nhận 0 video công khai / {channel_info.get('videoCount')} video -> bỏ qua Playwright")
+
     # Trường hợp B2: Kênh ngoài hoặc chưa lấy được -> Quét dự phòng qua Playwright Worker siêu tốc
-    if not raw_items and username:
+    if not raw_items and username and not no_public_videos:
         channel_url = f"https://www.tiktok.com/@{username}"
         pw_cookie = effective_cookie or ""
         pw_items = fetch_external_channel_videos_playwright(
@@ -1699,7 +1717,11 @@ def fetch_channel_info_and_posts(
     ch_vids = int(channel_info.get("videoCount") or 0)
     video_notice = ""
     if total_loaded == 0:
-        if ch_vids > 0:
+        if ch_vids > 0 and no_public_videos:
+            video_notice = (f"Kênh @{username} có {ch_vids} video nhưng KHÔNG có video công khai nào — "
+                            f"toàn bộ đang để chế độ Bạn bè hoặc Riêng tư. TikTok chỉ cho chính chủ xem các video này. "
+                            f"Muốn check: bấm \"Thêm nick\" đăng nhập đúng nick @{username} rồi quét lại.")
+        elif ch_vids > 0:
             video_notice = f"Kênh @{username} có {ch_vids} video trên TikTok nhưng các video này có thể đang ở chế độ Riêng tư (Private), hoặc TikTok tạm thời giới hạn tải danh sách công khai."
         else:
             video_notice = f"Kênh @{username} hiện chưa đăng tải video nào."
