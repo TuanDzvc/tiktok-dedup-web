@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
-    <title>TikFlow Checker | Hệ Thống Quét Trùng Lặp & Án Phạt FYP TikTok</title>
+    <title>TikFlow Checker | Quét Trùng Lặp, Án Phạt FYP & Check Post (Xóa / Riêng Tư / Bạn Bè)</title>
     <!-- Brand Favicons -->
     <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/logo.png">
@@ -150,7 +150,7 @@
                                 TIKFLOW <span class="text-cyan-400 ml-1.5 font-extrabold text-xs px-2 py-0.5 rounded-lg bg-cyan-950/90 border border-cyan-700/60 shadow-sm">CHECKER PRO</span>
                             </span>
                         </div>
-                        <p class="text-[11px] text-slate-400 font-medium">Hệ Thống Quét Trùng Lặp & Kiểm Tra Án Phạt FYP TikTok</p>
+                        <p class="text-[11px] text-slate-400 font-medium">Quét Trùng Lặp, Án Phạt FYP & Check Post (Xóa / Riêng Tư / Bạn Bè Video)</p>
                     </div>
                 </a>
             </div>
@@ -204,7 +204,7 @@
                     <span class="bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent"> & Trạng Thái FYP</span>
                 </h1>
                 <p class="text-sm sm:text-base text-slate-400">
-                    Nhập tên người dùng hoặc dán liên kết để quét video, phát hiện vi phạm bản quyền, Group ID trùng lặp và phân tích hạn chế FYP.
+                    Quét trùng lặp Group ID, phát hiện bản quyền, kiểm tra hạn chế FYP & Check Post quản lý hàng loạt (Xóa / Ẩn Riêng Tư / Bạn Bè video).
                 </p>
 
                 <!-- Input form: 2 Dòng riêng biệt rộng rãi, không bị lẹm placeholder -->
@@ -293,20 +293,13 @@
 
                     <!-- DÒNG 2: Tùy chọn số lượng quét bên trái + Nút Kiểm Tra Ngay bên phải -->
                     <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
-                        <!-- Dropdown số lượng video -->
-                        <div class="flex items-center gap-2 w-full sm:w-auto">
-                            <label for="scanLimitSelect" class="text-xs font-semibold text-slate-400 whitespace-nowrap hidden sm:inline-block">Số lượng quét:</label>
-                            <div class="relative w-full sm:w-auto">
-                                <select 
-                                    id="scanLimitSelect" 
-                                    class="w-full sm:w-auto appearance-none bg-slate-900 border border-slate-700/90 text-slate-200 text-xs sm:text-sm font-bold rounded-xl pl-3.5 pr-8 py-2.5 focus:outline-none focus:border-cyan-400 shadow-md cursor-pointer hover:border-slate-500 transition"
-                                    title="Chọn số lượng video muốn quét"
-                                >
-                                    <option value="18" selected>⚡ 18 video gần nhất (Siêu tốc ~2s - Khuyên dùng)</option>
-                                    <option value="50">🚀 50 video gần nhất (~6s)</option>
-                                    <option value="100">📦 100 video gần nhất</option>
-                                </select>
-                                <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                        <!-- Mức quét cố định 18 video (không cho đổi) -->
+                        <div class="flex items-center gap-2 w-full sm:w-auto select-none">
+                            <input type="hidden" id="scanLimitSelect" value="18" />
+                            <span class="text-xs font-semibold text-slate-400 whitespace-nowrap hidden sm:inline-block">Số lượng quét:</span>
+                            <div class="w-full sm:w-auto bg-slate-900/80 border border-slate-700/80 text-slate-200 text-xs sm:text-sm font-bold rounded-xl px-3.5 py-2.5 shadow-inner flex items-center justify-center sm:justify-start gap-2">
+                                <i class="fa-solid fa-bolt text-amber-400 text-xs"></i>
+                                <span>18 video gần nhất / lượt (Mặc định)</span>
                             </div>
                         </div>
 

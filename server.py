@@ -933,7 +933,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Vui lòng nhập tên người dùng hoặc link TikTok!")
 
     max_cursor = int(body.get("max_cursor") or 0)
-    max_videos = int(body.get("max_videos") or 18)
+    max_videos = 18
     cookie = str(body.get("cookie") or "").strip()
     proxy = str(body.get("proxy") or "").strip()
     sec_uid = str(body.get("sec_uid") or "").strip()
