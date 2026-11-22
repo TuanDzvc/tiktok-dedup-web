@@ -612,8 +612,45 @@ def _save_persistent_groupid_cache() -> None:
             pass
 
 
-def _fetch_tikhub_multi_awemes(video_ids: List[str]) -> Dict[str, Dict[str, Any]]:
-    """Gọi batch POST /api/v1/tiktok/app/v3/fetch_multi_video lấy group_id, region & NFF chuẩn Mobile."""
+_TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL: float = 0.0
+
+
+def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[str, Dict[str, Any]]) -> None:
+    now_ts = int(time.time())
+    cache_ref = _load_persistent_groupid_cache()
+    changed = False
+    for aw in raw_awemes:
+        if not isinstance(aw, dict):
+            continue
+        aid = str(aw.get("aweme_id") or aw.get("id") or "").strip()
+        if not aid:
+            continue
+        gid = str(aw.get("group_id") or aw.get("groupId") or "").strip()
+        reg = str(aw.get("region") or "").strip().upper()
+        nff = bool(aw.get("is_nff_or_nr"))
+        results[aid] = aw
+        if gid:
+            with _GROUPID_CACHE_LOCK:
+                cache_ref[aid] = {
+                    "group_id": gid,
+                    "region": reg,
+                    "is_nff_or_nr": nff,
+                    "ts": now_ts,
+                }
+                changed = True
+    if changed:
+        _save_persistent_groupid_cache()
+
+
+def _fetch_tikhub_multi_awemes(video_ids: List[str], sec_uid: str = "") -> Dict[str, Dict[str, Any]]:
+    """
+    Lấy group_id, region & NFF chuẩn Mobile với cơ chế tự động chọn cổng rẻ nhất:
+    1. Nếu tài khoản có số dư nạp (Balance): ưu tiên fetch_user_post_videos ($0.001 cho cả 20 video/lần ~ 25đ/kênh).
+    2. Nếu đang dùng Free Credit (402 $0đ) hoặc còn sót video:
+       - Ít video (<= 8 video): gọi fetch_one_video ($0.001/video, tránh mất $0.01 cả gói 10).
+       - Nhiều video (>= 9 video): gom lô fetch_multi_video ($0.01/10 video).
+    """
+    global _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL
     api_key = _get_tikhub_api_key()
     clean_ids = [str(v).strip() for v in video_ids if str(v).strip().isdigit()]
     if not api_key or not clean_ids:
@@ -625,9 +662,62 @@ def _fetch_tikhub_multi_awemes(video_ids: List[str]) -> Dict[str, Dict[str, Any]
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    chunks = [clean_ids[i:i + 10] for i in range(0, len(clean_ids), 10)]
+
+    # 1. Cổng siêu rẻ $0.001 / 20 video (dành cho tài khoản có nạp số dư Balance)
+    if sec_uid and len(clean_ids) >= 2 and time.time() >= _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL:
+        try:
+            r_post = requests.get(
+                "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos",
+                params={"sec_user_id": sec_uid, "count": 20, "max_cursor": 0, "sort_type": 0},
+                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                timeout=8,
+            )
+            if r_post.status_code == 200:
+                p_data = (r_post.json() or {}).get("data") or {}
+                aw_list = p_data.get("aweme_list") if isinstance(p_data, dict) else (p_data if isinstance(p_data, list) else [])
+                if aw_list:
+                    _cache_and_collect_awemes(aw_list, results)
+            elif r_post.status_code == 402:
+                # Tài khoản đang dùng Free Credit -> tạm nghỉ thử cổng này 5 phút (402 không bị trừ tiền)
+                _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL = time.time() + 300
+        except Exception:
+            pass
+
+    remaining_ids = [vid for vid in clean_ids if vid not in results]
+    if not remaining_ids:
+        return results
+
+    def _call_one(vid: str) -> Optional[Dict[str, Any]]:
+        try:
+            resp = requests.get(
+                "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video",
+                params={"aweme_id": vid},
+                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                d = (resp.json() or {}).get("data") or {}
+                if isinstance(d, dict):
+                    aw = d.get("aweme_detail") if isinstance(d.get("aweme_detail"), dict) else d
+                    if aw.get("aweme_id") or aw.get("id"):
+                        return aw
+        except Exception:
+            pass
+        return None
 
     def _call_chunk(chunk_ids: List[str]) -> List[Dict[str, Any]]:
+        if len(chunk_ids) <= 8:
+            out_ones: List[Dict[str, Any]] = []
+            if len(chunk_ids) == 1:
+                one_res = _call_one(chunk_ids[0])
+                if one_res:
+                    out_ones.append(one_res)
+            else:
+                with ThreadPoolExecutor(max_workers=min(6, len(chunk_ids))) as one_pool:
+                    for one_res in one_pool.map(_call_one, chunk_ids):
+                        if one_res:
+                            out_ones.append(one_res)
+            return out_ones
         try:
             resp = requests.post(
                 "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_multi_video",
@@ -649,6 +739,7 @@ def _fetch_tikhub_multi_awemes(video_ids: List[str]) -> Dict[str, Dict[str, Any]
             print(f"[TikHubGroupId] Lỗi kết nối batch: {err}")
         return []
 
+    chunks = [remaining_ids[i:i + 10] for i in range(0, len(remaining_ids), 10)]
     raw_awemes: List[Dict[str, Any]] = []
     if len(chunks) == 1:
         raw_awemes = _call_chunk(chunks[0])
@@ -657,32 +748,15 @@ def _fetch_tikhub_multi_awemes(video_ids: List[str]) -> Dict[str, Dict[str, Any]
             for res_list in pool.map(_call_chunk, chunks):
                 raw_awemes.extend(res_list)
 
-    now_ts = int(time.time())
-    cache_ref = _load_persistent_groupid_cache()
-    changed = False
-    for aw in raw_awemes:
-        aid = str(aw.get("aweme_id") or aw.get("id") or "").strip()
-        if not aid:
-            continue
-        gid = str(aw.get("group_id") or aw.get("groupId") or "").strip()
-        reg = str(aw.get("region") or "").strip().upper()
-        nff = bool(aw.get("is_nff_or_nr"))
-        results[aid] = aw
-        if gid:
-            with _GROUPID_CACHE_LOCK:
-                cache_ref[aid] = {
-                    "group_id": gid,
-                    "region": reg,
-                    "is_nff_or_nr": nff,
-                    "ts": now_ts,
-                }
-                changed = True
-    if changed:
-        _save_persistent_groupid_cache()
+    _cache_and_collect_awemes(raw_awemes, results)
     return results
 
 
-def sync_items_tikhub_groupid(raw_items: List[Dict[str, Any]], tkm_cache: Optional[Dict[str, Any]] = None) -> None:
+def sync_items_tikhub_groupid(
+    raw_items: List[Dict[str, Any]],
+    tkm_cache: Optional[Dict[str, Any]] = None,
+    sec_uid: str = "",
+) -> None:
     """Đồng bộ trực tiếp group_id, region và cờ is_nff_or_nr cho danh sách video (ưu tiên cache 0đ trước)."""
     if not raw_items:
         return
@@ -725,7 +799,7 @@ def sync_items_tikhub_groupid(raw_items: List[Dict[str, Any]], tkm_cache: Option
     if not missing_ids or not _get_tikhub_api_key():
         return
 
-    fetched_awemes = _fetch_tikhub_multi_awemes(missing_ids)
+    fetched_awemes = _fetch_tikhub_multi_awemes(missing_ids, sec_uid=sec_uid)
     if not fetched_awemes:
         return
 
@@ -2040,7 +2114,7 @@ def fetch_channel_info_and_posts(
     # 5. Định dạng và kiểm tra trùng lặp cho từng video
     video_list = []
     tkm_cache = _load_tiktokmanager_cache()
-    sync_items_tikhub_groupid(raw_items, tkm_cache)
+    sync_items_tikhub_groupid(raw_items, tkm_cache, sec_uid=sec_uid)
     ch_followers = int(channel_info.get("followers") or 0)
 
     for it in raw_items:
