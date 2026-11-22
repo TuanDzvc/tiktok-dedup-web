@@ -613,6 +613,7 @@ def _save_persistent_groupid_cache() -> None:
 
 
 _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL: float = 0.0
+_TIKHUB_SECUID_NEXT_CURSOR: Dict[str, int] = {}
 
 
 def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[str, Dict[str, Any]]) -> None:
@@ -663,25 +664,39 @@ def _fetch_tikhub_multi_awemes(video_ids: List[str], sec_uid: str = "") -> Dict[
         "Accept": "application/json",
     }
 
-    # 1. Cổng siêu rẻ $0.001 / 20 video (dành cho tài khoản có nạp số dư Balance)
+    # 1. Cổng siêu rẻ $0.001 / trang (tới 30 video/trang, tự phân trang nếu chọn 24/50/100 video)
     if sec_uid and len(clean_ids) >= 2 and time.time() >= _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL:
-        try:
-            r_post = requests.get(
-                "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos",
-                params={"sec_user_id": sec_uid, "count": 20, "max_cursor": 0, "sort_type": 0},
-                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-                timeout=8,
-            )
-            if r_post.status_code == 200:
-                p_data = (r_post.json() or {}).get("data") or {}
-                aw_list = p_data.get("aweme_list") if isinstance(p_data, dict) else (p_data if isinstance(p_data, list) else [])
-                if aw_list:
-                    _cache_and_collect_awemes(aw_list, results)
-            elif r_post.status_code == 402:
-                # Tài khoản đang dùng Free Credit -> tạm nghỉ thử cổng này 5 phút (402 không bị trừ tiền)
-                _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL = time.time() + 300
-        except Exception:
-            pass
+        cur_val = 0
+        for _page_idx in range(6):
+            if all(vid in results for vid in clean_ids):
+                break
+            try:
+                r_post = requests.get(
+                    "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos",
+                    params={"sec_user_id": sec_uid, "count": 30, "max_cursor": cur_val, "sort_type": 0},
+                    headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                    timeout=8,
+                )
+                if r_post.status_code == 200:
+                    p_data = (r_post.json() or {}).get("data") or {}
+                    aw_list = p_data.get("aweme_list") if isinstance(p_data, dict) else (p_data if isinstance(p_data, list) else [])
+                    if aw_list:
+                        _cache_and_collect_awemes(aw_list, results)
+                    has_more_p = bool(p_data.get("has_more")) if isinstance(p_data, dict) else False
+                    next_cur_p = int(p_data.get("max_cursor") or 0) if isinstance(p_data, dict) else 0
+                    if next_cur_p > 0:
+                        _TIKHUB_SECUID_NEXT_CURSOR[sec_uid] = next_cur_p
+                    if not aw_list or not has_more_p or next_cur_p <= 0 or next_cur_p == cur_val:
+                        break
+                    cur_val = next_cur_p
+                elif r_post.status_code == 402:
+                    # Tài khoản đang dùng Free Credit -> tạm nghỉ thử cổng này 5 phút (402 không bị trừ tiền)
+                    _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL = time.time() + 300
+                    break
+                else:
+                    break
+            except Exception:
+                break
 
     remaining_ids = [vid for vid in clean_ids if vid not in results]
     if not remaining_ids:
