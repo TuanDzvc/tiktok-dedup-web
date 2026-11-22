@@ -621,6 +621,17 @@ def _save_persistent_groupid_cache() -> None:
 
 _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL: float = 0.0
 _TIKHUB_SECUID_NEXT_CURSOR: Dict[str, int] = {}
+_SCAN_COST_TLS = threading.local()
+
+
+def _reset_scan_cost_ctx() -> Dict[str, Any]:
+    ctx = {"cost_usd": 0.0, "api_calls": 0, "cached_hits": 0}
+    _SCAN_COST_TLS.ctx = ctx
+    return ctx
+
+
+def _get_scan_cost_ctx() -> Optional[Dict[str, Any]]:
+    return getattr(_SCAN_COST_TLS, "ctx", None)
 
 
 def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[str, Dict[str, Any]]) -> None:
@@ -669,6 +680,15 @@ def _fetch_tikhub_multi_awemes(
         return {}
 
     results: Dict[str, Dict[str, Any]] = {}
+    cost_ctx = _get_scan_cost_ctx()
+    cost_lock = threading.Lock()
+
+    def _add_api_cost(usd_val: float) -> None:
+        if cost_ctx is not None:
+            with cost_lock:
+                cost_ctx["cost_usd"] = round(float(cost_ctx.get("cost_usd") or 0.0) + usd_val, 6)
+                cost_ctx["api_calls"] = int(cost_ctx.get("api_calls") or 0) + 1
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -693,6 +713,7 @@ def _fetch_tikhub_multi_awemes(
                     timeout=8,
                 )
                 if r_post.status_code == 200:
+                    _add_api_cost(0.001)
                     p_data = (r_post.json() or {}).get("data") or {}
                     aw_list = p_data.get("aweme_list") if isinstance(p_data, dict) else (p_data if isinstance(p_data, list) else [])
                     before_hits = sum(1 for vid in clean_id_set if vid in results)
@@ -729,6 +750,7 @@ def _fetch_tikhub_multi_awemes(
                 timeout=8,
             )
             if resp.status_code == 200:
+                _add_api_cost(0.001)
                 d = (resp.json() or {}).get("data") or {}
                 if isinstance(d, dict):
                     aw = d.get("aweme_detail") if isinstance(d.get("aweme_detail"), dict) else d
@@ -759,6 +781,7 @@ def _fetch_tikhub_multi_awemes(
                 timeout=8,
             )
             if resp.status_code == 200:
+                _add_api_cost(0.01)
                 payload = resp.json()
                 data = payload.get("data")
                 if isinstance(data, list):
@@ -815,6 +838,9 @@ def sync_items_tikhub_groupid(
         c_entry = p_cache.get(aid)
         if isinstance(c_entry, dict) and c_entry.get("group_id"):
             it["group_id"] = str(c_entry["group_id"])
+            c_ctx = _get_scan_cost_ctx()
+            if c_ctx is not None:
+                c_ctx["cached_hits"] = int(c_ctx.get("cached_hits") or 0) + 1
             c_reg = normalize_country_code(c_entry.get("region"))
             if len(c_reg) == 2 and c_reg not in ("EU", "XO"):
                 it["region"] = c_reg
@@ -1445,6 +1471,7 @@ def fetch_channel_info_and_posts(
     - Hỗ trợ lấy dữ liệu Check user (Tên, Handle, SĐT, Quốc gia, UID, Ngày tạo).
     - Hỗ trợ phân trang: mặc định quét 24 video, có thể quét thêm các đợt tiếp theo.
     """
+    scan_cost_ctx = _reset_scan_cost_ctx()
     query = str(channel_query or "").strip()
     force_external = query.startswith("!")
     if force_external:
@@ -2622,5 +2649,10 @@ def fetch_channel_info_and_posts(
         "user_info": check_user_info,
         "hasMore": has_more,
         "maxCursor": next_cursor,
-        "video_notice": video_notice
+        "video_notice": video_notice,
+        "_internal_cost": {
+            "cost_usd": round(float(scan_cost_ctx.get("cost_usd") or 0.0), 4),
+            "api_calls": int(scan_cost_ctx.get("api_calls") or 0),
+            "cached_hits": int(scan_cost_ctx.get("cached_hits") or 0),
+        },
     }

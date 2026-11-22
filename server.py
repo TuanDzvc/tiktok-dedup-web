@@ -49,6 +49,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import requests
 
 # Import engine trích xuất
+import core_dedup
 from core_dedup import fetch_channel_info_and_posts, DEFAULT_UA, get_borrowed_cookie
 import studio_engine
 
@@ -755,6 +756,58 @@ async def api_vip_change_password(req: Request):
     return JSONResponse(content={"success": True, "token": new_tok, "message": "Đã đổi mật khẩu thành công!"})
 
 
+_TIKHUB_USD_TO_VND = 25500
+_TIKHUB_BAL_CACHE: Dict[str, Any] = {"ts": 0.0, "data": None}
+
+
+def _get_tikhub_live_balance(force_refresh: bool = False) -> Dict[str, Any]:
+    """Lấy số dư TikHub thực tế ($0.0000 miễn phí qua get_user_info) — chỉ phục vụ Admin."""
+    now_t = time.time()
+    cached = _TIKHUB_BAL_CACHE.get("data")
+    if not force_refresh and isinstance(cached, dict) and (now_t - float(_TIKHUB_BAL_CACHE.get("ts") or 0.0)) < 15:
+        return cached
+    api_key = core_dedup._get_tikhub_api_key()
+    if not api_key:
+        return {"balance_usd": 0.0, "free_credit_usd": 0.0, "total_usd": 0.0, "total_vnd": 0, "est_scans_left": 0, "usd_rate": _TIKHUB_USD_TO_VND}
+    try:
+        r = requests.get(
+            "https://api.tikhub.io/api/v1/tikhub/user/get_user_info",
+            headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+            timeout=6,
+        )
+        if r.status_code == 200:
+            ud = (r.json() or {}).get("user_data") or {}
+            bal = round(float(ud.get("balance") or 0.0), 4)
+            free_c = round(float(ud.get("free_credit") or 0.0), 4)
+            tot = round(bal + free_c, 4)
+            info = {
+                "balance_usd": bal,
+                "free_credit_usd": free_c,
+                "total_usd": tot,
+                "total_vnd": int(round(tot * _TIKHUB_USD_TO_VND)),
+                "est_scans_left": int(tot / 0.001),
+                "usd_rate": _TIKHUB_USD_TO_VND,
+            }
+            _TIKHUB_BAL_CACHE["ts"] = now_t
+            _TIKHUB_BAL_CACHE["data"] = info
+            return info
+    except Exception:
+        pass
+    if isinstance(cached, dict):
+        return cached
+    return {"balance_usd": 0.0, "free_credit_usd": 0.0, "total_usd": 0.0, "total_vnd": 0, "est_scans_left": 0, "usd_rate": _TIKHUB_USD_TO_VND}
+
+
+@app.get("/api/vip/admin/api-balance")
+async def api_vip_admin_balance(req: Request, refresh: int = Query(0)):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới xem được số dư API."})
+    import asyncio
+    info = await asyncio.to_thread(_get_tikhub_live_balance, bool(refresh))
+    return JSONResponse(content={"success": True, "billing": info})
+
+
 @app.get("/api/vip/admin/users")
 async def api_vip_admin_list_users(req: Request):
     u_obj = _extract_vip_user(req)
@@ -992,6 +1045,25 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         allow_paid_groupid=allow_paid_groupid,
     )
     
+    internal_cost = res.pop("_internal_cost", None) if isinstance(res, dict) else None
+    if isinstance(res, dict) and vip_user and vip_user.get("role") == "admin":
+        cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
+        c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
+        c_calls = int(cost_obj.get("api_calls") or 0)
+        c_cached = int(cost_obj.get("cached_hits") or 0)
+        c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
+        bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
+        res["admin_billing"] = {
+            "scan_cost_usd": c_usd,
+            "scan_cost_vnd": c_vnd,
+            "api_calls": c_calls,
+            "cached_hits": c_cached,
+            "balance_usd": bal_info["total_usd"],
+            "balance_vnd": bal_info["total_vnd"],
+            "est_scans_left": bal_info["est_scans_left"],
+            "usd_rate": _TIKHUB_USD_TO_VND,
+        }
+
     # Kích hoạt tải trước ảnh bìa vào RAM cache song song trong nền (0.001s khi trình duyệt yêu cầu)
     v_list = res.get("list", [])
     if v_list:

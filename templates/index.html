@@ -496,6 +496,12 @@
                 <!-- CỘT BÊN PHẢI: Toàn bộ nội dung kết quả, bảng video & bộ lọc -->
                 <div class="flex-grow min-w-0 w-full space-y-6">
 
+                    <!-- Thanh báo chi phí lượt quét & Số dư API (CHỈ HIỆN RIÊNG CHO SUPER ADMIN) -->
+                    <div id="adminScanCostBanner" class="hidden rounded-2xl px-4 py-3 bg-emerald-950/50 border border-emerald-500/40 shadow-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div id="adminScanCostLeft" class="flex items-center gap-2 font-bold text-emerald-200"></div>
+                        <div id="adminScanCostRight" class="flex items-center gap-2 font-bold text-cyan-200"></div>
+                    </div>
+
                     <!-- Channel Overview Card + 4 Summary Stat Cards -->
                     <div class="glass-panel rounded-3xl p-6 sm:p-7 border border-slate-700/80 shadow-2xl relative overflow-hidden space-y-6">
                         <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-5">
@@ -1619,6 +1625,26 @@
             <div class="p-4 sm:p-5 space-y-5 overflow-y-auto custom-scrollbar">
                 <!-- Khối tạo / cập nhật tài khoản VIP (Chỉ hiện cho Admin) -->
                 <div id="adminUserManagerSection" class="space-y-4">
+                    <!-- Thẻ Số Dư Ví TikHub API (Chỉ Admin nhìn thấy) -->
+                    <div class="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-slate-950/90 to-cyan-950/60 border border-emerald-500/40 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300 text-base">
+                                <i class="fa-solid fa-wallet"></i>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Số dư ví TikHub API hiện tại (Chỉ Admin thấy)</div>
+                                <div class="flex flex-wrap items-baseline gap-2 mt-0.5">
+                                    <span id="adminModalBalanceUsd" class="text-lg font-black font-mono text-emerald-300">$—</span>
+                                    <span id="adminModalBalanceVnd" class="text-sm font-extrabold text-amber-300">≈ — VNĐ</span>
+                                    <span id="adminModalEstScans" class="text-xs font-semibold text-cyan-300 bg-cyan-950/80 border border-cyan-700/60 px-2 py-0.5 rounded-lg">Còn ~— lượt quét</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" onclick="refreshAdminApiBalance(true)" class="px-3 py-1.5 rounded-xl bg-emerald-900/60 hover:bg-emerald-800/80 border border-emerald-500/50 text-emerald-200 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
+                            <i class="fa-solid fa-rotate"></i> Làm mới số dư
+                        </button>
+                    </div>
+
                     <form onsubmit="submitAdminSaveUser(event); return false;" class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-3">
                         <div class="text-xs font-extrabold text-cyan-300 flex items-center gap-1.5">
                             <i class="fa-solid fa-user-plus"></i> Tạo Mới / Cập Nhật Tài Khoản Khách VIP
@@ -1840,9 +1866,24 @@
                     </div>
                 `;
             }
+            const adminBalBtn = isAdmin ? `
+                <button
+                    type="button"
+                    onclick="refreshAdminApiBalance(true)"
+                    class="px-2.5 py-1 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/50 flex items-center gap-1.5 transition"
+                    title="Số dư ví API hiện tại (chỉ Admin thấy) — bấm để cập nhật mới nhất"
+                >
+                    <i class="fa-solid fa-coins text-emerald-400 text-xs"></i>
+                    <div class="flex flex-col items-start leading-tight">
+                        <span id="adminNavBalanceUsd" class="text-[11px] font-black font-mono text-emerald-300">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd || 0).toFixed(4)) : 'Ví API'}</span>
+                        <span id="adminNavBalanceVnd" class="text-[10px] font-bold text-amber-300">${window._lastAdminBal ? ('~' + Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : 'Đang tải...'}</span>
+                    </div>
+                </button>
+            ` : '';
             nav.innerHTML = `
                 <div class="flex items-center gap-1.5">
                     ${noticeBtn}
+                    ${adminBalBtn}
                     <button
                         type="button"
                         onclick="openVipAdminModal()"
@@ -1862,6 +1903,69 @@
                     </button>
                 </div>
             `;
+            if (isAdmin && !window._adminBalFetchedOnce) {
+                window._adminBalFetchedOnce = true;
+                refreshAdminApiBalance(false);
+            }
+        }
+
+        function updateAdminBillingUI(b, isScanResult = false) {
+            const banner = document.getElementById('adminScanCostBanner');
+            if (!currentVipUser || currentVipUser.role !== 'admin' || !b) {
+                if (banner && (!currentVipUser || currentVipUser.role !== 'admin')) banner.classList.add('hidden');
+                return;
+            }
+            const balUsd = Number(b.balance_usd ?? b.total_usd ?? 0);
+            const balVnd = Number(b.balance_vnd ?? b.total_vnd ?? 0);
+            const estLeft = Number(b.est_scans_left ?? Math.floor(balUsd / 0.001));
+            window._lastAdminBal = { balance_usd: balUsd, balance_vnd: balVnd, est_scans_left: estLeft };
+
+            const navUsd = document.getElementById('adminNavBalanceUsd');
+            const navVnd = document.getElementById('adminNavBalanceVnd');
+            if (navUsd) navUsd.innerText = `$${balUsd.toFixed(4)}`;
+            if (navVnd) navVnd.innerText = `~${balVnd.toLocaleString('vi-VN')}đ`;
+
+            const modUsd = document.getElementById('adminModalBalanceUsd');
+            const modVnd = document.getElementById('adminModalBalanceVnd');
+            const modEst = document.getElementById('adminModalEstScans');
+            if (modUsd) modUsd.innerText = `$${balUsd.toFixed(4)}`;
+            if (modVnd) modVnd.innerText = `≈ ${balVnd.toLocaleString('vi-VN')} VNĐ`;
+            if (modEst) modEst.innerText = `Còn ~${estLeft.toLocaleString('vi-VN')} lượt quét`;
+
+            if (isScanResult && banner) {
+                const cUsd = Number(b.scan_cost_usd || 0);
+                const cVnd = Number(b.scan_cost_vnd || 0);
+                const calls = Number(b.api_calls || 0);
+                const cached = Number(b.cached_hits || 0);
+                const leftEl = document.getElementById('adminScanCostLeft');
+                const rightEl = document.getElementById('adminScanCostRight');
+                if (leftEl) {
+                    if (cUsd <= 0) {
+                        leftEl.innerHTML = `<i class="fa-solid fa-recycle text-emerald-400"></i> <span>Chi phí lượt quét này: <b class="text-emerald-300 font-mono">$0.0000 (0 VNĐ)</b> <span class="text-slate-400 font-normal">• Dùng Cache ổ cứng (${cached} video)</span></span>`;
+                    } else {
+                        leftEl.innerHTML = `<i class="fa-solid fa-bolt text-amber-400"></i> <span>Chi phí lượt quét này: <b class="text-amber-300 font-mono">$${cUsd.toFixed(4)} (~${cVnd.toLocaleString('vi-VN')} VNĐ)</b> <span class="text-slate-400 font-normal">• ${calls} request API${cached > 0 ? `, ${cached} cache 0đ` : ''}</span></span>`;
+                    }
+                }
+                if (rightEl) {
+                    rightEl.innerHTML = `<i class="fa-solid fa-wallet text-cyan-400"></i> <span>Số dư còn: <b class="text-emerald-300 font-mono">$${balUsd.toFixed(4)}</b> <b class="text-amber-300">(~${balVnd.toLocaleString('vi-VN')} VNĐ)</b></span>`;
+                }
+                banner.classList.remove('hidden');
+            }
+        }
+
+        async function refreshAdminApiBalance(showMsg = false) {
+            if (!currentVipUser || currentVipUser.role !== 'admin') return;
+            try {
+                const resp = await fetch('/api/vip/admin/api-balance?refresh=1', { headers: getDeviceHeaders(true) });
+                const data = await resp.json();
+                if (data && data.success && data.billing) {
+                    updateAdminBillingUI(data.billing, false);
+                    if (showMsg) {
+                        const b = data.billing;
+                        showToast(`💰 Số dư API: $${Number(b.total_usd || 0).toFixed(4)} (~${Number(b.total_vnd || 0).toLocaleString('vi-VN')} VNĐ • còn ~${Number(b.est_scans_left || 0).toLocaleString('vi-VN')} lượt)`);
+                    }
+                }
+            } catch (e) {}
         }
 
         function getLocalDateKey() {
@@ -2027,6 +2131,9 @@
         function vipLogout() {
             localStorage.removeItem('tikflow_vip_token');
             currentVipUser = null;
+            window._lastAdminBal = null;
+            window._adminBalFetchedOnce = false;
+            document.getElementById('adminScanCostBanner')?.classList.add('hidden');
             lastScanVipMode = false;
             renderVipNav();
             showToast('Đã đăng xuất. Đang chuyển về Chế độ Miễn Phí (0đ).');
@@ -2070,6 +2177,7 @@
                 if (currentVipUser.role === 'admin') {
                     admSec.classList.remove('hidden');
                     loadVipUsersList();
+                    refreshAdminApiBalance(false);
                 } else {
                     admSec.classList.add('hidden');
                 }
@@ -2711,6 +2819,9 @@
 
                     updateSummaryStats();
                     filterVideos();
+                    if (data.admin_billing) {
+                        updateAdminBillingUI(data.admin_billing, true);
+                    }
                     showToast(`Đã tải thêm ${data.list.length} video mới!`);
                 } else {
                     hasMoreVideos = false;
@@ -2833,6 +2944,11 @@
         }
 
         function renderResults(data) {
+            if (data.admin_billing) {
+                updateAdminBillingUI(data.admin_billing, true);
+            } else {
+                document.getElementById('adminScanCostBanner')?.classList.add('hidden');
+            }
             const ch = data.channel || {};
             const ui = data.user_info || {};
 
