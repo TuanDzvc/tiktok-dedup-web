@@ -1572,6 +1572,7 @@
                             type="password"
                             id="regPasswordInput"
                             minlength="6"
+                            oninput="validateRegPasswordLive()"
                             placeholder="Mật khẩu (ít nhất 6 ký tự)..."
                             autocomplete="new-password"
                             class="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
@@ -1583,11 +1584,14 @@
                             type="password"
                             id="regPasswordConfirmInput"
                             minlength="6"
+                            oninput="validateRegPasswordLive()"
                             placeholder="Nhập lại mật khẩu xác nhận..."
                             autocomplete="new-password"
-                            class="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
+                            class="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl pl-9 pr-9 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
                         />
+                        <i id="regPwdMatchIcon" class="hidden text-xs absolute right-3.5 top-1/2 -translate-y-1/2"></i>
                     </div>
+                    <div id="regPasswordLiveStatus" class="hidden text-[11px] font-bold px-1 flex items-center gap-1.5"></div>
                 </div>
                 <div class="bg-slate-950/90 border border-slate-800 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3">
                     <span class="text-[11px] text-slate-300 leading-snug">
@@ -2062,6 +2066,60 @@
             document.getElementById('vipLoginModal')?.classList.add('hidden');
         }
 
+        function validateRegPasswordLive() {
+            const p1El = document.getElementById('regPasswordInput');
+            const p2El = document.getElementById('regPasswordConfirmInput');
+            const stEl = document.getElementById('regPasswordLiveStatus');
+            const icEl = document.getElementById('regPwdMatchIcon');
+            const errBox = document.getElementById('vipRegisterError');
+            if (!p1El || !p2El || !stEl || !icEl) return;
+
+            const p1 = p1El.value || '';
+            const p2 = p2El.value || '';
+            errBox?.classList.add('hidden');
+
+            const baseP1 = 'w-full bg-slate-900 border rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition ';
+            const baseP2 = 'w-full bg-slate-900 border rounded-xl pl-9 pr-9 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition ';
+
+            if (!p1 && !p2) {
+                p1El.className = baseP1 + 'border-slate-700 focus:border-cyan-400';
+                p2El.className = baseP2 + 'border-slate-700 focus:border-cyan-400';
+                stEl.className = 'hidden';
+                icEl.className = 'hidden';
+                return;
+            }
+
+            if (p1.length > 0 && p1.length < 6) {
+                p1El.className = baseP1 + 'border-amber-500/80 focus:border-amber-400';
+                p2El.className = baseP2 + (p2 ? 'border-rose-500/80' : 'border-slate-700 focus:border-cyan-400');
+                stEl.className = 'text-[11px] font-bold px-1 flex items-center gap-1.5 text-amber-300';
+                stEl.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> <span>Mật khẩu cần ít nhất 6 ký tự (${p1.length}/6)</span>`;
+                icEl.className = 'hidden';
+                return;
+            }
+
+            p1El.className = baseP1 + 'border-emerald-500/70 focus:border-emerald-400';
+            if (!p2) {
+                p2El.className = baseP2 + 'border-slate-700 focus:border-cyan-400';
+                stEl.className = 'text-[11px] font-bold px-1 flex items-center gap-1.5 text-slate-400';
+                stEl.innerHTML = `<i class="fa-solid fa-arrow-down text-cyan-400"></i> <span>Nhập lại mật khẩu ở ô dưới để xác nhận</span>`;
+                icEl.className = 'hidden';
+                return;
+            }
+
+            if (p1 !== p2) {
+                p2El.className = baseP2 + 'border-rose-500 focus:border-rose-400';
+                stEl.className = 'text-[11px] font-bold px-1 flex items-center gap-1.5 text-rose-400';
+                stEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> <span>Mật khẩu nhập lại không khớp!</span>`;
+                icEl.className = 'fa-solid fa-circle-xmark text-rose-400 text-xs absolute right-3.5 top-1/2 -translate-y-1/2';
+            } else {
+                p2El.className = baseP2 + 'border-emerald-500 focus:border-emerald-400';
+                stEl.className = 'text-[11px] font-bold px-1 flex items-center gap-1.5 text-emerald-400';
+                stEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Mật khẩu hợp lệ và đã khớp!</span>`;
+                icEl.className = 'fa-solid fa-circle-check text-emerald-400 text-xs absolute right-3.5 top-1/2 -translate-y-1/2';
+            }
+        }
+
         async function submitVipRegister(e) {
             if (e) e.preventDefault();
             const u = (document.getElementById('regUsernameInput')?.value || '').trim();
@@ -2110,6 +2168,7 @@
                 document.getElementById('regPasswordInput').value = '';
                 const p2El = document.getElementById('regPasswordConfirmInput');
                 if (p2El) p2El.value = '';
+                validateRegPasswordLive();
                 renderVipNav();
                 closeVipModal();
                 showToast(`✅ Đã tạo tài khoản "${currentVipUser.username}"! Liên hệ Admin qua Zalo/FB để kích hoạt VIP.`);
@@ -6251,7 +6310,7 @@
     <!-- Thanh nổi Liên hệ/Hỗ trợ sát mép phải màn hình (chạy theo khi cuộn chuột) -->
     <div class="fixed right-2 sm:right-3.5 top-1/2 -translate-y-1/2 z-[60] glass-panel rounded-2xl px-2 py-2.5 border border-cyan-500/40 shadow-[0_12px_35px_rgba(0,0,0,0.75)] flex flex-col items-center gap-2 select-none">
         <span class="text-[10px] font-extrabold text-cyan-300 text-center leading-tight tracking-tight px-0.5">
-            Liên hệ/<br />Hỗ trợ
+            Liên hệ<br />Hỗ trợ
         </span>
         <a
             href="https://zalo.me/0963282278"
