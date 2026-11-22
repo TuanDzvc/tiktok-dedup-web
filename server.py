@@ -293,12 +293,21 @@ def _verify_vip_token(token: str) -> Optional[Dict[str, Any]]:
                 return None
             if int(u_obj.get("token_ver") or 1) != t_ver:
                 return None
-            exp_at = int(u_obj.get("expires_at") or 0)
-            if exp_at > 0 and exp_at < int(time.time()):
-                return None
             return dict(u_obj)
     except Exception:
         return None
+
+
+def _has_vip_privilege(u: Optional[Dict[str, Any]]) -> bool:
+    if not isinstance(u, dict) or not u.get("active", True):
+        return False
+    role = str(u.get("role") or "member").lower()
+    if role == "admin":
+        return True
+    if role != "vip":
+        return False
+    exp_at = int(u.get("expires_at") or 0)
+    return exp_at <= 0 or exp_at >= int(time.time())
 
 
 def _extract_vip_user(req: Request, body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
@@ -314,7 +323,8 @@ def _extract_vip_user(req: Request, body: Optional[Dict[str, Any]] = None) -> Op
 def _public_vip_user(u: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "username": u.get("username"),
-        "role": u.get("role", "vip"),
+        "role": u.get("role", "member"),
+        "is_vip": _has_vip_privilege(u),
         "active": bool(u.get("active", True)),
         "expires_at": int(u.get("expires_at") or 0),
         "note": str(u.get("note") or ""),
@@ -508,11 +518,49 @@ async def api_vip_login(req: Request):
             return JSONResponse(status_code=401, content={"success": False, "error": "Sai tên tài khoản hoặc mật khẩu!"})
         if not u_obj.get("active", True):
             return JSONResponse(status_code=403, content={"success": False, "error": "Tài khoản này đã bị tạm khóa."})
-        exp_at = int(u_obj.get("expires_at") or 0)
-        if exp_at > 0 and exp_at < int(time.time()):
-            return JSONResponse(status_code=403, content={"success": False, "error": "Tài khoản VIP của bạn đã hết hạn sử dụng."})
         tok = _create_vip_token(uname, int(u_obj.get("token_ver") or 1))
         pub = _public_vip_user(u_obj)
+
+    return JSONResponse(content={"success": True, "token": tok, "user": pub})
+
+
+@app.post("/api/vip/register")
+async def api_vip_register(req: Request):
+    """Khách tự đăng ký tài khoản mới (mặc định hạng Thường Free 0đ, chờ Admin duyệt bật VIP)."""
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+
+    raw_u = str(body.get("username") or "").strip().lower()
+    uname = re.sub(r"[^a-z0-9_.-]", "", raw_u)
+    pwd = str(body.get("password") or "")
+    note = str(body.get("note") or "").strip()[:100]
+
+    if len(uname) < 3 or uname != raw_u:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản từ 3 ký tự trở lên (chỉ dùng chữ thường, số, dấu chấm hoặc gạch dưới)."})
+    if len(pwd) < 4:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Mật khẩu phải từ 4 ký tự trở lên."})
+
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        if uname in users:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản này đã có người đăng ký! Vui lòng chọn tên khác."})
+        new_rec = {
+            "username": uname,
+            "password_hash": _hash_password(pwd),
+            "role": "member",
+            "active": True,
+            "expires_at": 0,
+            "note": note or "Tự đăng ký trên web",
+            "scan_count": 0,
+            "created_at": int(time.time()),
+            "token_ver": 1,
+        }
+        users[uname] = new_rec
+        _save_vip_users_unlocked(users)
+        tok = _create_vip_token(uname, 1)
+        pub = _public_vip_user(new_rec)
 
     return JSONResponse(content={"success": True, "token": tok, "user": pub})
 
@@ -574,8 +622,9 @@ async def api_vip_admin_upsert_user(req: Request):
 
     target_u = re.sub(r"[^a-z0-9_.-]", "", str(body.get("username") or "").strip().lower())
     pwd = str(body.get("password") or "").strip()
-    role = "admin" if str(body.get("role") or "vip").lower() == "admin" else "vip"
-    note = str(body.get("note") or "").strip()[:120]
+    raw_role = str(body.get("role") or "vip").lower()
+    role = raw_role if raw_role in ("admin", "vip", "member") else "vip"
+    note_in = body.get("note")
     active = bool(body.get("active", True))
     days = body.get("days")
 
@@ -589,7 +638,9 @@ async def api_vip_admin_upsert_user(req: Request):
             return JSONResponse(status_code=400, content={"success": False, "error": "Vui lòng đặt mật khẩu ít nhất 4 ký tự cho tài khoản mới."})
 
         exp_ts = int(existing.get("expires_at") or 0) if existing else 0
-        if days is not None and str(days).strip() != "":
+        if role == "member":
+            exp_ts = 0
+        elif days is not None and str(days).strip() != "":
             d_val = int(days)
             exp_ts = 0 if d_val <= 0 else int(time.time()) + d_val * 86400
 
@@ -601,7 +652,8 @@ async def api_vip_admin_upsert_user(req: Request):
                 existing["role"] = role
                 existing["active"] = active
             existing["expires_at"] = exp_ts
-            existing["note"] = note
+            if note_in is not None:
+                existing["note"] = str(note_in).strip()[:120]
             saved_pub = _public_vip_user(existing)
         else:
             new_rec = {
@@ -610,7 +662,7 @@ async def api_vip_admin_upsert_user(req: Request):
                 "role": role,
                 "active": active,
                 "expires_at": exp_ts,
-                "note": note,
+                "note": str(note_in or "").strip()[:120],
                 "scan_count": 0,
                 "created_at": int(time.time()),
                 "token_ver": 1,
@@ -660,10 +712,10 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     proxy = str(body.get("proxy") or "").strip()
     sec_uid = str(body.get("sec_uid") or "").strip()
 
-    # Kiểm tra quyền VIP / Admin để quyết định mở khóa API quét trùng Group ID hay chạy Free 0đ
+    # Kiểm tra quyền VIP / Admin thực sự (đã kích hoạt VIP & còn hạn) để mở khóa API quét trùng Group ID
     vip_user = _extract_vip_user(req, body)
-    allow_paid_groupid = bool(vip_user)
-    if vip_user and max_cursor == 0:
+    allow_paid_groupid = _has_vip_privilege(vip_user)
+    if allow_paid_groupid and vip_user and max_cursor == 0:
         with _VIP_LOCK:
             users_db = _load_vip_users_unlocked()
             u_rec = users_db.get(vip_user["username"])
