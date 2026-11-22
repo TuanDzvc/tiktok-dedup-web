@@ -1412,10 +1412,10 @@
     </div>
 
     <!-- ============================================================================== -->
-    <!-- 1. POPUP THÔNG BÁO KHI MỞ WEB (KHÔNG CHỨA Ô ĐĂNG NHẬP - NỀN MỜ NHẸ - TẮT TRONG NGÀY) -->
+    <!-- 1. POPUP THÔNG BÁO KHI MỞ WEB (KHÔNG CHỨA Ô ĐĂNG NHẬP - BLUR KÍNH MỜ MẠNH - TẮT TRONG NGÀY) -->
     <!-- ============================================================================== -->
-    <div id="vipWelcomeModal" onclick="if(event.target===this) closeNoticeModal()" class="fixed inset-0 z-[94] bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
-        <div class="relative max-w-xl w-full flex flex-col bg-dark-900/95 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden">
+    <div id="vipWelcomeModal" onclick="if(event.target===this) closeNoticeModal()" class="fixed inset-0 z-[94] bg-black/60 backdrop-blur-lg flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
+        <div class="relative max-w-[660px] w-full flex flex-col bg-dark-900/95 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden">
             <div class="absolute -top-16 -right-16 w-44 h-44 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
             <div class="absolute -bottom-16 -left-16 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -1437,58 +1437,58 @@
 
             <!-- Body -->
             <div class="p-4 sm:p-5 space-y-4 relative z-10">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <!-- Cột Free -->
-                    <div class="p-3.5 rounded-2xl bg-slate-950/85 border border-slate-700/80 space-y-2">
+                    <div class="p-4 rounded-2xl bg-slate-950/85 border border-slate-700/80 space-y-2.5">
                         <div class="flex items-center justify-between">
                             <span class="px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-600/60 text-emerald-300 text-[11px] font-extrabold flex items-center gap-1.5">
                                 <i class="fa-solid fa-bolt"></i> CHẾ ĐỘ MIỄN PHÍ
                             </span>
                             <span class="text-[11px] font-black text-emerald-400">Free 0đ</span>
                         </div>
-                        <ul class="space-y-1.5 text-xs text-slate-300 leading-relaxed pt-1">
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Check <b>Mất đề xuất FYP / Shadowban</b></span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Check <b>Vi phạm Bản quyền / Tắt tiếng</b></span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Xem thông tin kênh, Quốc gia, Ngày tạo</span></li>
-                            <li class="flex items-start gap-2 text-rose-400"><i class="fa-solid fa-lock mt-0.5"></i><span><b>Không</b> check Trùng lặp & Video Gốc</span></li>
+                        <ul class="space-y-2 text-xs text-slate-300 leading-snug pt-1">
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Mất đề xuất FYP / Shadowban</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Vi phạm Bản quyền / Tắt tiếng</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Thông tin kênh, Quốc gia, Ngày tạo</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap text-rose-400"><i class="fa-solid fa-lock flex-shrink-0"></i><span><b>Không</b> check Trùng lặp & Video Gốc</span></li>
                         </ul>
                     </div>
 
                     <!-- Cột VIP -->
-                    <div class="p-3.5 rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-950/90 to-rose-950/40 border border-amber-500/60 space-y-2">
+                    <div class="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-950/90 to-rose-950/40 border border-amber-500/60 space-y-2.5">
                         <div class="flex items-center justify-between">
                             <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 text-[11px] font-extrabold flex items-center gap-1.5">
                                 <i class="fa-solid fa-crown text-yellow-300"></i> TÀI KHOẢN VIP
                             </span>
                             <span class="text-[11px] font-black text-amber-300">Cần Login</span>
                         </div>
-                        <ul class="space-y-1.5 text-xs text-slate-200 leading-relaxed pt-1">
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Bao gồm toàn bộ tính năng Miễn Phí</span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span><b>Mở khóa Check Trùng Lặp Video</b></span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Hiện nút <b class="text-sky-300">gốc ↗</b> mở thẳng <b>Video Gốc</b></span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Quốc gia IP thực tế chuẩn từng video</span></li>
+                        <ul class="space-y-2 text-xs text-slate-200 leading-snug pt-1">
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Bao gồm toàn bộ tính năng Miễn Phí</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span><b>Mở khóa Check Trùng Lặp Video</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Hiện nút <b class="text-sky-300">gốc ↗</b> mở thẳng <b>Video Gốc</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Quốc gia IP thực tế chuẩn từng video</span></li>
                         </ul>
                     </div>
                 </div>
 
-                <p class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-center leading-relaxed">
-                    💡 Khách có tài khoản VIP vui lòng bấm nút <b class="text-amber-300">👑 Đăng Nhập VIP</b> ở góc phải trên cùng màn hình để mở khóa Check Trùng.
+                <p class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center leading-relaxed">
+                    💡 Khách có tài khoản VIP bấm nút <b class="text-amber-300">👑 Đăng Nhập VIP</b> ở góc phải trên cùng màn hình để mở khóa Check Trùng.
                 </p>
 
-                <!-- Nút đóng & tắt 24h (sang ngày mới tự hiện lại) -->
-                <div class="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-1">
+                <!-- Hàng nút full 100% diện tích chiều ngang popup -->
+                <div class="flex flex-col sm:flex-row items-stretch gap-3 pt-1 w-full">
                     <button
                         type="button"
                         onclick="dismissNoticeForToday()"
-                        class="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/80 text-slate-300 hover:text-white font-bold text-xs transition flex items-center justify-center gap-2"
+                        class="w-full sm:flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 border border-amber-300/40 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-amber-500/25 transition active:scale-[0.99] flex items-center justify-center gap-2"
                     >
-                        <i class="fa-regular fa-bell-slash text-amber-400"></i>
+                        <i class="fa-solid fa-bell-slash text-yellow-100"></i>
                         <span>Tắt thông báo hôm nay (24h)</span>
                     </button>
                     <button
                         type="button"
                         onclick="closeNoticeModal()"
-                        class="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs shadow-lg shadow-cyan-500/20 transition active:scale-95"
+                        class="w-full sm:w-40 py-3 px-6 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 transition active:scale-[0.99] flex items-center justify-center"
                     >
                         Đã Hiểu
                     </button>
@@ -1500,7 +1500,7 @@
     <!-- ============================================================================== -->
     <!-- 2. MODAL ĐĂNG NHẬP VIP / ADMIN RIÊNG (MỞ KHI BẤM NÚT ĐĂNG NHẬP VIP) -->
     <!-- ============================================================================== -->
-    <div id="vipLoginModal" onclick="if(event.target===this) closeVipModal()" class="fixed inset-0 z-[95] bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
+    <div id="vipLoginModal" onclick="if(event.target===this) closeVipModal()" class="fixed inset-0 z-[95] bg-black/60 backdrop-blur-lg flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
         <div class="relative max-w-md w-full flex flex-col bg-dark-900/95 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden">
             <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-3.5 bg-dark-950/90">
                 <div class="flex items-center gap-2.5">
@@ -1555,7 +1555,7 @@
     <!-- ============================================================================== -->
     <!-- 3. MODAL QUẢN TRỊ ADMIN (TẠO / XÓA NICK VIP CHO KHÁCH & ĐỔI MẬT KHẨU) -->
     <!-- ============================================================================== -->
-    <div id="vipAdminModal" onclick="if(event.target===this) closeVipAdminModal()" class="fixed inset-0 z-[96] bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
+    <div id="vipAdminModal" onclick="if(event.target===this) closeVipAdminModal()" class="fixed inset-0 z-[96] bg-black/60 backdrop-blur-lg flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
         <div class="relative max-w-3xl w-full max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden">
             <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-3.5 bg-dark-950/90 flex-shrink-0">
                 <div class="flex items-center gap-2.5">
