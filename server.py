@@ -539,8 +539,8 @@ async def api_vip_register(req: Request):
 
     if len(uname) < 3 or uname != raw_u:
         return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản từ 3 ký tự trở lên (chỉ dùng chữ thường, số, dấu chấm hoặc gạch dưới)."})
-    if len(pwd) < 4:
-        return JSONResponse(status_code=400, content={"success": False, "error": "Mật khẩu phải từ 4 ký tự trở lên."})
+    if len(pwd) < 6:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Mật khẩu phải từ 6 ký tự trở lên."})
 
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
@@ -584,8 +584,8 @@ async def api_vip_change_password(req: Request):
         return JSONResponse(status_code=401, content={"success": False, "error": "Phiên đăng nhập không hợp lệ."})
     old_pwd = str(body.get("old_password") or "")
     new_pwd = str(body.get("new_password") or "")
-    if len(new_pwd) < 4:
-        return JSONResponse(status_code=400, content={"success": False, "error": "Mật khẩu mới phải từ 4 ký tự trở lên."})
+    if len(new_pwd) < 6:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Mật khẩu mới phải từ 6 ký tự trở lên."})
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
         cur = users.get(u_obj["username"])
@@ -634,8 +634,8 @@ async def api_vip_admin_upsert_user(req: Request):
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
         existing = users.get(target_u)
-        if not existing and len(pwd) < 4:
-            return JSONResponse(status_code=400, content={"success": False, "error": "Vui lòng đặt mật khẩu ít nhất 4 ký tự cho tài khoản mới."})
+        if (not existing and len(pwd) < 6) or (pwd and len(pwd) < 6):
+            return JSONResponse(status_code=400, content={"success": False, "error": "Vui lòng đặt mật khẩu từ 6 ký tự trở lên."})
 
         exp_ts = int(existing.get("expires_at") or 0) if existing else 0
         if role == "member":
