@@ -149,7 +149,7 @@ def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "
                     app_st_int = int(app_st) if app_st is not None else 0
                 except Exception:
                     app_st_int = 0
-                is_restored = app_st_int in (1, 4) or bool(d.get("isRestored") or d.get("is_restored"))
+                is_restored = (app_st_int == 1) or bool(d.get("isRestored") or d.get("is_restored"))
                 penalties = d.get("penalties") or []
                 has_pen = bool(penalties or d.get("hasPenalty") or d.get("has_penalty")) and not is_restored
                 top_det = ""
@@ -176,6 +176,8 @@ def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "
                             top_det = "Spam / Thao túng hệ thống (Mã 12 · Mất FYP)"
                         elif "9" in rc_list or "999" in rc_list:
                             top_det = "Không đủ điều kiện xuất hiện trên Bảng tin Cho bạn (Hạn chế FYP)"
+                    if app_st_int == 4 and top_det:
+                        top_det += " (Kháng xịt)"
                 return {
                     "success": True,
                     "hasPenalty": has_pen,
@@ -216,6 +218,93 @@ def sync_items_penalty_data_native(pen_items: list, cookie_str: str, ua: str = "
 
     with ThreadPoolExecutor(max_workers=min(10, len(pen_items))) as executor:
         list(executor.map(_sync_one, pen_items))
+
+def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "", proxy: str = "", region: str = "US"):
+    """
+    Quét đồng bộ gậy Không nguyên tác / Loại khỏi Quỹ BKT (Creator Rewards Program) cho các video >= 60s
+    thông qua API chính thức của TikTok Studio Monetization (/tiktok/v1/creator/m10n_center/video_reward_analytics).
+    """
+    if not cookie_str or not pen_items:
+        return
+
+    targets = []
+    for p in pen_items:
+        dur_raw = p.get("duration_sec") or p.get("duration") or ((p.get("video") or {}).get("duration") if isinstance(p.get("video"), dict) else 0) or 0
+        try:
+            d_val = float(dur_raw)
+            d_sec = d_val / 1000.0 if d_val > 1000 else d_val
+        except Exception:
+            d_sec = 0
+        if d_sec >= 58 or d_sec == 0:
+            targets.append(p)
+
+    if not targets:
+        return
+
+    ck_header = _cookie_to_header_str(cookie_str)
+    ua_val = ua or DEFAULT_UA
+    reg_val = (region or "US").replace("_TTP", "").strip() or "US"
+    now_ts = int(time.time())
+    start_ts = str(now_ts - 86400 * 365)
+    end_ts = str(now_ts)
+
+    proxies = None
+    if proxy:
+        p_c = proxy.strip()
+        if not p_c.startswith(("http://", "https://", "socks5://")):
+            p_c = f"http://{p_c}"
+        proxies = {"http": p_c, "https": p_c}
+
+    def _check_crp_one(p):
+        vid = str(p.get("aweme_id") or p.get("item_id") or p.get("vid") or p.get("id") or "").strip()
+        if not vid:
+            return
+        try:
+            r = requests.get(
+                "https://www.tiktok.com/tiktok/v1/creator/m10n_center/video_reward_analytics",
+                params={
+                    "aid": "1988",
+                    "app_name": "tiktok_creator_center",
+                    "device_platform": "web_pc",
+                    "channel": "tiktok_web",
+                    "scene": "156",
+                    "locale": "en",
+                    "region": reg_val,
+                    "start_date": start_ts,
+                    "end_date": end_ts,
+                    "video_id": vid,
+                },
+                headers={
+                    "User-Agent": ua_val,
+                    "Cookie": ck_header,
+                    "Referer": f"https://www.tiktok.com/tiktokstudio/monetization/item/{vid}/",
+                    "Accept": "application/json, text/plain, */*",
+                },
+                proxies=proxies,
+                timeout=6,
+            )
+            if r.status_code == 200 and r.content:
+                j = r.json()
+                crp_d = j.get("crp_analytics_data") or {}
+                vid_info = j.get("video_analytics_video_info") or {}
+                progs = vid_info.get("video_analytics_programs") or []
+                is_pun = (crp_d.get("is_punished") is True) or any(isinstance(pr, dict) and pr.get("is_punished") is True for pr in progs)
+                if is_pun:
+                    p["is_crp_punished"] = True
+                    p["is_dup"] = True
+                    p["is_restored"] = False
+                    p["isRestored"] = False
+                    app_st = int(p.get("appeal_status") or 0)
+                    app_note = " · Đã kháng / Kháng xịt" if app_st in (2, 3, 4) else ""
+                    crp_msg = f"Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Creator Rewards{app_note})"
+                    p["crp_penalty_details"] = crp_msg
+                    if not p.get("has_penalty"):
+                        p["penalty_details"] = crp_msg
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=min(10, len(targets))) as executor:
+        list(executor.map(_check_crp_one, targets))
 
 def api_get_post_list_native(cookie_str: str, ua: str, proxy: str = "", sec_uid: str = "", max_cursor: int = 0, count: int = 50) -> dict:
     """Lấy danh sách video đã đăng từ TikTok Studio API (hoạt động độc lập 100% không cần GUI)."""
@@ -1426,11 +1515,35 @@ def fetch_channel_info_and_posts(
                 if posts_res.get("author_avatar") and not channel_info.get("avatar"):
                     channel_info["avatar"] = posts_res["author_avatar"]
 
-                if sync_items_penalty_data and raw_items:
-                    try:
-                        sync_items_penalty_data(raw_items, effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
-                    except Exception as pen_err:
-                        print(f"[CheckDupWeb] Lỗi sync_items_penalty_data: {pen_err}")
+                if raw_items:
+                    def _run_fyp_sync():
+                        if sync_items_penalty_data:
+                            try:
+                                sync_items_penalty_data(raw_items, effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
+                            except Exception as pen_err:
+                                print(f"[CheckDupWeb] Lỗi sync_items_penalty_data: {pen_err}")
+
+                    def _run_crp_sync():
+                        try:
+                            sync_items_crp_punishment_data(raw_items, effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
+                        except Exception as crp_err:
+                            print(f"[CheckDupWeb] Lỗi sync_items_crp_punishment_data: {crp_err}")
+
+                    with ThreadPoolExecutor(max_workers=2) as sync_pool:
+                        f1 = sync_pool.submit(_run_fyp_sync)
+                        f2 = sync_pool.submit(_run_crp_sync)
+                        f1.result()
+                        f2.result()
+                    for _p in raw_items:
+                        if _p.get("is_crp_punished"):
+                            _p["is_restored"] = False
+                            _p["isRestored"] = False
+                            _app_st = int(_p.get("appeal_status") or 0)
+                            if _app_st in (2, 3, 4):
+                                _msg = "Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Kháng xịt / Đã kháng)"
+                                _p["crp_penalty_details"] = _msg
+                                if not _p.get("has_penalty"):
+                                    _p["penalty_details"] = _msg
         except Exception as e_studio:
             print(f"[CheckDupWeb] Lỗi api_get_post_list: {e_studio}")
 
@@ -1572,9 +1685,11 @@ def fetch_channel_info_and_posts(
             if found_extra is not None:
                 if oembed_restricted:
                     found_extra["_oembed_restricted"] = True
-                if is_self_account and sync_items_penalty_data and effective_cookie:
+                if is_self_account and effective_cookie:
                     try:
-                        sync_items_penalty_data([found_extra], effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
+                        if sync_items_penalty_data:
+                            sync_items_penalty_data([found_extra], effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
+                        sync_items_crp_punishment_data([found_extra], effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
                     except Exception:
                         pass
                 raw_items.insert(0, found_extra)
@@ -1848,7 +1963,8 @@ def fetch_channel_info_and_posts(
         share_cnt = int(it.get("share_count") or stats.get("shareCount") or stats.get("share_count") or 0)
         collect_cnt = int(it.get("collect_count") or it.get("favorite_count") or stats.get("collectCount") or stats.get("collect_count") or 0)
 
-        has_pen = bool(
+        is_crp_punished = bool(it.get("is_crp_punished", False))
+        has_fyp_pen = bool(
             is_copyright
             or is_takedown
             or it.get("has_penalty", False)
@@ -1857,10 +1973,12 @@ def fetch_channel_info_and_posts(
             or is_prohibited
             or is_muted
         )
+        has_pen = bool(has_fyp_pen or is_crp_punished)
 
         has_real_group_dup = bool(group_id and group_id != aweme_id and group_id not in ("0", "None", "null"))
         is_dup = bool(
             has_real_group_dup
+            or is_crp_punished
             or cached_meta.get("is_dup", False)
             or it.get("is_dup", False)
             or it.get("isDup", False)
@@ -1871,6 +1989,10 @@ def fetch_channel_info_and_posts(
         dup_origin_vid = ""
         if is_copyright:
             dup_reason = "Khiếu nại bản quyền (Âm thanh/Hình ảnh vi phạm - Mã 141)"
+        elif is_crp_punished:
+            dup_reason = str(it.get("crp_penalty_details") or "Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Creator Rewards)")
+            if has_real_group_dup:
+                dup_origin_vid = group_id
         elif has_real_group_dup:
             dup_reason = f"Trùng lặp Group ID (Group: {group_id})"
             dup_origin_vid = group_id
@@ -1885,25 +2007,27 @@ def fetch_channel_info_and_posts(
         age_hours = (time.time() - c_time) / 3600 if c_time > 0 else 0
 
         # Phân biệt rõ:
-        # 1. Trùng lặp (is_dup): video bị cờ duplicate / unoriginal / group_id
-        # 2. Án phạt (has_pen): vi phạm tiêu chuẩn cộng đồng, moderation penalty, tắt tiếng bản quyền
+        # 1. Trùng lặp / Không nguyên tác (is_dup / is_crp_punished): trùng Group ID hoặc bị đánh gậy Không nguyên tác BKT
+        # 2. Án phạt FYP (has_fyp_pen): vi phạm tiêu chuẩn cộng đồng, TNS penalty, tắt tiếng bản quyền
         # 3. Mất FYP (is_fyp): video không đủ điều kiện vào For You feed
         # 4. Shadowban (is_shadow): hạn chế phân phối đề xuất FYP
+        is_non_crp_dup = bool(is_dup and not is_crp_punished)
         is_fyp = bool(
             is_copyright
             or is_takedown
-            or is_dup
+            or is_non_crp_dup
+            or has_real_group_dup
             or is_tns_fyp_ban
             or is_muted
             or (can_repost is False)
             or (can_share is False)
             or is_prohibited
-            or has_pen
+            or has_fyp_pen
             or it.get("is_fyp_restricted", False)
             or cached_meta.get("is_fyp_restricted", False)
         )
 
-        is_shadow = bool(it.get("shadow", False))
+        is_shadow = bool(it.get("shadow", False) or it.get("shadowban", False))
         shadow_reason = str(it.get("shadowReason") or "")
         # Shadowban & FYP restriction: Xác định từ tín hiệu thực của TikTok (status 141, penaltyContext TNS/EC, NFF, oEmbed 403, item_control, isProhibited, mute)
         if is_copyright:
@@ -1934,20 +2058,20 @@ def fetch_channel_info_and_posts(
             shadow_reason = shadow_reason or "Hạn chế phân phối Bảng tin Cho bạn (Chặn chia sẻ / đăng lại)"
             is_fyp = True
             is_shadow = True
-        elif has_pen:
+        elif has_fyp_pen:
             shadow_reason = shadow_reason or "Án phạt kiểm duyệt nội dung TikTok (Hạn chế FYP)"
             is_fyp = True
             is_shadow = True
-        elif is_dup:
+        elif is_non_crp_dup or has_real_group_dup:
             shadow_reason = shadow_reason or dup_reason or "Nội dung trùng lặp (Không đủ điều kiện FYP)"
             is_fyp = True
 
-        pen_details_str = str(it.get("penalty_details") or "")
-        if not pen_details_str:
-            if is_copyright:
-                pen_details_str = "Khiếu nại bản quyền (Mã 141)"
-            else:
-                pen_details_str = dup_reason or shadow_reason or ""
+        raw_pen_str = str(it.get("penalty_details") or "")
+        if "kháng về thành công" in raw_pen_str.lower() and (has_pen or is_dup):
+            raw_pen_str = ""
+        pen_details_str = dup_reason if is_crp_punished and not has_fyp_pen else (raw_pen_str or dup_reason or shadow_reason or "")
+        if is_copyright and not raw_pen_str:
+            pen_details_str = "Khiếu nại bản quyền (Mã 141)"
         if not shadow_reason and is_shadow:
             shadow_reason = pen_details_str or "Video bị hạn chế xuất hiện trên FYP"
 
@@ -2027,6 +2151,7 @@ def fetch_channel_info_and_posts(
             "shadow": is_shadow,
             "shadowReason": shadow_reason,
             "is_dup": is_dup,
+            "is_crp_punished": is_crp_punished,
             "is_fyp_restricted": is_fyp,
             "has_penalty": has_pen,
             "is_copyright": is_copyright,
@@ -2058,7 +2183,7 @@ def fetch_channel_info_and_posts(
     total_loaded = len(video_list)
     dup_count = sum(1 for v in video_list if v.get("is_dup"))
     copyright_count = sum(1 for v in video_list if v.get("is_copyright"))
-    fyp_pen_count = sum(1 for v in video_list if v.get("is_fyp_restricted") or v.get("shadow") or v.get("has_penalty") or v.get("is_copyright"))
+    fyp_pen_count = sum(1 for v in video_list if v.get("is_fyp_restricted") or v.get("shadow") or v.get("is_copyright"))
     bad_count = sum(1 for v in video_list if v.get("is_dup") or v.get("is_fyp_restricted") or v.get("shadow") or v.get("has_penalty") or v.get("is_copyright"))
     clean_count = max(0, total_loaded - bad_count)
 
