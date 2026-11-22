@@ -1952,7 +1952,7 @@
             document.getElementById('cuCountry').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${cleanCountry}</span></span>`;
             document.getElementById('cuUid').innerText = ui.uid || '---';
             document.getElementById('cuLastNickChange').innerText = ui.last_nickname_change || '—';
-            document.getElementById('cuStatusBadge').innerText = ui.is_self ? '⭐ Nick trong Tool' : '🌐 Kênh công khai';
+            document.getElementById('cuStatusBadge').innerText = ui.is_self ? '⭐ Nick trong Tool' : (ui.is_private_account ? '🔒 Kênh riêng tư' : '🌐 Kênh công khai');
             const qInput = document.getElementById('quickCheckInput');
             if (qInput) qInput.value = cleanHandle;
 

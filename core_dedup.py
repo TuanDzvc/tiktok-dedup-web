@@ -1226,6 +1226,9 @@ def fetch_channel_info_and_posts(
             pass
 
     # 3. Kênh ngoài: Dùng requests lấy nhanh HTML trang chủ để lấy secUid & nickname
+    ssr_status_code = -1
+    ssr_video_count_known = False
+    is_private_account = False
     if username and (not channel_info.get("avatar") or not channel_info.get("followers") or not sec_uid):
         try:
             s = requests.Session()
@@ -1255,9 +1258,18 @@ def fetch_channel_info_and_posts(
                         u_json = json.loads(m.group(1))
                         scope = u_json.get("__DEFAULT_SCOPE__", {})
                         u_detail = scope.get("webapp.user-detail", {})
+                        if u_detail.get("statusCode") is not None:
+                            try:
+                                ssr_status_code = int(u_detail.get("statusCode"))
+                            except Exception:
+                                pass
                         u_info = u_detail.get("userInfo", {})
                         u = u_info.get("user", {})
                         st = u_info.get("stats", {})
+
+                        if u.get("privateAccount") is True or u.get("secret") is True or ssr_status_code == 10222:
+                            is_private_account = True
+                            check_user_info["is_private_account"] = True
 
                         if u.get("uniqueId"):
                             raw_u = str(u["uniqueId"]).lstrip("@").strip()
@@ -1272,6 +1284,7 @@ def fetch_channel_info_and_posts(
                             channel_info["followers"] = int(st.get("followerCount") or 0)
                         if st.get("videoCount") is not None:
                             channel_info["videoCount"] = int(st.get("videoCount") or 0)
+                            ssr_video_count_known = True
                         c_sec = u.get("secUid", "")
                         if c_sec:
                             sec_uid = c_sec
@@ -1318,7 +1331,7 @@ def fetch_channel_info_and_posts(
                     except Exception:
                         pass
 
-                if not sec_uid:
+                if not sec_uid and not m and ssr_status_code not in (10202, 10203, 10204, 10221, 10223):
                     m_sec = re.search(r'"secUid":"([^"]+)"', html)
                     if m_sec:
                         sec_uid = m_sec.group(1)
@@ -1335,6 +1348,9 @@ def fetch_channel_info_and_posts(
                     m_vids = re.search(r'"videoCount":([0-9]+)', html)
                     if m_vids:
                         channel_info["videoCount"] = int(m_vids.group(1))
+                        ssr_video_count_known = True
+                    if re.search(r'"privateAccount"\s*:\s*true', html):
+                        is_private_account = True
                     m_uid = re.search(r'"userId":"([0-9]+)"', html) or re.search(r'"authorId":"([0-9]+)"', html)
                     if m_uid:
                         check_user_info["uid"] = m_uid.group(1)
@@ -1352,6 +1368,14 @@ def fetch_channel_info_and_posts(
                             check_user_info["last_nickname_change"] = "Chưa đổi lần nào"
         except Exception:
             pass
+
+    # Nếu TikTok SSR đã xác nhận rõ tài khoản không tồn tại hoặc đã bị đình chỉ (10202, 10203, 10204, 10221, 10223) -> trả kết quả ngay ~0.8s, không chạy Playwright
+    if not is_self_account and not sec_uid and not target_vid and ssr_status_code in (10202, 10203, 10204, 10221, 10223):
+        print(f"[CheckDupWeb] @{username}: TikTok SSR trả mã {ssr_status_code} (không tồn tại / bị cấm) -> dừng ngay, bỏ qua Playwright")
+        return {
+            "success": False,
+            "error": f"Không tìm thấy kênh hoặc tài khoản TikTok @{username} không tồn tại / đã bị đình chỉ!"
+        }
 
     if detected_account_country and detected_account_country not in ("NONE", "AUTO", "EU") and not detected_account_country.endswith("_TTP"):
         channel_info["region"] = detected_account_country
@@ -1410,9 +1434,21 @@ def fetch_channel_info_and_posts(
         except Exception as e_studio:
             print(f"[CheckDupWeb] Lỗi api_get_post_list: {e_studio}")
 
+    # Kênh ngoài đã xác nhận chắc chắn từ SSR là chưa đăng video nào (videoCount == 0) hoặc là Tài khoản Riêng tư (privateAccount == True)
+    # -> không gọi Creator API và tuyệt đối không chạy Playwright (~30s vô ích), trả kết quả tức thì (~0.8s)
+    is_external_private_acc = bool(is_private_account and not is_self_account and not target_vid)
+    is_zero_videos_confirmed = bool(
+        ssr_video_count_known and int(channel_info.get("videoCount") or 0) == 0
+        and not is_private_account and not is_self_account and not target_vid
+    )
+    if is_external_private_acc:
+        print(f"[CheckDupWeb] @{username}: Tài khoản Riêng tư (Private Account, mã {ssr_status_code}) -> bỏ qua Creator API & Playwright")
+    elif is_zero_videos_confirmed:
+        print(f"[CheckDupWeb] @{username}: Kênh có 0 video trên SSR -> bỏ qua Creator API & Playwright")
+
     # Trường hợp B1: Thử quét siêu tốc qua Creator API (xoay vòng tối đa 3-4 cookie mượn nếu cookie đầu bị giới hạn)
     creator_meta: Dict[str, Any] = {}
-    if not raw_items and sec_uid:
+    if not raw_items and sec_uid and not is_external_private_acc and not is_zero_videos_confirmed:
         cookie_candidates: List[Tuple[str, str, str]] = []
         seen_ck = set()
         if effective_cookie:
@@ -1454,16 +1490,27 @@ def fetch_channel_info_and_posts(
             print(f"[CheckDupWeb] Quét siêu tốc qua Creator API thành công: {len(raw_items)} video cho @{username}")
 
     # Kênh có video nhưng TikTok xác nhận không có video công khai nào (toàn bộ để Bạn bè / Riêng tư)
-    # -> không quét Playwright vô ích (~30s), báo ngay cho người dùng.
     no_public_videos = bool(
         not raw_items and creator_meta.get("confirmed_empty")
         and int(channel_info.get("videoCount") or 0) > 0 and max_cursor == 0 and not target_vid
     )
+    # Bỏ qua hoàn toàn Playwright (~30s) nếu kênh đã xác nhận: 0 video, toàn bộ ẩn Bạn bè/Riêng tư, hoặc Tài khoản Riêng tư
+    skip_playwright = bool(
+        not target_vid and (
+            no_public_videos
+            or creator_meta.get("confirmed_empty")
+            or is_external_private_acc
+            or is_zero_videos_confirmed
+            or (ssr_video_count_known and int(channel_info.get("videoCount") or 0) == 0)
+        )
+    )
     if no_public_videos:
         print(f"[CheckDupWeb] @{username}: TikTok xác nhận 0 video công khai / {channel_info.get('videoCount')} video -> bỏ qua Playwright")
+    elif skip_playwright and not raw_items:
+        print(f"[CheckDupWeb] @{username}: Xác nhận kênh trống / riêng tư -> bỏ qua Playwright")
 
     # Trường hợp B2: Kênh ngoài hoặc chưa lấy được -> Quét dự phòng qua Playwright Worker siêu tốc
-    if not raw_items and username and not no_public_videos:
+    if not raw_items and username and not skip_playwright:
         channel_url = f"https://www.tiktok.com/@{username}"
         pw_cookie = effective_cookie or ""
         pw_items = fetch_external_channel_videos_playwright(
@@ -2040,7 +2087,10 @@ def fetch_channel_info_and_posts(
     ch_vids = int(channel_info.get("videoCount") or 0)
     video_notice = ""
     if total_loaded == 0:
-        if ch_vids > 0 and no_public_videos:
+        if is_private_account and not is_self_account:
+            video_notice = (f"Kênh @{username} đang để chế độ Tài khoản Riêng tư (Private Account) "
+                            f"hoặc chưa có video công khai nào hiển thị với người ngoài.")
+        elif ch_vids > 0 and no_public_videos:
             video_notice = (f"Kênh @{username} có {ch_vids} video nhưng chủ kênh đã ẩn toàn bộ sang chế độ "
                             f"Riêng tư / Bạn bè (0 video công khai hiển thị trên trang cá nhân).")
         elif ch_vids > 0:
