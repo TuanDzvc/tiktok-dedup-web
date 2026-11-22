@@ -643,7 +643,11 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
         _save_persistent_groupid_cache()
 
 
-def _fetch_tikhub_multi_awemes(video_ids: List[str], sec_uid: str = "") -> Dict[str, Dict[str, Any]]:
+def _fetch_tikhub_multi_awemes(
+    video_ids: List[str],
+    sec_uid: str = "",
+    start_cursor_ms: int = 0,
+) -> Dict[str, Dict[str, Any]]:
     """
     Lấy group_id, region & NFF chuẩn Mobile với cơ chế tự động chọn cổng rẻ nhất:
     1. Nếu tài khoản có số dư nạp (Balance): ưu tiên fetch_user_post_videos ($0.001 cho cả 20 video/lần ~ 25đ/kênh).
@@ -664,9 +668,9 @@ def _fetch_tikhub_multi_awemes(video_ids: List[str], sec_uid: str = "") -> Dict[
         "Accept": "application/json",
     }
 
-    # 1. Cổng siêu rẻ $0.001 / trang (tới 30 video/trang, tự phân trang nếu chọn 24/50/100 video)
+    # 1. Cổng siêu rẻ $0.001 / trang (tới 30 video/trang, nhảy thẳng vào trang tiếp theo khi bấm Quét thêm)
     if sec_uid and len(clean_ids) >= 2 and time.time() >= _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL:
-        cur_val = 0
+        cur_val = int(start_cursor_ms or 0)
         for _page_idx in range(6):
             if all(vid in results for vid in clean_ids):
                 break
@@ -771,6 +775,7 @@ def sync_items_tikhub_groupid(
     raw_items: List[Dict[str, Any]],
     tkm_cache: Optional[Dict[str, Any]] = None,
     sec_uid: str = "",
+    is_load_more: bool = False,
 ) -> None:
     """Đồng bộ trực tiếp group_id, region và cờ is_nff_or_nr cho danh sách video (ưu tiên cache 0đ trước)."""
     if not raw_items:
@@ -814,7 +819,20 @@ def sync_items_tikhub_groupid(
     if not missing_ids or not _get_tikhub_api_key():
         return
 
-    fetched_awemes = _fetch_tikhub_multi_awemes(missing_ids, sec_uid=sec_uid)
+    start_cur_ms = 0
+    if is_load_more and sec_uid:
+        saved_cur = int(_TIKHUB_SECUID_NEXT_CURSOR.get(sec_uid) or 0)
+        if saved_cur > 0:
+            start_cur_ms = saved_cur
+        else:
+            newest_ct = max(
+                (int(x.get("createTime") or x.get("create_time") or x.get("post_time") or 0) for x in raw_items),
+                default=0,
+            )
+            if newest_ct > 1_000_000_000:
+                start_cur_ms = (newest_ct + 1) * 1000
+
+    fetched_awemes = _fetch_tikhub_multi_awemes(missing_ids, sec_uid=sec_uid, start_cursor_ms=start_cur_ms)
     if not fetched_awemes:
         return
 
@@ -2129,7 +2147,7 @@ def fetch_channel_info_and_posts(
     # 5. Định dạng và kiểm tra trùng lặp cho từng video
     video_list = []
     tkm_cache = _load_tiktokmanager_cache()
-    sync_items_tikhub_groupid(raw_items, tkm_cache, sec_uid=sec_uid)
+    sync_items_tikhub_groupid(raw_items, tkm_cache, sec_uid=sec_uid, is_load_more=(max_cursor > 0))
     ch_followers = int(channel_info.get("followers") or 0)
 
     for it in raw_items:
