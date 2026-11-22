@@ -248,6 +248,8 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
     ck_header = _cookie_to_header_str(cookie_str)
     ua_val = ua or DEFAULT_UA
     reg_val = (region or "US").replace("_TTP", "").strip() or "US"
+    if reg_val.upper() == "UK":
+        reg_val = "GB"
     now_ts = int(time.time())
     start_ts = str(now_ts - 86400 * 365)
     end_ts = str(now_ts)
@@ -466,12 +468,17 @@ COUNTRY_NAMES = {
     "MX": ("Mexico", "🇲🇽"),
 }
 
+def normalize_country_code(code: Any) -> str:
+    c = str(code or "").strip().upper().replace("_TTP", "")
+    return "UK" if c == "GB" else c
+
+
 def format_full_country_display(code: str, loc_detail: str = "") -> str:
     raw = (code or "").strip()
     if not raw:
         return "Quốc tế"
-    c = raw.upper().replace("_TTP", "")
-    base_c = c.split("-")[0].strip() if "-" in c else c
+    c = normalize_country_code(raw)
+    base_c = normalize_country_code(c.split("-")[0].strip()) if "-" in c else c
     if base_c in COUNTRY_NAMES:
         name_vn, _ = COUNTRY_NAMES[base_c]
         return f"{name_vn} ({base_c})"
@@ -627,7 +634,7 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
         if not aid:
             continue
         gid = str(aw.get("group_id") or aw.get("groupId") or "").strip()
-        reg = str(aw.get("region") or "").strip().upper()
+        reg = normalize_country_code(aw.get("region"))
         nff = bool(aw.get("is_nff_or_nr"))
         results[aid] = aw
         if gid:
@@ -808,7 +815,7 @@ def sync_items_tikhub_groupid(
         c_entry = p_cache.get(aid)
         if isinstance(c_entry, dict) and c_entry.get("group_id"):
             it["group_id"] = str(c_entry["group_id"])
-            c_reg = str(c_entry.get("region") or "").strip().upper()
+            c_reg = normalize_country_code(c_entry.get("region"))
             if len(c_reg) == 2 and c_reg not in ("EU", "XO"):
                 it["region"] = c_reg
             if c_entry.get("is_nff_or_nr") is True:
@@ -851,7 +858,7 @@ def sync_items_tikhub_groupid(
         gid = str(aw.get("group_id") or aw.get("groupId") or "").strip()
         if gid and gid not in ("0", "None", "null"):
             it["group_id"] = gid
-        reg = str(aw.get("region") or "").strip().upper()
+        reg = normalize_country_code(aw.get("region"))
         if len(reg) == 2:
             it["region"] = reg
         if aw.get("is_nff_or_nr") is True:
@@ -1754,7 +1761,7 @@ def fetch_channel_info_and_posts(
                                 if d_kind == "us" or "US" in v_reg or "US" in v_geo or "tiktokcdn-us.com" in av_url or "useast" in av_url:
                                     detected_account_country = "US"
                                 elif "GB" in v_reg or "UK" in v_reg:
-                                    detected_account_country = "GB"
+                                    detected_account_country = "UK"
                                 elif "VN" in v_reg or "VN" in v_geo:
                                     detected_account_country = "VN"
                     except Exception:
@@ -1807,7 +1814,7 @@ def fetch_channel_info_and_posts(
         }
 
     if detected_account_country and detected_account_country not in ("NONE", "AUTO", "EU") and not detected_account_country.endswith("_TTP"):
-        channel_info["region"] = detected_account_country
+        channel_info["region"] = normalize_country_code(detected_account_country)
     else:
         channel_info["region"] = "US"
 
@@ -2271,8 +2278,8 @@ def fetch_channel_info_and_posts(
 
         quality_str = "1080p" if v_h >= 1080 else ("720p" if v_h >= 720 else ("480p" if v_h >= 480 else (f"{v_w}x{v_h}" if v_h > 0 else "Chuẩn")))
 
-        ch_reg = str(channel_info.get("region") or "US").upper()
-        region = str(it.get("region") or it.get("locationCreated") or it.get("country_code") or it.get("geo") or cached_meta.get("region") or ch_reg).upper()
+        ch_reg = normalize_country_code(channel_info.get("region") or "US")
+        region = normalize_country_code(it.get("region") or it.get("locationCreated") or it.get("country_code") or it.get("geo") or cached_meta.get("region") or ch_reg)
 
         group_id = str(it.get("group_id") or it.get("groupId") or cached_meta.get("group_id") or "") if allow_paid_groupid else ""
 

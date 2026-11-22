@@ -2315,6 +2315,11 @@
             initVipAuthOnStartup();
         });
 
+        function formatCountryCode(code) {
+            const c = String(code || 'US').toUpperCase().trim().replace('_TTP', '');
+            return c === 'GB' ? 'UK' : (c || 'US');
+        }
+
         function getCountryFlag(code) {
             if (!code) return `<span class="text-base select-none">🌐</span>`;
             let c = code.toUpperCase().trim().replace('_TTP', '');
@@ -2856,8 +2861,8 @@
             document.getElementById('chAvatar').src = getProxiedImage(ch.avatar, ch.nickname || rawUniqueId);
             document.getElementById('chProfileLink').href = rawUniqueId ? `https://www.tiktok.com/@${rawUniqueId}` : '#';
             document.getElementById('chCreateDate').innerText = ch.createDate || '—';
-            const regCode = (ch.region || 'US').replace('_TTP', '');
-            document.getElementById('chCountryText').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${ch.region_display || regCode}</span></span>`;
+            const regCode = formatCountryCode(ch.region || 'US');
+            document.getElementById('chCountryText').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${(ch.region_display || regCode).replace(/\(GB\)/g, '(UK)')}</span></span>`;
             document.getElementById('chRegionBadge').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${regCode}</span></span>`;
             document.getElementById('chFollowers').innerText = ch.followers_fmt || (ch.followers ? ch.followers.toLocaleString() : '0');
 
@@ -2873,7 +2878,7 @@
 
             document.getElementById('cuCreateDate').innerText = ui.create_date || ch.createDate || '—';
             document.getElementById('cuPhone').innerText = (ui.mobile && ui.mobile !== 'chưa gắn') ? ui.mobile : '—';
-            const cleanCountry = (ui.country || ch.region_display || 'Mỹ (US)').replace(/[\uD83C][\uDDE6-\uDDFF]{2}/g, '').trim();
+            const cleanCountry = (ui.country || ch.region_display || 'Mỹ (US)').replace(/[\uD83C][\uDDE6-\uDDFF]{2}/g, '').replace(/\(GB\)/g, '(UK)').trim();
             document.getElementById('cuCountry').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${cleanCountry}</span></span>`;
             document.getElementById('cuUid').innerText = ui.uid || '---';
             document.getElementById('cuLastNickChange').innerText = ui.last_nickname_change || '—';
@@ -3236,9 +3241,9 @@
                         </div>
                     </td>
                     <td class="p-2.5 text-center">
-                        <div class="flex flex-col items-center justify-center leading-tight gap-1" title="Quốc gia: ${v.region_display || v.region}">
+                        <div class="flex flex-col items-center justify-center leading-tight gap-1" title="Quốc gia đăng video: ${(v.region_display || formatCountryCode(v.region)).replace(/\(GB\)/g, '(UK)')}">
                             ${getCountryFlag(v.region)}
-                            <span class="text-[11px] font-bold text-slate-200 mt-0.5">${(v.region || 'US').replace('_TTP', '')}</span>
+                            <span class="text-[11px] font-bold text-slate-200 mt-0.5">${formatCountryCode(v.region)}</span>
                         </div>
                     </td>
                     <td class="p-3 text-center align-middle whitespace-nowrap">
@@ -3321,7 +3326,7 @@
                         
                         <!-- Top-left Region Flag Badge -->
                         <span class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded bg-black/80 flex items-center gap-1 text-[10px] text-white font-bold backdrop-blur-sm border border-slate-700/60 shadow">
-                            ${getCountryFlag(v.region)} <span>${(v.region || 'US').replace('_TTP', '')}</span>
+                            ${getCountryFlag(v.region)} <span>${formatCountryCode(v.region)}</span>
                         </span>
 
                         <!-- Center Big Status Badge (Ra giữa thumbnail và to lên theo yêu cầu) -->
@@ -3469,7 +3474,7 @@
                 v.is_dup ? "Trùng lặp" : "Không trùng",
                 v.is_fyp_restricted ? "Mất FYP" : "Bình thường",
                 v.date_local || v.date_utc,
-                v.region,
+                formatCountryCode(v.region),
                 `"${(v.desc || '').replace(/"/g, '""')}"`,
                 v.share_url,
                 v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : "")
@@ -5223,7 +5228,7 @@
                         <td class="py-1 px-1 text-center border-r border-slate-800/80">
                             <div class="inline-flex items-center justify-center gap-1 font-bold text-[11px] text-slate-300">
                                 ${getCountryFlag(item.country || item.country_code || item.region || channelCountry)}
-                                <span>${item.country || item.country_code || item.region || channelCountry}</span>
+                                <span>${formatCountryCode(item.country || item.country_code || item.region || channelCountry)}</span>
                             </div>
                         </td>
 
