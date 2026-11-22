@@ -144,16 +144,44 @@ def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "
                 sc = d.get("status_code", d.get("statusCode", 0))
                 if sc == 8:
                     continue
+                app_st = d.get("appeal_status", d.get("appealStatus", 0))
+                try:
+                    app_st_int = int(app_st) if app_st is not None else 0
+                except Exception:
+                    app_st_int = 0
+                is_restored = app_st_int in (1, 4) or bool(d.get("isRestored") or d.get("is_restored"))
                 penalties = d.get("penalties") or []
-                has_pen = bool(penalties or d.get("hasPenalty") or d.get("has_penalty"))
+                has_pen = bool(penalties or d.get("hasPenalty") or d.get("has_penalty")) and not is_restored
                 top_det = ""
-                if penalties:
-                    top_det = penalties[0].get("penalty_detail") or penalties[0].get("description") or penalties[0].get("penaltyDetail") or ""
+                if penalties and not is_restored:
+                    p0 = penalties[0] if isinstance(penalties[0], dict) else {}
+                    top_det = p0.get("penalty_detail") or p0.get("description") or p0.get("penaltyDetail") or ""
+                    rc_list = [str(x) for x in (p0.get("reason_codes") or [])]
+                    if not top_det:
+                        pr_list = p0.get("penalty_reason_info_list") or []
+                        if pr_list and isinstance(pr_list[0], dict):
+                            raw_c = str(pr_list[0].get("content") or "")
+                            if "ineligible for the fyf" in raw_c.lower() or "for you" in raw_c.lower():
+                                top_det = "Không đủ điều kiện xuất hiện trên Bảng tin Cho bạn (TNS · Hạn chế FYP)"
+                            elif raw_c:
+                                top_det = raw_c[:160]
+                    if not top_det:
+                        if "13" in rc_list:
+                            top_det = "Nội dung không nguyên bản / Trùng lặp (Mã 13 · Mất FYP)"
+                        elif "11" in rc_list:
+                            top_det = "Tương tác giả / Hành vi lừa dối (Mã 11 · Mất FYP)"
+                        elif "10" in rc_list:
+                            top_det = "Nội dung nhạy cảm / Giật gân (Mã 10 · Mất FYP)"
+                        elif "12" in rc_list:
+                            top_det = "Spam / Thao túng hệ thống (Mã 12 · Mất FYP)"
+                        elif "9" in rc_list or "999" in rc_list:
+                            top_det = "Không đủ điều kiện xuất hiện trên Bảng tin Cho bạn (Hạn chế FYP)"
                 return {
                     "success": True,
                     "hasPenalty": has_pen,
+                    "isRestored": is_restored,
                     "penalties": penalties,
-                    "top_penalty_details": top_det or ("Có án phạt vi phạm kiểm duyệt" if has_pen else "")
+                    "top_penalty_details": top_det or ("Có án phạt vi phạm kiểm duyệt (Hạn chế FYP)" if has_pen else "")
                 }
         except Exception:
             pass
@@ -171,6 +199,8 @@ def sync_items_penalty_data_native(pen_items: list, cookie_str: str, ua: str = "
             c_time = int(p.get("create_time", 0) or p.get("post_time", 0) or p.get("video_posted_date", 0) or 0)
             p_res = api_get_penalty_details_native(cookie_str, ua, proxy, vid, c_time, region)
             if p_res.get("success"):
+                if p_res.get("isRestored"):
+                    p["is_restored"] = True
                 has_pen = bool(p_res.get("hasPenalty"))
                 if has_pen:
                     p["has_penalty"] = True
@@ -703,7 +733,8 @@ def fetch_external_channel_videos_creator_api(
         return []
     
     all_items = []
-    cursor = str(max_cursor or 0)
+    raw_mc = int(max_cursor or 0)
+    cursor = str(raw_mc) if raw_mc >= 1_000_000_000 else "0"
     user_agent = ua_str or DEFAULT_UA
     
     proxies = {}
@@ -788,16 +819,41 @@ def fetch_external_channel_videos_creator_api(
 
     return all_items
 
-def get_borrowed_cookie() -> Tuple[str, str, str]:
+def get_borrowed_cookies_pool() -> List[Tuple[str, str, str]]:
     """
-    Tự động chọn 1 cookie hợp lệ trong kho ConfigStore hoặc cookie_pool.json để bypass WAF TikTok.
-    Trả về (cookie_str, user_agent, proxy_str)
+    Thu thập danh sách các cookie hợp lệ từ Studio Web, ConfigStore và cookie_pool.json (đã xáo trộn)
+    để xoay vòng khi quét kênh ngoài, tránh chết 1 cookie hoặc bị TikTok giới hạn tốc độ.
     """
+    pool_out: List[Tuple[str, str, str]] = []
+    seen_sids = set()
+
+    def _add_cand(ck_raw: str, ua_val: str = "", px_val: str = ""):
+        if not ck_raw or len(ck_raw) < 30:
+            return
+        ck_str = _cookie_to_header_str(ck_raw)
+        if "sessionid=" not in ck_str and "sessionid_ss=" not in ck_str:
+            return
+        m_s = re.search(r"sessionid(?:_ss)?=([0-9a-zA-Z_-]{8,})", ck_str)
+        sid_key = m_s.group(1) if m_s else ck_str[:48]
+        if sid_key in seen_sids:
+            return
+        seen_sids.add(sid_key)
+        pool_out.append((ck_str, ua_val or DEFAULT_UA, px_val or ""))
+
+    # 1. Các nick đã đăng nhập trên Web (ACTIVE_STUDIO_ACCOUNTS)
+    try:
+        import studio_engine
+        for _, s_entry in list((studio_engine.ACTIVE_STUDIO_ACCOUNTS or {}).items()):
+            if isinstance(s_entry, dict) and s_entry.get("cookie"):
+                _add_cand(s_entry["cookie"], DEFAULT_UA, "")
+    except Exception:
+        pass
+
+    # 2. Kho ConfigStore của tool desktop (nếu có)
     try:
         if ConfigStore:
             store = ConfigStore()
             _, accs = store.load()
-            candidates = []
             for a in accs:
                 c = getattr(a, "tiktok_cookie", "")
                 if c:
@@ -806,37 +862,138 @@ def get_borrowed_cookie() -> Tuple[str, str, str]:
                             c = unprotect_secret(c)
                         except Exception:
                             continue
-                    if len(c) > 30 and ("sessionid=" in c or "sessionid_ss=" in c):
-                        candidates.append((
-                            c,
-                            getattr(a, "user_agent", "") or DEFAULT_UA,
-                            ""
-                        ))
-            if candidates:
-                return random.choice(candidates)
+                    _add_cand(c, getattr(a, "user_agent", "") or DEFAULT_UA, "")
     except Exception as e:
         print(f"[BorrowCookie] Lỗi mượn cookie từ tool: {e}")
 
+    # 3. Kho cookie_pool.json
     try:
         pool_file = Path(__file__).resolve().parent / "cookie_pool.json"
         if pool_file.exists():
             data = json.loads(pool_file.read_text(encoding="utf-8"))
-            c = data.get("cookie", "")
-            ua = data.get("user_agent", DEFAULT_UA)
-            if c:
-                return c, ua, ""
-            accs_map = data.get("accounts", {})
-            for _, a_info in accs_map.items():
-                if a_info.get("cookie"):
-                    return a_info["cookie"], a_info.get("user_agent", DEFAULT_UA), ""
+            if data.get("cookie"):
+                _add_cand(data["cookie"], data.get("user_agent", DEFAULT_UA), "")
+            for _, a_info in (data.get("accounts") or {}).items():
+                if isinstance(a_info, dict) and a_info.get("cookie"):
+                    _add_cand(a_info["cookie"], a_info.get("user_agent", DEFAULT_UA), "")
     except Exception as e:
         print(f"[BorrowCookie] Lỗi đọc cookie_pool.json: {e}")
 
     env_c = os.getenv("TIKTOK_COOKIE", "")
     if env_c:
-        return env_c, DEFAULT_UA, ""
+        _add_cand(env_c, DEFAULT_UA, "")
 
+    random.shuffle(pool_out)
+    return pool_out
+
+def get_borrowed_cookie() -> Tuple[str, str, str]:
+    """Chọn ngẫu nhiên 1 cookie hợp lệ từ kho xoay vòng."""
+    cands = get_borrowed_cookies_pool()
+    if cands:
+        return cands[0]
     return "", "", ""
+
+
+def _resolve_query_target(raw_query: str, ua_str: str = "") -> Tuple[str, str, Optional[Dict[str, Any]]]:
+    """
+    Hỗ trợ mọi định dạng đầu vào: @username, link kênh, link video đầy đủ,
+    link rút gọn (vt.tiktok.com / vm.tiktok.com), hoặc ID video 17-21 chữ số.
+    Trả về: (username, target_video_id, fallback_video_dict)
+    """
+    q = str(raw_query or "").strip()
+    if not q:
+        return "", "", None
+
+    ua = ua_str or DEFAULT_UA
+    target_vid = ""
+    fallback_it = None
+
+    # 1. Nếu là link rút gọn (vt.tiktok.com / vm.tiktok.com / tiktok.com/t/)
+    if re.search(r"https?://(?:vt|vm)\.tiktok\.com/|tiktok\.com/t/", q, re.I):
+        try:
+            r_red = requests.get(q, headers={"User-Agent": ua}, allow_redirects=True, timeout=8)
+            if r_red.url and "tiktok.com" in r_red.url:
+                q = r_red.url
+        except Exception:
+            pass
+
+    # 2. Trích xuất video ID nếu có trong URL hoặc chuỗi số thuần 17-21 chữ số
+    m_url_vid = re.search(r"tiktok\.com/@([^/?#]+)/(?:video|photo)/(\d{15,22})", q)
+    if m_url_vid:
+        return m_url_vid.group(1).strip().lstrip("@"), m_url_vid.group(2), None
+
+    m_any_vid = re.search(r"/(?:video|photo|v)/(\d{15,22})", q)
+    if m_any_vid:
+        target_vid = m_any_vid.group(1)
+    elif re.fullmatch(r"\d{17,22}", q):
+        target_vid = q
+
+    # Nếu chỉ có ID video mà chưa biết username -> tra ngược tác giả siêu tốc
+    if target_vid:
+        uname_found = ""
+        try:
+            ck_b, _, _ = get_borrowed_cookie()
+            h_vid = {"User-Agent": ua, "Referer": "https://www.tiktok.com/"}
+            if ck_b:
+                h_vid["Cookie"] = ck_b
+            r_vp = requests.get(f"https://www.tiktok.com/@tiktok/video/{target_vid}", headers=h_vid, allow_redirects=True, timeout=8)
+            m_u = re.search(r"tiktok\.com/@([^/?#]+)/(?:video|photo)/", r_vp.url or "")
+            if m_u and m_u.group(1) != "tiktok":
+                uname_found = m_u.group(1)
+            m_rehyd = re.search(r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)</script>', r_vp.text or "")
+            if m_rehyd:
+                sc = json.loads(m_rehyd.group(1)).get("__DEFAULT_SCOPE__", {}).get("webapp.video-detail", {})
+                ist = (sc.get("itemInfo") or {}).get("itemStruct") or {}
+                if ist and ist.get("id"):
+                    fallback_it = ist
+                    au = (ist.get("author") or {}).get("uniqueId") or ""
+                    if au:
+                        uname_found = au
+        except Exception:
+            pass
+
+        if not uname_found:
+            try:
+                r_wm = requests.get("https://www.tikwm.com/api/", params={"url": target_vid}, timeout=8).json()
+                wm_d = r_wm.get("data") or {}
+                au = (wm_d.get("author") or {}).get("unique_id") or ""
+                if au:
+                    uname_found = au
+                if wm_d.get("id"):
+                    fallback_it = {
+                        "id": str(wm_d.get("id")),
+                        "desc": wm_d.get("title") or "",
+                        "createTime": wm_d.get("create_time") or 0,
+                        "duration": wm_d.get("duration") or 0,
+                        "region": wm_d.get("region") or "",
+                        "cover_url": wm_d.get("origin_cover") or wm_d.get("cover") or "",
+                        "play_count": wm_d.get("play_count") or 0,
+                        "digg_count": wm_d.get("digg_count") or 0,
+                        "comment_count": wm_d.get("comment_count") or 0,
+                        "share_count": wm_d.get("share_count") or 0,
+                        "collect_count": wm_d.get("collect_count") or 0,
+                        "is_nff_or_nr": bool(wm_d.get("is_nff_or_nr")),
+                        "author": {
+                            "uniqueId": au,
+                            "nickname": (wm_d.get("author") or {}).get("nickname") or au,
+                            "avatarLarger": (wm_d.get("author") or {}).get("avatar") or "",
+                        },
+                    }
+            except Exception:
+                pass
+        return uname_found.strip().lstrip("@"), target_vid, fallback_it
+
+    # 3. Link kênh hoặc @username thông thường
+    username = q
+    if "tiktok.com/@" in q:
+        username = q.split("tiktok.com/@")[-1].split("?")[0].split("#")[0].split("/")[0]
+    elif "tiktok.com/" in q:
+        p = q.split("tiktok.com/")[-1].split("?")[0].split("#")[0].split("/")[0]
+        username = p.lstrip("@")
+    else:
+        username = q.lstrip("@")
+    username = username.split("?")[0].split("#")[0].rstrip("/").strip().lstrip("@")
+    return username, "", None
 
 def fetch_channel_info_and_posts(
     channel_query: str,
@@ -854,15 +1011,7 @@ def fetch_channel_info_and_posts(
     - Hỗ trợ phân trang: mặc định quét 24 video, có thể quét thêm các đợt tiếp theo.
     """
     query = str(channel_query or "").strip()
-    username = query
-    if "tiktok.com/@" in query:
-        username = query.split("tiktok.com/@")[-1].split("?")[0].split("#")[0].split("/")[0]
-    elif "tiktok.com/" in query:
-        p = query.split("tiktok.com/")[-1].split("?")[0].split("#")[0].split("/")[0]
-        username = p.lstrip("@")
-    else:
-        username = query.lstrip("@")
-    username = username.split("?")[0].split("#")[0].rstrip("/").strip().lstrip("@")
+    username, target_vid, fallback_target_item = _resolve_query_target(query, ua_str or DEFAULT_UA)
 
     channel_info = {
         "uniqueId": username,
@@ -935,6 +1084,27 @@ def fetch_channel_info_and_posts(
                 if a_info.get("sec_uid") and not sec_uid:
                     sec_uid = a_info["sec_uid"]
 
+        # C. Thử tìm trong phiên Studio Web đang hoạt động (studio_engine.ACTIVE_STUDIO_ACCOUNTS)
+        if not matched_acc_cookie:
+            try:
+                import studio_engine
+                u_clean = username.strip().lower()
+                for s_info in list(getattr(studio_engine, "ACTIVE_STUDIO_ACCOUNTS", {}).values()):
+                    if not isinstance(s_info, dict) or not s_info.get("cookie"):
+                        continue
+                    acc_obj = s_info.get("account") or {}
+                    a_un = str(acc_obj.get("uniqueId") or acc_obj.get("username") or "").lstrip("@").strip().lower()
+                    if a_un and a_un == u_clean:
+                        is_self_account = True
+                        matched_acc_cookie = s_info.get("cookie", "")
+                        if s_info.get("proxy") and not matched_acc_proxy:
+                            matched_acc_proxy = s_info["proxy"]
+                        if acc_obj.get("sec_uid") and not sec_uid:
+                            sec_uid = acc_obj["sec_uid"]
+                        break
+            except Exception:
+                pass
+
     if matched_acc_cookie and isinstance(matched_acc_cookie, str) and matched_acc_cookie.startswith("dpapi:") and unprotect_secret:
         try:
             matched_acc_cookie = unprotect_secret(matched_acc_cookie)
@@ -970,12 +1140,25 @@ def fetch_channel_info_and_posts(
                     p_c = f"http://{p_c}"
                 px_dict = {"http": p_c, "https": p_c}
 
-            r_pass = requests.get(
-                "https://www.tiktok.com/passport/web/account/info/",
-                headers=p_headers,
-                proxies=px_dict if px_dict else None,
-                timeout=8
-            )
+            r_pass = None
+            if px_dict:
+                try:
+                    r_pass = requests.get(
+                        "https://www.tiktok.com/passport/web/account/info/",
+                        headers=p_headers,
+                        proxies=px_dict,
+                        timeout=4
+                    )
+                except Exception:
+                    matched_acc_proxy = ""
+                    px_dict = {}
+            if r_pass is None:
+                r_pass = requests.get(
+                    "https://www.tiktok.com/passport/web/account/info/",
+                    headers=p_headers,
+                    proxies=None,
+                    timeout=6
+                )
             if r_pass.status_code == 200:
                 p_data = r_pass.json().get("data", {})
                 if p_data:
@@ -1180,6 +1363,8 @@ def fetch_channel_info_and_posts(
     check_user_info["country"] = reg_disp
 
     raw_items = []
+    all_studio_items = []
+    all_fetched_api_items = []
     has_more = False
     next_cursor = 0
 
@@ -1225,19 +1410,39 @@ def fetch_channel_info_and_posts(
         except Exception as e_studio:
             print(f"[CheckDupWeb] Lỗi api_get_post_list: {e_studio}")
 
-    # Trường hợp B1: Thử quét siêu tốc qua Creator API (chỉ mất ~1s, không tốn RAM)
+    # Trường hợp B1: Thử quét siêu tốc qua Creator API (xoay vòng tối đa 3-4 cookie mượn nếu cookie đầu bị giới hạn)
     creator_meta: Dict[str, Any] = {}
-    if not raw_items and sec_uid and effective_cookie:
-        api_items = fetch_external_channel_videos_creator_api(
-            sec_uid=sec_uid,
-            cookie_str=effective_cookie,
-            ua_str=matched_acc_ua,
-            proxy_str=matched_acc_proxy or proxy_str,
-            max_videos=max_videos + max_cursor,
-            max_cursor=max_cursor,
-            result_meta=creator_meta
-        )
+    if not raw_items and sec_uid:
+        cookie_candidates: List[Tuple[str, str, str]] = []
+        seen_ck = set()
+        if effective_cookie:
+            cookie_candidates.append((effective_cookie, matched_acc_ua, matched_acc_proxy or proxy_str))
+            seen_ck.add(effective_cookie)
+        for p_c, p_ua, p_px in get_borrowed_cookies_pool():
+            if p_c and p_c not in seen_ck:
+                cookie_candidates.append((p_c, p_ua or matched_acc_ua, p_px or matched_acc_proxy or proxy_str))
+                seen_ck.add(p_c)
+            if len(cookie_candidates) >= 4:
+                break
+
+        api_items = []
+        fetch_limit = max(max_videos + max_cursor, 35 if target_vid else (max_videos + max_cursor))
+        for cand_ck, cand_ua, cand_px in cookie_candidates:
+            creator_meta = {}
+            api_items = fetch_external_channel_videos_creator_api(
+                sec_uid=sec_uid,
+                cookie_str=cand_ck,
+                ua_str=cand_ua,
+                proxy_str=cand_px,
+                max_videos=fetch_limit,
+                max_cursor=max_cursor,
+                result_meta=creator_meta
+            )
+            if api_items or creator_meta.get("confirmed_empty"):
+                break
+
         if api_items:
+            all_fetched_api_items = api_items
             offset = int(max_cursor) if max_cursor > 0 else 0
             raw_items = api_items[offset:offset + max_videos]
             next_cursor = offset + len(raw_items)
@@ -1252,7 +1457,7 @@ def fetch_channel_info_and_posts(
     # -> không quét Playwright vô ích (~30s), báo ngay cho người dùng.
     no_public_videos = bool(
         not raw_items and creator_meta.get("confirmed_empty")
-        and int(channel_info.get("videoCount") or 0) > 0 and max_cursor == 0
+        and int(channel_info.get("videoCount") or 0) > 0 and max_cursor == 0 and not target_vid
     )
     if no_public_videos:
         print(f"[CheckDupWeb] @{username}: TikTok xác nhận 0 video công khai / {channel_info.get('videoCount')} video -> bỏ qua Playwright")
@@ -1288,6 +1493,80 @@ def fetch_channel_info_and_posts(
                 has_more = next_cursor < total_vids
             else:
                 has_more = len(pw_items) > next_cursor or len(raw_items) >= max_videos
+
+    # Nếu người dùng dán trực tiếp Link Video hoặc ID Video: ưu tiên đưa video đó lên đầu & kiểm tra thêm oEmbed / Mobile API
+    if target_vid and max_cursor == 0:
+        oembed_restricted = False
+        try:
+            oe_u = f"https://www.tiktok.com/@{username or 'tiktok'}/video/{target_vid}"
+            r_oe = requests.get(
+                "https://www.tiktok.com/oembed",
+                params={"url": oe_u},
+                headers={"User-Agent": matched_acc_ua},
+                timeout=5,
+            )
+            if r_oe.status_code in (401, 403):
+                oembed_restricted = True
+        except Exception:
+            pass
+
+        def _vid_of(item_dict: dict) -> str:
+            return str(item_dict.get("id") or item_dict.get("aweme_id") or item_dict.get("item_id") or "")
+
+        found_idx = next((idx for idx, x in enumerate(raw_items) if _vid_of(x) == target_vid), -1)
+        if found_idx >= 0:
+            target_obj = raw_items.pop(found_idx)
+            if oembed_restricted:
+                target_obj["_oembed_restricted"] = True
+            raw_items.insert(0, target_obj)
+        else:
+            extra_pool = list(all_studio_items or []) + list(all_fetched_api_items or [])
+            found_extra = next((x for x in extra_pool if _vid_of(x) == target_vid), None)
+            if found_extra is not None:
+                if oembed_restricted:
+                    found_extra["_oembed_restricted"] = True
+                if is_self_account and sync_items_penalty_data and effective_cookie:
+                    try:
+                        sync_items_penalty_data([found_extra], effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
+                    except Exception:
+                        pass
+                raw_items.insert(0, found_extra)
+                if len(raw_items) > max_videos:
+                    raw_items = raw_items[:max_videos]
+            else:
+                if not fallback_target_item:
+                    try:
+                        r_wm = requests.get("https://www.tikwm.com/api/", params={"url": target_vid}, timeout=6).json()
+                        wm_d = r_wm.get("data") or {}
+                        if wm_d.get("id"):
+                            au = (wm_d.get("author") or {}).get("unique_id") or username
+                            fallback_target_item = {
+                                "id": str(wm_d.get("id")),
+                                "desc": wm_d.get("title") or "",
+                                "createTime": wm_d.get("create_time") or 0,
+                                "duration": wm_d.get("duration") or 0,
+                                "region": wm_d.get("region") or channel_info.get("region") or "US",
+                                "cover_url": wm_d.get("origin_cover") or wm_d.get("cover") or "",
+                                "play_count": wm_d.get("play_count") or 0,
+                                "digg_count": wm_d.get("digg_count") or 0,
+                                "comment_count": wm_d.get("comment_count") or 0,
+                                "share_count": wm_d.get("share_count") or 0,
+                                "collect_count": wm_d.get("collect_count") or 0,
+                                "is_nff_or_nr": bool(wm_d.get("is_nff_or_nr")),
+                                "author": {
+                                    "uniqueId": au,
+                                    "nickname": (wm_d.get("author") or {}).get("nickname") or au,
+                                    "avatarLarger": (wm_d.get("author") or {}).get("avatar") or "",
+                                },
+                            }
+                    except Exception:
+                        pass
+                if fallback_target_item:
+                    if oembed_restricted:
+                        fallback_target_item["_oembed_restricted"] = True
+                    raw_items.insert(0, fallback_target_item)
+                    if len(raw_items) > max_videos:
+                        raw_items = raw_items[:max_videos]
 
     # Trích xuất Avatar & Nickname từ author nếu chưa có
     if not channel_info.get("avatar") and raw_items:
@@ -1470,13 +1749,40 @@ def fetch_channel_info_and_posts(
         )
         is_takedown = bool(st_code in (140, 141, 142, 143, 144) or it.get("is_takedown") is True)
 
-        # Cờ kiểm duyệt chính sách (penaltyContext)
+        # Cờ kiểm duyệt chính sách (penaltyContext - lộ cả ở kênh ngoài qua Creator API mà không cần cookie chính chủ)
         penalty_ctx = it.get("penaltyContext") if isinstance(it.get("penaltyContext"), dict) else {}
         display_penalty_type = int(penalty_ctx.get("display_penalty_type") or 0)
         display_policy = int(penalty_ctx.get("display_policy") or 0)
+        ec_verdict = int(penalty_ctx.get("ec_global_verdict") or 0)
+        tns_status = int(penalty_ctx.get("tns_status") or 0)
+        arb_status = int(penalty_ctx.get("arb_content_safety_status") or 0)
+        pc_status = int(penalty_ctx.get("status") or 0)
+        pc_vid_status = int(penalty_ctx.get("video_status") or 0)
+
+        if pc_vid_status == 141:
+            is_copyright = True
+            is_takedown = True
+            if not st_code:
+                st_code = 141
+        elif pc_vid_status in (140, 142, 143, 144):
+            is_takedown = True
+            if not st_code:
+                st_code = pc_vid_status
+
+        is_restored = bool(it.get("is_restored", False))
+        # Tín hiệu cấm đề xuất FYP từ hệ thống kiểm duyệt TNS / Mobile NFF / oEmbed 403 (0% báo nhầm trên video sạch)
+        is_tns_fyp_ban = (not is_restored) and bool(
+            (ec_verdict not in (0, 1))
+            or (tns_status not in (0, 102))
+            or (arb_status not in (0, 102))
+            or (pc_status not in (0, 102))
+            or (it.get("is_nff_or_nr") is True)
+            or (it.get("_oembed_restricted") is True)
+        )
 
         item_ctrl = it.get("item_control") if isinstance(it.get("item_control"), dict) else {}
         can_repost = item_ctrl.get("can_repost", True)
+        can_share = item_ctrl.get("can_share", True)
         is_prohibited = bool(it.get("isProhibited", False))
 
         status_dict = it.get("status") if isinstance(it.get("status"), dict) else {}
@@ -1499,9 +1805,10 @@ def fetch_channel_info_and_posts(
             is_copyright
             or is_takedown
             or it.get("has_penalty", False)
-            or (display_penalty_type != 0)
-            or (display_policy != 0)
+            or ((display_penalty_type != 0 or display_policy != 0) and not is_restored)
+            or is_tns_fyp_ban
             or is_prohibited
+            or is_muted
         )
 
         has_real_group_dup = bool(group_id and group_id != aweme_id and group_id not in ("0", "None", "null"))
@@ -1510,8 +1817,7 @@ def fetch_channel_info_and_posts(
             or cached_meta.get("is_dup", False)
             or it.get("is_dup", False)
             or it.get("isDup", False)
-            or (display_penalty_type != 0)
-            or (display_policy != 0)
+            or ((display_penalty_type != 0 or display_policy != 0) and not is_restored)
         )
 
         dup_reason = ""
@@ -1526,30 +1832,33 @@ def fetch_channel_info_and_posts(
             c_gid = str(cached_meta.get("group_id") or "").strip()
             if c_gid and c_gid != aweme_id and c_gid not in ("0", "None", "null"):
                 dup_origin_vid = c_gid
-        elif display_penalty_type != 0 or display_policy != 0:
+        elif (display_penalty_type != 0 or display_policy != 0) and not is_restored:
             dup_reason = "Vi phạm chính sách trùng lặp / Bản quyền nội dung"
 
         age_hours = (time.time() - c_time) / 3600 if c_time > 0 else 0
 
         # Phân biệt rõ:
         # 1. Trùng lặp (is_dup): video bị cờ duplicate / unoriginal / group_id
-        # 2. Án phạt (has_pen): vi phạm tiêu chuẩn cộng đồng, moderation penalty
+        # 2. Án phạt (has_pen): vi phạm tiêu chuẩn cộng đồng, moderation penalty, tắt tiếng bản quyền
         # 3. Mất FYP (is_fyp): video không đủ điều kiện vào For You feed
-        # 4. Shadowban (is_shadow): hiện tượng thuật toán bóp ngầm phân phối (view kẹt 0 - 300 view)
+        # 4. Shadowban (is_shadow): hạn chế phân phối đề xuất FYP
         is_fyp = bool(
             is_copyright
             or is_takedown
             or is_dup
+            or is_tns_fyp_ban
+            or is_muted
             or (can_repost is False)
+            or (can_share is False)
             or is_prohibited
             or has_pen
             or it.get("is_fyp_restricted", False)
             or cached_meta.get("is_fyp_restricted", False)
         )
 
-        is_shadow = False
-        shadow_reason = ""
-        # Shadowban & FYP restriction: Xác định khi có tín hiệu thực sự từ TikTok (status 141, item_control, penaltyContext, isProhibited)
+        is_shadow = bool(it.get("shadow", False))
+        shadow_reason = str(it.get("shadowReason") or "")
+        # Shadowban & FYP restriction: Xác định từ tín hiệu thực của TikTok (status 141, penaltyContext TNS/EC, NFF, oEmbed 403, item_control, isProhibited, mute)
         if is_copyright:
             shadow_reason = "Khiếu nại bản quyền (TikTok tự động gỡ khỏi FYP & chuyển Riêng tư)"
             is_fyp = True
@@ -1558,18 +1867,32 @@ def fetch_channel_info_and_posts(
             shadow_reason = f"Video bị gỡ bỏ / Vi phạm tiêu chuẩn TikTok (Mã trạng thái {st_code})"
             is_fyp = True
             is_shadow = True
-        elif can_repost is False:
-            shadow_reason = "Hạn chế phân phối Bảng tin Cho bạn (Chặn chia sẻ lại)"
-            is_fyp = True
         elif is_prohibited:
             shadow_reason = "Nội dung vi phạm tiêu chuẩn cộng đồng TikTok (Bị cấm phân phối)"
             is_fyp = True
             is_shadow = True
-        elif has_pen:
-            shadow_reason = "Án phạt kiểm duyệt nội dung TikTok"
+        elif is_tns_fyp_ban:
+            if (ec_verdict not in (0, 1)) or it.get("is_nff_or_nr") or it.get("_oembed_restricted"):
+                shadow_reason = shadow_reason or "Không đủ điều kiện xuất hiện trên Bảng tin Cho bạn (Hạn chế đề xuất FYP · TNS)"
+            else:
+                tns_code = tns_status if tns_status not in (0, 102) else (arb_status if arb_status not in (0, 102) else pc_status)
+                shadow_reason = shadow_reason or f"Hạn chế kiểm duyệt an toàn nội dung TikTok (Mã TNS {tns_code})"
             is_fyp = True
+            is_shadow = True
+        elif is_muted:
+            shadow_reason = shadow_reason or "Vi phạm bản quyền âm thanh (Video bị tắt tiếng · Hạn chế FYP)"
+            is_fyp = True
+            is_shadow = True
+        elif can_repost is False or can_share is False:
+            shadow_reason = shadow_reason or "Hạn chế phân phối Bảng tin Cho bạn (Chặn chia sẻ / đăng lại)"
+            is_fyp = True
+            is_shadow = True
+        elif has_pen:
+            shadow_reason = shadow_reason or "Án phạt kiểm duyệt nội dung TikTok (Hạn chế FYP)"
+            is_fyp = True
+            is_shadow = True
         elif is_dup:
-            shadow_reason = dup_reason or "Nội dung trùng lặp (Không đủ điều kiện FYP)"
+            shadow_reason = shadow_reason or dup_reason or "Nội dung trùng lặp (Không đủ điều kiện FYP)"
             is_fyp = True
 
         pen_details_str = str(it.get("penalty_details") or "")
@@ -1718,9 +2041,8 @@ def fetch_channel_info_and_posts(
     video_notice = ""
     if total_loaded == 0:
         if ch_vids > 0 and no_public_videos:
-            video_notice = (f"Kênh @{username} có {ch_vids} video nhưng KHÔNG có video công khai nào — "
-                            f"toàn bộ đang để chế độ Bạn bè hoặc Riêng tư. TikTok chỉ cho chính chủ xem các video này. "
-                            f"Muốn check: bấm \"Thêm nick\" đăng nhập đúng nick @{username} rồi quét lại.")
+            video_notice = (f"Kênh @{username} có {ch_vids} video nhưng chủ kênh đã ẩn toàn bộ sang chế độ "
+                            f"Riêng tư / Bạn bè (0 video công khai hiển thị trên trang cá nhân).")
         elif ch_vids > 0:
             video_notice = f"Kênh @{username} có {ch_vids} video trên TikTok nhưng các video này có thể đang ở chế độ Riêng tư (Private), hoặc TikTok tạm thời giới hạn tải danh sách công khai."
         else:

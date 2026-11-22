@@ -203,7 +203,7 @@
                         <input 
                             type="text" 
                             id="channelInput" 
-                            placeholder="Nhập @username hoặc link kênh..."
+                            placeholder="Nhập @username, link kênh, link video hoặc ID video..."
                             value=""
                             autocomplete="off"
                             class="w-full bg-transparent border-none text-white text-sm sm:text-base focus:outline-none placeholder-slate-400 font-medium cursor-text min-w-0"
@@ -390,7 +390,7 @@
                                 <input 
                                     type="text" 
                                     id="quickCheckInput" 
-                                    placeholder="Đổi user khác (@user hoặc link)..." 
+                                    placeholder="Nhập @user, link kênh / video hoặc ID video..." 
                                     class="w-full bg-transparent border-none text-white text-xs px-1 focus:outline-none placeholder-slate-500 font-medium cursor-text"
                                     onkeydown="if(event.key === 'Enter'){ event.preventDefault(); handleQuickCheck(); }"
                                     onclick="this.select()"
@@ -1524,7 +1524,14 @@
         function extractCleanHandle(input) {
             if (!input) return '';
             let val = String(input).trim();
-            // Xử lý link đầy đủ dạng https://www.tiktok.com/@username...
+            // Giữ nguyên ID video thuần (17-22 chữ số) hoặc link video / link rút gọn để backend xử lý trực tiếp
+            if (/^\d{17,22}$/.test(val)) {
+                return val;
+            }
+            if (/(?:\/(?:video|photo|v)\/\d+|(?:vt|vm)\.tiktok\.com\/|tiktok\.com\/t\/)/i.test(val)) {
+                return val;
+            }
+            // Xử lý link kênh đầy đủ dạng https://www.tiktok.com/@username...
             if (val.includes('tiktok.com/@')) {
                 val = val.split('tiktok.com/@')[1].split('?')[0].split('#')[0].split('/')[0];
             } else if (val.includes('tiktok.com/')) {
@@ -1668,7 +1675,10 @@
             };
 
             // Tự động kiểm tra xem kênh này có trong kho tài khoản Studio đã lưu hay không
-            const queryCleanName = cleanHandle.replace(/^@+/, '').toLowerCase();
+            let queryCleanName = cleanHandle.replace(/^@+/, '').toLowerCase();
+            if (cleanHandle.includes('tiktok.com/@')) {
+                queryCleanName = cleanHandle.split('tiktok.com/@')[1].split('?')[0].split('#')[0].split('/')[0].replace(/^@+/, '').toLowerCase();
+            }
             const savedAccounts = getSavedStudioAccounts();
             currentCheckCookie = '';
             currentCheckProxy = '';
@@ -1730,6 +1740,9 @@
                 await new Promise(r => setTimeout(r, 320));
 
                 channelData = data.channel || {};
+                if (channelData.uniqueId) {
+                    currentQuery = '@' + String(channelData.uniqueId).replace(/^@+/, '').trim();
+                }
                 userInfoData = data.user_info || {};
                 currentVideos = data.list || [];
                 currentMaxCursor = data.maxCursor || (data.list ? data.list.length : limit);
@@ -1783,17 +1796,6 @@
                 });
 
                 const data = await safeParseJson(response);
-                if (data.success && data.list && data.list.length > 0) {
-                    currentVideos.push(...data.list);
-                    currentMaxCursor = data.maxCursor || (currentMaxCursor + data.list.length);
-                    hasMoreVideos = Boolean(data.hasMore);
-
-                    updateSummaryStats();
-                    filterVideos();
-                    showToast(`Đã tải thêm ${data.list.length} video mới!`);
-                } else {
-                    hasMoreVideos = false;
-                }
                 if (data.success && data.list && data.list.length > 0) {
                     currentVideos.push(...data.list);
                     currentMaxCursor = data.maxCursor || (currentMaxCursor + data.list.length);

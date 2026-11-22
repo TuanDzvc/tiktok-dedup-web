@@ -241,6 +241,7 @@ def start_cloudflare_tunnel(port: int = 8000):
                 encoding="utf-8",
                 errors="ignore",
                 bufsize=1,
+                close_fds=True,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             )
             tunnel_state["proc"] = proc
@@ -271,6 +272,7 @@ def start_cloudflare_tunnel(port: int = 8000):
             encoding="utf-8",
             errors="ignore",
             bufsize=1,
+            close_fds=True,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         )
         tunnel_state["proc"] = proc
@@ -384,10 +386,11 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
             record_user_check_async(clean_user, client_ip)
 
     # Chạy phân tích trong thread riêng tránh xung đột Playwright sync với asyncio loop
+    # Truyền nguyên bản query để core_dedup giải mã được cả @username, link kênh, link video, link rút gọn & ID video
     import asyncio
     res = await asyncio.to_thread(
         fetch_channel_info_and_posts,
-        clean_user,
+        query,
         sec_uid=sec_uid,
         max_cursor=max_cursor,
         cookie_str=cookie,
