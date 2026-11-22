@@ -2204,20 +2204,20 @@ def fetch_channel_info_and_posts(
 
 
         shoot_tab = it.get("shoot_tab")
+        vid_sub_obj = it.get("video") if isinstance(it.get("video"), dict) else {}
+        vid_hash_id = str(vid_sub_obj.get("videoID") or vid_sub_obj.get("vid") or it.get("video_id") or "").strip().lower()
+        play_addr_str = str(vid_sub_obj.get("playAddr") or "")
 
+        # Trong kiến trúc lưu trữ VOD của ByteDance/TikTok:
+        # Mã không gian "025" ở ký tự [3:6] (vd: v14025..., v12025..., v1c025..., v24025...) hoặc btag=e000b0000 là upload từ Web / Studio PC (aid=1988)
+        # Mã không gian "044" ở ký tự [3:6] (vd: v12044..., v15044...) là upload từ App Mobile (aid=1233/1180)
+        is_vod_web_space = bool(re.match(r"^v[0-9a-z]{2}025", vid_hash_id)) or ("btag=e000b0000" in play_addr_str)
 
         is_explicit_web = (
-
-
             device_plat in ("web_pc", "pc", "web")
-
-
             or source_raw in ("web", "web_pc")
-
-
+            or is_vod_web_space
             or "web_upload" in str(it).lower()
-
-
         )
 
 

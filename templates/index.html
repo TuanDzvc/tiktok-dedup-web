@@ -3327,47 +3327,47 @@
                 if (isCopyright) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm" title="${penTitle || 'Vi phạm bản quyền âm thanh / hình ảnh (Bị TikTok khóa Riêng tư)'}"><i class="fa-solid fa-copyright text-rose-400"></i> Bản quyền</span>
+                            <span data-tip="${penTitle || 'Vi phạm bản quyền âm thanh / hình ảnh (Bị TikTok khóa Riêng tư & ngừng đề xuất FYP)'}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-copyright text-rose-400"></i> Bản quyền</span>
                         </div>
                     `;
                 } else if (v.is_crp_punished && (v.is_fyp_restricted || v.shadow)) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm" title="${penTitle}"><i class="fa-solid fa-ban text-rose-400"></i> Không nguyên tác & Mất FYP</span>
+                            <span data-tip="${penTitle || 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT & Mất đề xuất FYP'}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-ban text-rose-400"></i> Không nguyên tác & Mất FYP</span>
                             ${origBtn}
                         </div>
                     `;
                 } else if (v.is_crp_punished) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm" title="${penTitle || 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Creator Rewards)'}"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> Không nguyên tác</span>
+                            <span data-tip="Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Hiện KHÔNG bị mất đề xuất FYP)" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> Không nguyên tác</span>
                             ${origBtn}
                         </div>
                     `;
                 } else if (v.is_fyp_restricted && isThisDup) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
+                            <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị Trùng nội dung, vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
                             ${origBtn}
                         </div>
                     `;
                 } else if (isThisDup) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}"><i class="fa-solid fa-repeat"></i> Trùng</span>
+                            <span data-tip="Chỉ bị Trùng nội dung (Trùng Group ID với video gốc) — Hiện KHÔNG bị mất đề xuất FYP" class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng</span>
                             ${origBtn}
                         </div>
                     `;
                 } else if (v.is_fyp_restricted) {
                     dupBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
-                            <span class="h-7 px-2.5 rounded-lg bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}">🚨 Mất FYP</span>
+                            <span data-tip="${penTitle || 'Bị TikTok chặn đề xuất lên trang Xu hướng (Mất FYP)'}" class="h-7 px-2.5 rounded-lg bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">🚨 Mất FYP</span>
                         </div>
                     `;
                 } else {
                     dupBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
-                            <span class="h-7 px-2.5 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 leading-normal"><i class="fa-solid fa-check"></i> Sạch</span>
+                            <span data-tip="Video sạch an toàn — Không trùng lặp & Đủ điều kiện lên Xu hướng FYP" class="h-7 px-2.5 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-check"></i> Sạch</span>
                         </div>
                     `;
                 }
@@ -3376,19 +3376,19 @@
                 if (isCopyright) {
                     sbBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
-                            <span class="h-7 px-2.5 rounded-lg bg-rose-950/90 text-rose-400 border border-rose-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle || 'Khiếu nại bản quyền - Bị gỡ khỏi Bảng tin Cho bạn'}"><i class="fa-solid fa-ban text-[9px] text-rose-400"></i> Mất FYP</span>
+                            <span data-tip="${penTitle || 'Vi phạm bản quyền — Bị gỡ khỏi Bảng tin Xu hướng (FYP)'}" class="h-7 px-2.5 rounded-lg bg-rose-950/90 text-rose-400 border border-rose-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-ban text-[9px] text-rose-400"></i> Mất FYP</span>
                         </div>
                     `;
                 } else if (v.shadow) {
                     sbBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
-                            <span class="h-7 px-2.5 rounded-lg bg-red-950/90 text-red-400 border border-red-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}">⛔ Có</span>
+                            <span data-tip="${penTitle || 'Đang bị hạn chế phân phối lên Bảng tin Xu hướng (Shadowban / Mất FYP)'}" class="h-7 px-2.5 rounded-lg bg-red-950/90 text-red-400 border border-red-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">⛔ Có</span>
                         </div>
                     `;
                 } else {
                     sbBadge = `
                         <div class="relative inline-flex items-center justify-center h-7">
-                            <span class="h-7 px-2.5 rounded-lg bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 leading-normal">✅ Không</span>
+                            <span data-tip="Không bị Shadowban — Phân phối đề xuất FYP bình thường" class="h-7 px-2.5 rounded-lg bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">✅ Không</span>
                         </div>
                     `;
                 }
@@ -6358,6 +6358,63 @@
             <i class="fa-brands fa-facebook-f text-lg"></i>
         </a>
     </div>
+
+    <!-- Tooltip nổi căn chính giữa bên dưới nhãn trạng thái -->
+    <div id="tikCenteredTooltip" class="fixed z-[999999] pointer-events-none hidden transition-opacity duration-100" style="left:0;top:0;">
+        <div id="tikCenteredTooltipArrow" class="w-2.5 h-2.5 bg-[#0b1326] border-l border-t border-cyan-400/60 rotate-45 -mb-1.5 mx-auto"></div>
+        <div id="tikCenteredTooltipBody" class="px-3 py-1.5 rounded-xl bg-[#0b1326]/98 border border-cyan-400/60 text-white text-xs font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.85)] text-center max-w-[320px] leading-snug backdrop-blur-md"></div>
+    </div>
+    <script>
+        (function initCenteredTooltip() {
+            const tipWrap = document.getElementById('tikCenteredTooltip');
+            const tipBody = document.getElementById('tikCenteredTooltipBody');
+            const tipArrow = document.getElementById('tikCenteredTooltipArrow');
+            let activeEl = null;
+
+            function positionTip(el) {
+                if (!el || !tipWrap || !tipBody) return;
+                const msg = el.getAttribute('data-tip');
+                if (!msg) {
+                    tipWrap.classList.add('hidden');
+                    return;
+                }
+                tipBody.textContent = msg;
+                tipWrap.classList.remove('hidden');
+                const r = el.getBoundingClientRect();
+                const tw = tipWrap.offsetWidth;
+                const centerX = r.left + r.width / 2;
+                let left = centerX - tw / 2;
+                const pad = 10;
+                if (left < pad) left = pad;
+                if (left + tw > window.innerWidth - pad) left = window.innerWidth - pad - tw;
+                const top = r.bottom + 7;
+                tipWrap.style.left = `${Math.round(left)}px`;
+                tipWrap.style.top = `${Math.round(top)}px`;
+                if (tipArrow) {
+                    const arrowOffset = Math.max(10, Math.min(tw - 14, centerX - left - 5));
+                    tipArrow.style.marginLeft = `${Math.round(arrowOffset)}px`;
+                    tipArrow.style.marginRight = '0px';
+                }
+            }
+
+            document.addEventListener('mouseover', (e) => {
+                const target = e.target.closest ? e.target.closest('[data-tip]') : null;
+                if (target) {
+                    activeEl = target;
+                    positionTip(target);
+                } else if (activeEl) {
+                    activeEl = null;
+                    tipWrap?.classList.add('hidden');
+                }
+            });
+            window.addEventListener('scroll', () => {
+                if (activeEl) {
+                    activeEl = null;
+                    tipWrap?.classList.add('hidden');
+                }
+            }, true);
+        })();
+    </script>
 
     <!-- Nút cuộn lên đầu trang (Back to top) bên phải màn hình -->
     <button 
