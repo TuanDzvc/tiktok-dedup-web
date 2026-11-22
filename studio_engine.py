@@ -934,7 +934,9 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 or (isinstance(it.get("desc"), str) and "bản quyền" in it["desc"].lower())
                 or (isinstance(it.get("penalty_details"), str) and "bản quyền" in it["penalty_details"].lower())
             )
-            is_takedown = bool(st_code in (140, 141, 142, 143, 144) or it.get("is_takedown") is True)
+            # 140 = Riêng tư (Only Me) | 143 = Chỉ Bạn bè (Friends) -> KHÔNG phải bị gỡ bỏ!
+            # 141 = Khóa Bản quyền | 142, 144 = Bị gỡ bỏ do vi phạm Tiêu chuẩn Cộng đồng
+            is_takedown = bool(st_code in (141, 142, 144) or (it.get("is_takedown") is True and st_code not in (140, 143)))
 
             vis_val = it.get("visibility")
             if vis_val is None:

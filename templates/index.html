@@ -3310,11 +3310,11 @@
                         <div class="relative inline-flex items-center justify-center">
                             <a href="${origLink}" target="_blank" rel="noopener noreferrer" 
                                title="Mở video gốc trên TikTok:\n${origLink}"
-                               class="px-2.5 py-0.5 rounded-lg bg-sky-950/90 hover:bg-sky-900 border border-sky-500/70 text-sky-300 hover:text-white text-[10px] font-bold inline-flex items-center justify-center gap-1 transition shadow-sm">
-                                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> gốc ↗
+                               class="w-[84px] h-7 px-2.5 rounded-lg bg-sky-950/95 hover:bg-sky-900 border border-sky-500/75 text-sky-300 hover:text-white text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 transition shadow-sm">
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Gốc ↗
                             </a>
                             <button onclick="copyText('${origLink}')" title="Sao chép link video gốc" 
-                               class="absolute left-full ml-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-300 transition text-[10px]">
+                               class="absolute left-full ml-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-300 transition text-xs">
                                 <i class="fa-regular fa-copy"></i>
                             </button>
                         </div>
@@ -3327,7 +3327,7 @@
                 if (isCopyright) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm" title="${penTitle || 'Khiếu nại bản quyền (Mã 141)'}"><i class="fa-solid fa-copyright text-rose-400"></i> Bản quyền</span>
+                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm" title="${penTitle || 'Vi phạm bản quyền âm thanh / hình ảnh (Bị TikTok khóa Riêng tư)'}"><i class="fa-solid fa-copyright text-rose-400"></i> Bản quyền</span>
                         </div>
                     `;
                 } else if (v.is_crp_punished && (v.is_fyp_restricted || v.shadow)) {
@@ -3354,7 +3354,7 @@
                 } else if (isThisDup) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}"><i class="fa-solid fa-repeat"></i> Trùng</span>
+                            <span class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}"><i class="fa-solid fa-repeat"></i> Trùng</span>
                             ${origBtn}
                         </div>
                     `;

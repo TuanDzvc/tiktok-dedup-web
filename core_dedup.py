@@ -167,15 +167,15 @@ def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "
                                 top_det = raw_c[:160]
                     if not top_det:
                         if "13" in rc_list:
-                            top_det = "Nội dung không nguyên bản / Trùng lặp (Mã 13 · Mất FYP)"
+                            top_det = "Mất đề xuất FYP: Nội dung không nguyên bản / Trùng lặp"
                         elif "11" in rc_list:
-                            top_det = "Tương tác giả / Hành vi lừa dối (Mã 11 · Mất FYP)"
+                            top_det = "Mất đề xuất FYP: Tương tác giả / Hành vi lừa dối"
                         elif "10" in rc_list:
-                            top_det = "Nội dung nhạy cảm / Giật gân (Mã 10 · Mất FYP)"
+                            top_det = "Mất đề xuất FYP: Nội dung nhạy cảm / Hành vi nguy hiểm / Giật gân"
                         elif "12" in rc_list:
-                            top_det = "Spam / Thao túng hệ thống (Mã 12 · Mất FYP)"
+                            top_det = "Mất đề xuất FYP: Spam / Thao túng hệ thống"
                         elif "9" in rc_list or "999" in rc_list:
-                            top_det = "Không đủ điều kiện xuất hiện trên Bảng tin Cho bạn (Hạn chế FYP)"
+                            top_det = "Mất đề xuất FYP: Không đủ điều kiện lên Bảng tin Xu hướng (Cho bạn)"
                     if app_st_int == 4 and top_det:
                         top_det += " (Kháng xịt)"
                 return {
@@ -2319,7 +2319,9 @@ def fetch_channel_info_and_posts(
                     # Là 2 phần video khác nhau trên chính kênh này (không phải đăng đúp cùng 1 video, không phải reup kênh khác)
                     group_id = aweme_id
 
-        # Mã trạng thái kiểm duyệt TikTok (Mã 141 = Khiếu nại bản quyền, 140-149 = Bị gỡ bỏ / Vi phạm)
+        # Mã trạng thái TikTok:
+        # 102 = Công khai | 140 = Chủ kênh để Riêng tư | 143 = Chủ kênh để Chỉ Bạn bè (KHÔNG phải vi phạm!)
+        # 141 = Khóa Bản quyền | 142, 144 = Bị TikTok gỡ bỏ do vi phạm Tiêu chuẩn Cộng đồng
         st_val = it.get("status")
         st_code = 0
         if isinstance(st_val, (int, str)) and str(st_val).isdigit():
@@ -2327,14 +2329,23 @@ def fetch_channel_info_and_posts(
         elif isinstance(st_val, dict):
             st_code = int(st_val.get("video_status") or 0)
 
-        # Nhận diện khiếu nại bản quyền & vi phạm tiêu chuẩn
+        # Dọn sạch cờ báo nhầm từ module cũ nếu video chỉ đang ở chế độ Riêng tư (140) hoặc Chỉ Bạn bè (143)
+        if st_code in (140, 143):
+            if "mã 140" in str(it.get("penalty_details") or "").lower() or "mã 143" in str(it.get("penalty_details") or "").lower():
+                it["penalty_details"] = ""
+                it["is_takedown"] = False
+                it["is_fyp_restricted"] = False
+                it["shadow"] = False
+                it["has_penalty"] = False
+
+        # Nhận diện khiếu nại bản quyền & vi phạm tiêu chuẩn thật sự
         is_copyright = bool(
             st_code == 141
             or it.get("is_copyright") is True
             or (isinstance(it.get("desc"), str) and "bản quyền" in it["desc"].lower())
             or (isinstance(it.get("penalty_details"), str) and "bản quyền" in it["penalty_details"].lower())
         )
-        is_takedown = bool(st_code in (140, 141, 142, 143, 144) or it.get("is_takedown") is True)
+        is_takedown = bool(st_code in (141, 142, 144) or (it.get("is_takedown") is True and st_code not in (140, 143)))
 
         # Cờ kiểm duyệt chính sách (penaltyContext - lộ cả ở kênh ngoài qua Creator API mà không cần cookie chính chủ)
         penalty_ctx = it.get("penaltyContext") if isinstance(it.get("penaltyContext"), dict) else {}
@@ -2351,18 +2362,18 @@ def fetch_channel_info_and_posts(
             is_takedown = True
             if not st_code:
                 st_code = 141
-        elif pc_vid_status in (140, 142, 143, 144):
+        elif pc_vid_status in (142, 144):
             is_takedown = True
             if not st_code:
                 st_code = pc_vid_status
 
         is_restored = bool(it.get("is_restored", False))
-        # Tín hiệu cấm đề xuất FYP từ hệ thống kiểm duyệt TNS / Mobile NFF / oEmbed 403 (0% báo nhầm trên video sạch)
+        # Tín hiệu cấm đề xuất FYP từ hệ thống kiểm duyệt AI của TikTok (bỏ qua 140 Riêng tư & 143 Bạn bè)
         is_tns_fyp_ban = (not is_restored) and bool(
             (ec_verdict not in (0, 1))
-            or (tns_status not in (0, 102))
-            or (arb_status not in (0, 102))
-            or (pc_status not in (0, 102))
+            or (tns_status not in (0, 102, 140, 143))
+            or (arb_status not in (0, 102, 140, 143))
+            or (pc_status not in (0, 102, 140, 143))
             or (it.get("is_nff_or_nr") is True)
             or (it.get("_oembed_restricted") is True)
         )
@@ -2453,35 +2464,34 @@ def fetch_channel_info_and_posts(
         shadow_reason = str(it.get("shadowReason") or "")
         # Shadowban & FYP restriction: Xác định từ tín hiệu thực của TikTok (status 141, penaltyContext TNS/EC, NFF, oEmbed 403, item_control, isProhibited, mute)
         if is_copyright:
-            shadow_reason = "Khiếu nại bản quyền (TikTok tự động gỡ khỏi FYP & chuyển Riêng tư)"
+            shadow_reason = "Vi phạm bản quyền âm thanh / hình ảnh (TikTok tự khóa Riêng tư & ngừng đề xuất Xu hướng)"
             is_fyp = True
             is_shadow = True
         elif is_takedown:
-            shadow_reason = f"Video bị gỡ bỏ / Vi phạm tiêu chuẩn TikTok (Mã trạng thái {st_code})"
+            shadow_reason = "Video bị TikTok gỡ bỏ do vi phạm Tiêu chuẩn Cộng đồng"
             is_fyp = True
             is_shadow = True
         elif is_prohibited:
-            shadow_reason = "Nội dung vi phạm tiêu chuẩn cộng đồng TikTok (Bị cấm phân phối)"
+            shadow_reason = "Vi phạm Tiêu chuẩn Cộng đồng TikTok (Bị cấm phân phối)"
             is_fyp = True
             is_shadow = True
         elif is_tns_fyp_ban:
             if (ec_verdict not in (0, 1)) or it.get("is_nff_or_nr") or it.get("_oembed_restricted"):
-                shadow_reason = shadow_reason or "Không đủ điều kiện xuất hiện trên Bảng tin Cho bạn (Hạn chế đề xuất FYP · TNS)"
+                shadow_reason = shadow_reason or "Mất đề xuất Xu hướng (FYP): Nội dung bị AI đánh dấu nhạy cảm / hành vi nguy hiểm / chất lượng thấp / dính logo-QR"
             else:
-                tns_code = tns_status if tns_status not in (0, 102) else (arb_status if arb_status not in (0, 102) else pc_status)
-                shadow_reason = shadow_reason or f"Hạn chế kiểm duyệt an toàn nội dung TikTok (Mã TNS {tns_code})"
+                shadow_reason = shadow_reason or "Mất đề xuất Xu hướng (FYP): Bị bộ lọc an toàn nội dung của TikTok chặn phân phối"
             is_fyp = True
             is_shadow = True
         elif is_muted:
-            shadow_reason = shadow_reason or "Vi phạm bản quyền âm thanh (Video bị tắt tiếng · Hạn chế FYP)"
+            shadow_reason = shadow_reason or "Vi phạm bản quyền âm thanh (Video bị tắt tiếng · Mất đề xuất Xu hướng)"
             is_fyp = True
             is_shadow = True
         elif can_repost is False or can_share is False:
-            shadow_reason = shadow_reason or "Hạn chế phân phối Bảng tin Cho bạn (Chặn chia sẻ / đăng lại)"
+            shadow_reason = shadow_reason or "Mất đề xuất Xu hướng (FYP): Video bị TikTok khóa chia sẻ & đăng lại"
             is_fyp = True
             is_shadow = True
         elif has_fyp_pen:
-            shadow_reason = shadow_reason or "Án phạt kiểm duyệt nội dung TikTok (Hạn chế FYP)"
+            shadow_reason = shadow_reason or "Mất đề xuất Xu hướng (FYP): Đang dính án phạt kiểm duyệt nội dung của TikTok"
             is_fyp = True
             is_shadow = True
 
@@ -2490,7 +2500,7 @@ def fetch_channel_info_and_posts(
             raw_pen_str = ""
         pen_details_str = dup_reason if is_crp_punished and not has_fyp_pen else (raw_pen_str or dup_reason or shadow_reason or "")
         if is_copyright and not raw_pen_str:
-            pen_details_str = "Khiếu nại bản quyền (Mã 141)"
+            pen_details_str = "Vi phạm bản quyền âm thanh / hình ảnh (Bị khóa Riêng tư)"
         if not shadow_reason and is_shadow:
             shadow_reason = pen_details_str or "Video bị hạn chế xuất hiện trên FYP"
 
