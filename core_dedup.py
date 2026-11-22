@@ -807,7 +807,7 @@ def _extract_aweme_quality_label(vid_obj: Any) -> str:
     if best_short > 0:
         return f"{best_short}p"
 
-    ratio = str(vid_obj.get("ratio") or "").strip().lower()
+    ratio = str(vid_obj.get("definition") or vid_obj.get("ratio") or "").strip().lower()
     m_r = re.search(r"(2160|1440|1080|720|540|480|360)", ratio)
     if m_r:
         r_num = int(m_r.group(1))
@@ -2352,6 +2352,67 @@ def fetch_channel_info_and_posts(
         )
     else:
         tkm_cache = {}
+
+    # Bổ sung miễn phí (0đ) độ phân giải thực (720p/1080p/540p) cho video Studio hoặc video cache cũ chưa có quality
+    p_gid_cache_ref = _load_persistent_groupid_cache()
+    need_qual_items = [
+        it for it in (raw_items or [])
+        if isinstance(it, dict)
+        and not str(it.get("quality") or "").strip()
+        and not _extract_aweme_quality_label(it.get("video"))
+    ]
+    if need_qual_items and sec_uid:
+        qual_src_map: Dict[str, Dict[str, Any]] = {}
+        for x_src in (all_fetched_api_items or []):
+            if isinstance(x_src, dict):
+                x_aid = str(x_src.get("id") or x_src.get("aweme_id") or "").strip()
+                if x_aid:
+                    qual_src_map[x_aid] = x_src
+        if not all(str(it.get("id") or it.get("aweme_id") or it.get("item_id") or "") in qual_src_map for it in need_qual_items):
+            q_cookies: List[Tuple[str, str, str]] = []
+            if effective_cookie:
+                q_cookies.append((effective_cookie, matched_acc_ua, matched_acc_proxy))
+            for p_c, p_ua, _ in get_borrowed_cookies_pool():
+                if p_c and not any(c[0] == p_c for c in q_cookies):
+                    q_cookies.append((p_c, p_ua or matched_acc_ua, ""))
+                if len(q_cookies) >= 2:
+                    break
+            q_limit = max(max_videos + max_cursor, 20)
+            for q_ck, q_ua, q_px in q_cookies:
+                try:
+                    ext_q = fetch_external_channel_videos_creator_api(
+                        sec_uid=sec_uid, cookie_str=q_ck, ua_str=q_ua, proxy_str=q_px,
+                        max_videos=q_limit, max_cursor=max_cursor
+                    )
+                    if ext_q:
+                        for x_src in ext_q:
+                            if isinstance(x_src, dict):
+                                x_aid = str(x_src.get("id") or x_src.get("aweme_id") or "").strip()
+                                if x_aid:
+                                    qual_src_map[x_aid] = x_src
+                        break
+                except Exception:
+                    pass
+        if qual_src_map:
+            qual_cache_dirty = False
+            for it in need_qual_items:
+                aid = str(it.get("id") or it.get("aweme_id") or it.get("item_id") or "").strip()
+                src_it = qual_src_map.get(aid)
+                if not isinstance(src_it, dict):
+                    continue
+                src_vid = src_it.get("video") if isinstance(src_it.get("video"), dict) else {}
+                q_lbl = _extract_aweme_quality_label(src_vid)
+                if q_lbl:
+                    it["quality"] = q_lbl
+                    if not isinstance(it.get("video"), dict) or not it.get("video"):
+                        it["video"] = src_vid
+                    if isinstance(p_gid_cache_ref.get(aid), dict):
+                        with _GROUPID_CACHE_LOCK:
+                            p_gid_cache_ref[aid]["quality"] = q_lbl
+                        qual_cache_dirty = True
+            if qual_cache_dirty:
+                _save_persistent_groupid_cache()
+
     ch_followers = int(channel_info.get("followers") or 0)
 
     # Bản đồ toàn bộ video thuộc chính kênh đang quét (để loại trừ báo giả khi kênh cắt nhiều phần Part 1, Part 2... từ cùng 1 tập/bối cảnh)
@@ -2371,7 +2432,6 @@ def fetch_channel_info_and_posts(
                     "size": int(v_sub.get("size") or ((v_sub.get("playAddr") or {}).get("DataSize") if isinstance(v_sub.get("playAddr"), dict) else 0) or 0),
                     "ct": int(x_it.get("createTime") or x_it.get("create_time") or x_it.get("post_time") or 0),
                 }
-    p_gid_cache_ref = _load_persistent_groupid_cache()
     cur_ch_uid = str(check_user_info.get("uid") or "").strip()
 
     for it in raw_items:

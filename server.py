@@ -151,6 +151,111 @@ def extract_clean_username(query: str) -> str:
         u = q.lstrip("@")
     return u.split("?")[0].split("#")[0].rstrip("/").strip().lstrip("@").lower()
 
+SHEET_CONFIG_FILE = Path(__file__).resolve().parent / "sheet_config.json"
+_SHEET_CFG_LOCK = threading.Lock()
+_IP_GEO_CACHE: Dict[str, str] = {}
+_COUNTRY_VN_TRANSLATE = {
+    "Vietnam": "Việt Nam",
+    "United States": "Mỹ",
+    "United Kingdom": "Anh",
+    "Bangladesh": "Bangladesh",
+    "Singapore": "Singapore",
+    "Japan": "Nhật Bản",
+    "South Korea": "Hàn Quốc",
+    "Germany": "Đức",
+    "France": "Pháp",
+    "Netherlands": "Hà Lan",
+    "Thailand": "Thái Lan",
+    "Indonesia": "Indonesia",
+    "Malaysia": "Malaysia",
+    "Philippines": "Philippines",
+    "India": "Ấn Độ",
+    "Taiwan": "Đài Loan",
+    "Hong Kong": "Hồng Kông",
+    "Australia": "Úc",
+    "Canada": "Canada",
+}
+
+
+def _load_sheet_config() -> Dict[str, Any]:
+    with _SHEET_CFG_LOCK:
+        if SHEET_CONFIG_FILE.exists():
+            try:
+                raw = json.loads(SHEET_CONFIG_FILE.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    return {"split_free_by_ip": bool(raw.get("split_free_by_ip", False))}
+            except Exception:
+                pass
+    return {"split_free_by_ip": False}
+
+
+def _save_sheet_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    clean = {"split_free_by_ip": bool(cfg.get("split_free_by_ip", False))}
+    with _SHEET_CFG_LOCK:
+        try:
+            tmp_f = SHEET_CONFIG_FILE.with_suffix(".json.tmp")
+            tmp_f.write_text(json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(tmp_f, SHEET_CONFIG_FILE)
+        except Exception as e:
+            logger.error(f"[SheetCfg] Lỗi lưu sheet_config.json: {e}")
+    return clean
+
+
+def resolve_ip_location(ip: str) -> str:
+    """Tra cứu nhanh vị trí địa lý + nhà mạng của IP khách truy cập (kèm RAM cache)."""
+    s_ip = str(ip or "").strip()
+    if not s_ip or s_ip == "Unknown":
+        return "Không xác định"
+    if s_ip in _IP_GEO_CACHE:
+        return _IP_GEO_CACHE[s_ip]
+    if s_ip in ("127.0.0.1", "::1", "localhost") or s_ip.startswith(("10.", "192.168.", "172.16.")):
+        _IP_GEO_CACHE[s_ip] = "Máy chủ Local (PC)"
+        return _IP_GEO_CACHE[s_ip]
+
+    loc_str = ""
+    try:
+        r = requests.get(
+            f"http://ip-api.com/json/{s_ip}?fields=status,country,countryCode,regionName,city,isp&lang=vi",
+            timeout=3.5,
+        )
+        if r.status_code == 200:
+            d = r.json() or {}
+            if d.get("status") == "success":
+                city = str(d.get("city") or d.get("regionName") or "").strip()
+                city = {"Hanoi": "Hà Nội", "Ho Chi Minh City": "TP.HCM"}.get(city, city)
+                country = str(d.get("country") or d.get("countryCode") or "").strip()
+                country = _COUNTRY_VN_TRANSLATE.get(country, country)
+                isp = str(d.get("isp") or "").strip()
+                isp_short = re.sub(r"\s*(Corporation|Group|Company|Telecom|JSC|Ltd\.?)$", "", isp, flags=re.I).strip()[:28]
+                parts = [p for p in (city, country) if p]
+                base_loc = ", ".join(parts)
+                loc_str = f"{base_loc} ({isp_short})" if (base_loc and isp_short) else (base_loc or isp_short)
+    except Exception:
+        pass
+
+    if not loc_str:
+        try:
+            r2 = requests.get(f"https://ipwho.is/{s_ip}", timeout=3.5)
+            if r2.status_code == 200:
+                d2 = r2.json() or {}
+                if d2.get("success"):
+                    city2 = str(d2.get("city") or d2.get("region") or "").strip()
+                    city2 = {"Hanoi": "Hà Nội", "Ho Chi Minh City": "TP.HCM"}.get(city2, city2)
+                    country2 = str(d2.get("country") or d2.get("country_code") or "").strip()
+                    country2 = _COUNTRY_VN_TRANSLATE.get(country2, country2)
+                    isp2 = str(((d2.get("connection") or {}).get("isp")) or "").strip()[:28]
+                    base2 = ", ".join(p for p in (city2, country2) if p)
+                    loc_str = f"{base2} ({isp2})" if (base2 and isp2) else (base2 or isp2)
+        except Exception:
+            pass
+
+    final_loc = loc_str or "Không rõ vị trí"
+    if len(_IP_GEO_CACHE) > 2000:
+        _IP_GEO_CACHE.clear()
+    _IP_GEO_CACHE[s_ip] = final_loc
+    return final_loc
+
+
 def _get_sheet_webhook_url() -> str:
     env_map = _read_local_env()
     return (os.getenv("SHEET_WEBHOOK_URL") or env_map.get("SHEET_WEBHOOK_URL") or SHEET_WEBHOOK_URL or "").strip()
@@ -158,7 +263,7 @@ def _get_sheet_webhook_url() -> str:
 
 def _sanitize_sheet_tab(account: str) -> str:
     cleaned = re.sub(r'[\\/?*\[\]:]', '_', str(account or "").strip().lower())
-    return cleaned[:95] if cleaned else "Khach_Free"
+    return cleaned[:95] if cleaned else "Khách_Free"
 
 
 def init_user_sheet_async(account: str, role: str = "member", note: str = ""):
@@ -188,12 +293,19 @@ def init_user_sheet_async(account: str, role: str = "member", note: str = ""):
 
 
 def record_user_check_async(user: str, ip: str, account: str = "", device_id: str = ""):
-    """Gửi dữ liệu kiểm tra ngầm về đúng trang tính Google Sheet mang tên tài khoản đã đăng ký."""
+    """Gửi dữ liệu kiểm tra ngầm (kèm Vị trí IP) về đúng trang tính Google Sheet theo tài khoản hoặc IP."""
     hook_url = _get_sheet_webhook_url()
     if not user or not hook_url:
         return
 
-    acc_sheet = _sanitize_sheet_tab(account) if str(account or "").strip() else "Khach_Free"
+    raw_acc = str(account or "").strip()
+    if raw_acc:
+        acc_sheet = _sanitize_sheet_tab(raw_acc)
+    elif _load_sheet_config().get("split_free_by_ip") and ip and ip != "Unknown":
+        acc_sheet = re.sub(r'[\\/?*\[\]:]', '_', f"Khách_{ip}")[:95]
+    else:
+        acc_sheet = "Khách_Free"
+
     now = time.time()
     cache_key = f"{acc_sheet}:{ip}:{user}"
     last_time = _recent_logged_checks.get(cache_key, 0)
@@ -204,16 +316,18 @@ def record_user_check_async(user: str, ip: str, account: str = "", device_id: st
     def _worker():
         try:
             vn_time = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%d/%m/%Y %H:%M:%S")
+            ip_loc = resolve_ip_location(ip)
             payload = {
                 "action": "log_check",
                 "account": acc_sheet,
                 "sheet_name": acc_sheet,
                 "user": user,
                 "ip": ip,
+                "ip_location": ip_loc,
                 "device_id": str(device_id or "").strip(),
                 "time": vn_time,
             }
-            requests.post(hook_url, json=payload, timeout=8)
+            requests.post(hook_url, json=payload, timeout=10)
         except Exception as e:
             print(f"[Sheet Tracker] Lỗi gửi log ({acc_sheet}): {e}")
 
@@ -980,6 +1094,33 @@ async def api_vip_admin_sheet_script(req: Request):
         "success": True,
         "script": gs_file.read_text(encoding="utf-8"),
         "sheet_id": "1HRGpokdDkzyHFCvJBDishlkR7HaVp6BgyBJPxNCW2A0",
+        "split_free_by_ip": _load_sheet_config().get("split_free_by_ip", False),
+    })
+
+
+@app.post("/api/vip/admin/sheet-config")
+async def api_vip_admin_sheet_config(req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền chỉnh cấu hình Google Sheet."})
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    cur = _load_sheet_config()
+    if "split_free_by_ip" in body:
+        new_val = bool(body.get("split_free_by_ip"))
+    else:
+        new_val = not bool(cur.get("split_free_by_ip", False))
+    saved = _save_sheet_config({"split_free_by_ip": new_val})
+    return JSONResponse(content={
+        "success": True,
+        "split_free_by_ip": saved["split_free_by_ip"],
+        "message": (
+            "✅ Đã BẬT tách riêng mỗi IP khách chưa đăng nhập thành 1 Trang tính (Khách_<IP>)!"
+            if saved["split_free_by_ip"]
+            else "✅ Đã chuyển về gom chung khách chưa đăng nhập vào 1 tab Khách_Free (vẫn tách dòng theo từng IP & Vị trí IP)."
+        ),
     })
 
 
@@ -999,14 +1140,14 @@ async def api_vip_admin_sync_sheets(req: Request):
             for k, v in users.items()
             if isinstance(v, dict) and k
         ]
-    targets.append({"account": "Khach_Free", "role": "guest", "note": "Khách chưa đăng nhập"})
+    targets.append({"account": "Khách_Free", "role": "guest", "note": "Khách chưa đăng nhập"})
 
     def _sync_all():
         vn_time = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%d/%m/%Y %H:%M:%S")
         synced = []
         script_supported = True
         for item in targets:
-            acc_tab = "Khach_Free" if item["account"] == "Khach_Free" else _sanitize_sheet_tab(item["account"])
+            acc_tab = "Khách_Free" if item["account"] == "Khách_Free" else _sanitize_sheet_tab(item["account"])
             payload = {
                 "action": "init_user_sheet",
                 "account": acc_tab,

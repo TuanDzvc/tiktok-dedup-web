@@ -1749,7 +1749,7 @@
                             </a>
                         </div>
                         <p class="text-[11px] text-slate-300 leading-relaxed">
-                            Mỗi tài khoản đăng ký web sẽ tự động được ghi vào <b class="text-white">1 trang tính (tab) đặt tên đúng theo username</b> (khách chưa đăng nhập vào tab <code class="px-1 py-0.5 rounded bg-slate-800 text-amber-300">Khach_Free</code>). Nếu Sheet vẫn đang dồn vào 1 bảng, hãy bấm <b class="text-emerald-300">Copy Code Apps Script</b> rồi dán đè vào mục <i>Tiện ích mở rộng → Apps Script → Triển khai phiên bản mới</i>.
+                            Mỗi tài khoản đăng ký web sẽ tự động được ghi vào <b class="text-white">1 trang tính (tab) đặt tên đúng theo username</b> (khách chưa đăng nhập vào tab <code class="px-1 py-0.5 rounded bg-slate-800 text-amber-300">Khách_Free</code> hoặc tách riêng từng IP, tiêu đề chữ trắng căn giữa & có thêm cột <b class="text-cyan-300">Vị trí IP</b>). Nếu Sheet chưa cập nhật, bấm <b class="text-emerald-300">Copy Code Apps Script</b> rồi dán đè vào mục <i>Tiện ích mở rộng → Apps Script → Triển khai phiên bản mới</i>.
                         </p>
                         <div class="flex flex-wrap items-center gap-2 pt-0.5">
                             <button type="button" onclick="copyGoogleSheetScript()" class="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
@@ -1757,6 +1757,9 @@
                             </button>
                             <button type="button" id="btnSyncGoogleSheets" onclick="syncGoogleSheetTabs()" class="px-3.5 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
                                 <i class="fa-solid fa-arrows-rotate"></i> Tạo Trang Tính Cho Các Acc Hiện Có
+                            </button>
+                            <button type="button" id="btnToggleSplitIpSheet" onclick="toggleSplitFreeByIp()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-extrabold text-xs transition flex items-center gap-1.5 shadow">
+                                <i class="fa-solid fa-network-wired"></i> <span id="lblSplitIpSheet">Tách Tab Khách Free Theo IP: TẮT</span>
                             </button>
                         </div>
                         <div id="googleSheetSyncMsg" class="hidden text-[11px] font-semibold px-3 py-2 rounded-xl border"></div>
@@ -2365,6 +2368,7 @@
                 if (currentVipUser.role === 'admin') {
                     admSec.classList.remove('hidden');
                     loadVipUsersList();
+                    loadGoogleSheetConfigState();
                 } else {
                     admSec.classList.add('hidden');
                 }
@@ -2585,6 +2589,55 @@
                 document.getElementById('chgOldPass').value = '';
                 document.getElementById('chgNewPass').value = '';
                 showToast('✅ Đã cập nhật mật khẩu mới thành công!');
+            } catch (err) {
+                showToast('❌ Lỗi kết nối: ' + err.message);
+            }
+        }
+
+        function updateSplitIpButtonUI(isOn) {
+            const btn = document.getElementById('btnToggleSplitIpSheet');
+            const lbl = document.getElementById('lblSplitIpSheet');
+            if (!btn || !lbl) return;
+            window._splitFreeByIpState = Boolean(isOn);
+            if (isOn) {
+                btn.className = 'px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 border border-amber-400 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow';
+                lbl.innerText = 'Tách Tab Khách Free Theo IP: BẬT';
+            } else {
+                btn.className = 'px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-extrabold text-xs transition flex items-center gap-1.5 shadow';
+                lbl.innerText = 'Tách Tab Khách Free Theo IP: TẮT';
+            }
+        }
+
+        async function loadGoogleSheetConfigState() {
+            try {
+                const resp = await fetch('/api/vip/admin/sheet-script', {
+                    headers: { 'Authorization': 'Bearer ' + getVipToken() }
+                });
+                const data = await resp.json();
+                if (data && data.success) {
+                    updateSplitIpButtonUI(Boolean(data.split_free_by_ip));
+                }
+            } catch (e) {}
+        }
+
+        async function toggleSplitFreeByIp() {
+            const nextVal = !Boolean(window._splitFreeByIpState);
+            try {
+                const resp = await fetch('/api/vip/admin/sheet-config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + getVipToken()
+                    },
+                    body: JSON.stringify({ split_free_by_ip: nextVal })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    showToast('❌ ' + (data.error || 'Không lưu được cấu hình'));
+                    return;
+                }
+                updateSplitIpButtonUI(data.split_free_by_ip);
+                showToast(data.message || 'Đã cập nhật cấu hình chia IP!');
             } catch (err) {
                 showToast('❌ Lỗi kết nối: ' + err.message);
             }
@@ -3507,16 +3560,17 @@
                         </div>
                     `;
                 } else if (v.is_crp_punished && (v.is_fyp_restricted || v.shadow)) {
+                    const crpFypTip = (penTitle ? penTitle.replace(/\s*\(/g, '&#10;(') : 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT&#10;(Đang bị chặn đề xuất Xu hướng FYP)');
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="${penTitle || 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT & Mất đề xuất FYP'}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-ban text-rose-400"></i> Không nguyên tác & Mất FYP</span>
+                            <span data-tip="${crpFypTip}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-ban text-rose-400"></i> Không nguyên tác & Mất FYP</span>
                             ${origBtn}
                         </div>
                     `;
                 } else if (v.is_crp_punished) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Hiện KHÔNG bị mất đề xuất FYP)" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> Không nguyên tác</span>
+                            <span data-tip="Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT&#10;(Hiện KHÔNG bị mất đề xuất FYP)" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> Không nguyên tác</span>
                             ${origBtn}
                         </div>
                     `;
