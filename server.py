@@ -801,8 +801,8 @@ def _get_tikhub_live_balance(force_refresh: bool = False) -> Dict[str, Any]:
 @app.get("/api/vip/admin/api-balance")
 async def api_vip_admin_balance(req: Request, refresh: int = Query(0)):
     u_obj = _extract_vip_user(req)
-    if not u_obj or u_obj.get("role") != "admin":
-        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới xem được số dư API."})
+    if not _has_vip_privilege(u_obj):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ tài khoản VIP hoặc Admin mới xem được số dư API."})
     import asyncio
     info = await asyncio.to_thread(_get_tikhub_live_balance, bool(refresh))
     return JSONResponse(content={"success": True, "billing": info})
@@ -1046,7 +1046,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     )
     
     internal_cost = res.pop("_internal_cost", None) if isinstance(res, dict) else None
-    if isinstance(res, dict) and vip_user and vip_user.get("role") == "admin":
+    if isinstance(res, dict) and allow_paid_groupid:
         cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
         c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
         c_calls = int(cost_obj.get("api_calls") or 0)
