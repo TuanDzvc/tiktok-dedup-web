@@ -290,7 +290,7 @@
                                     class="w-full sm:w-auto appearance-none bg-slate-900 border border-slate-700/90 text-slate-200 text-xs sm:text-sm font-bold rounded-xl pl-3.5 pr-8 py-2.5 focus:outline-none focus:border-cyan-400 shadow-md cursor-pointer hover:border-slate-500 transition"
                                     title="Chọn số lượng video muốn quét"
                                 >
-                                    <option value="24" selected>⚡ 24 video gần nhất (Siêu tốc ~3s - Khuyên dùng)</option>
+                                    <option value="18" selected>⚡ 18 video gần nhất (Siêu tốc ~2s - Khuyên dùng)</option>
                                     <option value="50">🚀 50 video gần nhất (~6s)</option>
                                     <option value="100">📦 100 video gần nhất</option>
                                 </select>
@@ -338,7 +338,7 @@
                 </div>
                 <div id="scanStep2Box" class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 flex flex-col items-center gap-1.5 transition-all duration-300">
                     <i id="scanStep2Icon" class="fa-solid fa-video text-sm"></i>
-                    <span id="scanStep2Text" class="font-bold">2. Tải 24 video</span>
+                    <span id="scanStep2Text" class="font-bold">2. Tải 18 video</span>
                 </div>
                 <div id="scanStep3Box" class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 flex flex-col items-center gap-1.5 transition-all duration-300">
                     <i id="scanStep3Icon" class="fa-solid fa-chart-pie text-sm"></i>
@@ -676,7 +676,7 @@
                                 class="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 transition duration-200 inline-flex items-center justify-center gap-2.5 active:scale-95 border border-cyan-400/30"
                             >
                                 <i id="loadMoreIcon" class="fa-solid fa-arrows-rotate"></i>
-                                <span id="loadMoreText">➕ Quét thêm 24 video tiếp theo</span>
+                                <span id="loadMoreText">➕ Quét thêm 18 video tiếp theo</span>
                             </button>
                             <p id="loadMoreEndMsg" class="hidden text-sm text-emerald-400 font-bold mt-2 tracking-wide flex items-center justify-center gap-1.5">
                                 <i class="fa-solid fa-circle-check"></i>
@@ -1593,7 +1593,7 @@
             const i3 = document.getElementById('scanStep3Icon');
             const title = document.getElementById('scanStepTitle');
             const sub = document.getElementById('scanStepSubtitle');
-            const limit = parseInt(document.getElementById('scanLimitSelect')?.value || 24);
+            const limit = parseInt(document.getElementById('scanLimitSelect')?.value || 18);
 
             // 3 MÀU RIÊNG BIỆT (KHÔNG DÙNG XANH LÁ):
             // Bước 1: Xanh ngọc Cyan Neon
@@ -1665,7 +1665,7 @@
             const qBtn = document.getElementById('btnQuickCheck');
             if (qBtn) { qBtn.disabled = true; qBtn.classList.add('opacity-70'); }
 
-            const limit = parseInt(document.getElementById('scanLimitSelect')?.value || 24);
+            const limit = parseInt(document.getElementById('scanLimitSelect')?.value || 18);
             const step2Text = document.getElementById('scanStep2Text');
             if (step2Text) step2Text.innerText = `2. Tải ${limit} video`;
 
@@ -1785,7 +1785,7 @@
 
             btn.disabled = true;
             icon.className = "fa-solid fa-spinner animate-spin";
-            text.innerText = "Đang quét thêm 24 video tiếp theo...";
+            text.innerText = "Đang quét thêm 18 video tiếp theo...";
 
             try {
                 const response = await fetch('/api/check', {
@@ -1794,7 +1794,7 @@
                     body: JSON.stringify({
                         query: currentQuery,
                         max_cursor: currentMaxCursor,
-                        max_videos: 24,
+                        max_videos: 18,
                         cookie: currentCheckCookie,
                         proxy: currentCheckProxy,
                         sec_uid: currentCheckSecUid
@@ -1819,7 +1819,7 @@
                 isLoadingMore = false;
                 btn.disabled = false;
                 icon.className = "fa-solid fa-arrows-rotate";
-                text.innerText = "➕ Quét thêm 24 video tiếp theo";
+                text.innerText = "➕ Quét thêm 18 video tiếp theo";
                 updateLoadMoreButtonState();
             }
         }
