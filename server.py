@@ -367,10 +367,13 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     proxy = str(body.get("proxy") or "").strip()
     sec_uid = str(body.get("sec_uid") or "").strip()
 
-    clean_user = extract_clean_username(query)
+    force_ext = query.startswith("!")
+    if force_ext:
+        cookie = ""
+    clean_user = extract_clean_username(query.lstrip("!"))
 
     # Nếu client chưa truyền cookie, tự động tra cứu trong ACTIVE_STUDIO_ACCOUNTS
-    if not cookie and clean_user:
+    if not cookie and clean_user and not force_ext:
         acc_entry = studio_engine.ACTIVE_STUDIO_ACCOUNTS.get(clean_user.lower())
         if acc_entry:
             cookie = acc_entry.get("cookie", "")

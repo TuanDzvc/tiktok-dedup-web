@@ -1100,6 +1100,10 @@ def fetch_channel_info_and_posts(
     - Hỗ trợ phân trang: mặc định quét 24 video, có thể quét thêm các đợt tiếp theo.
     """
     query = str(channel_query or "").strip()
+    force_external = query.startswith("!")
+    if force_external:
+        query = query.lstrip("!").strip()
+        cookie_str = ""
     username, target_vid, fallback_target_item = _resolve_query_target(query, ua_str or DEFAULT_UA)
 
     channel_info = {
@@ -1139,7 +1143,7 @@ def fetch_channel_info_and_posts(
     except Exception:
         pass
 
-    if username and not matched_acc_cookie:
+    if username and not matched_acc_cookie and not force_external:
         # A. Thử tìm trong ConfigStore (nếu chạy local)
         if ConfigStore:
             try:

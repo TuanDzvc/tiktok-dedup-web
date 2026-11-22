@@ -1524,12 +1524,17 @@
         function extractCleanHandle(input) {
             if (!input) return '';
             let val = String(input).trim();
+            let prefix = '';
+            if (val.startsWith('!')) {
+                prefix = '!';
+                val = val.slice(1).trim();
+            }
             // Giữ nguyên ID video thuần (17-22 chữ số) hoặc link video / link rút gọn để backend xử lý trực tiếp
             if (/^\d{17,22}$/.test(val)) {
-                return val;
+                return prefix + val;
             }
             if (/(?:\/(?:video|photo|v)\/\d+|(?:vt|vm)\.tiktok\.com\/|tiktok\.com\/t\/)/i.test(val)) {
-                return val;
+                return prefix + val;
             }
             // Xử lý link kênh đầy đủ dạng https://www.tiktok.com/@username...
             if (val.includes('tiktok.com/@')) {
@@ -1540,7 +1545,7 @@
             }
             val = val.split('?')[0].split('#')[0].replace(/\/+$/, '').trim();
             val = val.replace(/^@+/, '');
-            return val ? '@' + val : '';
+            return val ? prefix + '@' + val : '';
         }
 
         async function handleQuickCheck(e) {
@@ -1674,12 +1679,13 @@
                 t2: setTimeout(() => setScanStep(3), 1600)
             };
 
-            // Tự động kiểm tra xem kênh này có trong kho tài khoản Studio đã lưu hay không
-            let queryCleanName = cleanHandle.replace(/^@+/, '').toLowerCase();
+            // Tự động kiểm tra xem kênh này có trong kho tài khoản Studio đã lưu hay không (trừ khi gõ dấu ! ở đầu để ép giả lập khách ngoài)
+            const isForceExternal = cleanHandle.startsWith('!');
+            let queryCleanName = cleanHandle.replace(/^!+/, '').replace(/^@+/, '').toLowerCase();
             if (cleanHandle.includes('tiktok.com/@')) {
                 queryCleanName = cleanHandle.split('tiktok.com/@')[1].split('?')[0].split('#')[0].split('/')[0].replace(/^@+/, '').toLowerCase();
             }
-            const savedAccounts = getSavedStudioAccounts();
+            const savedAccounts = isForceExternal ? [] : getSavedStudioAccounts();
             currentCheckCookie = '';
             currentCheckProxy = '';
             currentCheckSecUid = '';
@@ -1694,7 +1700,7 @@
                 currentCheckCookie = matchedAcc.cookie;
                 currentCheckProxy = matchedAcc.proxy || '';
                 currentCheckSecUid = matchedAcc.sec_uid || '';
-            } else if (activeStudioSession && activeStudioSession.cookie) {
+            } else if (!isForceExternal && activeStudioSession && activeStudioSession.cookie) {
                 const activeU = String(activeStudioSession.account?.uniqueId || activeStudioSession.account?.username || '').replace(/^@+/, '').toLowerCase();
                 if (activeU === queryCleanName) {
                     currentCheckCookie = activeStudioSession.cookie;
