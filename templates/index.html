@@ -1615,8 +1615,8 @@
     <!-- ============================================================================== -->
     <!-- 3. MODAL QUẢN TRỊ ADMIN (TẠO / XÓA NICK VIP CHO KHÁCH & ĐỔI MẬT KHẨU) -->
     <!-- ============================================================================== -->
-    <div id="vipAdminModal" onclick="if(event.target===this) closeVipAdminModal()" class="fixed inset-0 z-[96] bg-black/60 backdrop-blur-lg flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
-        <div class="relative max-w-6xl w-full max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden">
+    <div id="vipAdminModal" onclick="if(event.target===this) closeVipAdminModal()" class="fixed inset-0 z-[96] bg-black/60 backdrop-blur-lg flex items-center justify-center p-2 sm:p-4 transition-all duration-200 hidden">
+        <div class="relative max-w-[1460px] w-[96vw] max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden">
             <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-3.5 bg-dark-950/90 flex-shrink-0">
                 <div class="flex items-center gap-2.5">
                     <div class="w-9 h-9 rounded-xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
@@ -2140,20 +2140,24 @@
                     const pwVal = String(u.password_plain || '—');
                     return `
                         <tr class="hover:bg-slate-900/60 align-middle">
-                            <td class="px-3 py-2.5 font-mono font-bold text-white text-center align-middle whitespace-nowrap">${escapeHtml(u.username)}</td>
-                            <td class="px-3 py-2.5 font-mono font-bold text-amber-300 text-center align-middle whitespace-nowrap">
-                                <button type="button" onclick="copyText('${escapeHtml(pwVal)}')" class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-200 hover:text-white transition" title="Bấm để sao chép mật khẩu">
+                            <td class="px-2.5 py-2.5 font-mono font-bold text-white text-center align-middle whitespace-nowrap">
+                                <button type="button" onclick="copyText('${escapeHtml(u.username)}')" class="px-2.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white hover:text-cyan-300 transition" title="Bấm để sao chép tên tài khoản">
+                                    ${escapeHtml(u.username)}
+                                </button>
+                            </td>
+                            <td class="px-2.5 py-2.5 font-mono font-bold text-amber-300 text-center align-middle whitespace-nowrap">
+                                <button type="button" onclick="copyText('${escapeHtml(pwVal)}')" class="px-2.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-200 hover:text-white transition" title="Bấm để sao chép mật khẩu">
                                     ${escapeHtml(pwVal)}
                                 </button>
                             </td>
-                            <td class="px-3 py-2.5 text-center align-middle whitespace-nowrap">${roleBadge}</td>
-                            <td class="px-3 py-2.5 font-mono text-cyan-300 font-extrabold text-center align-middle whitespace-nowrap">${u.scan_count || 0}</td>
-                            <td class="px-3 py-2.5 text-center align-middle whitespace-nowrap">${expStr}</td>
-                            <td class="px-3 py-2.5 text-center align-middle min-w-[230px]">${devicesHtml}</td>
-                            <td class="px-3 py-2.5 text-center align-middle min-w-[160px] max-w-[210px]">
+                            <td class="px-2.5 py-2.5 text-center align-middle whitespace-nowrap">${roleBadge}</td>
+                            <td class="px-2.5 py-2.5 font-mono text-cyan-300 font-extrabold text-center align-middle whitespace-nowrap">${u.scan_count || 0}</td>
+                            <td class="px-2.5 py-2.5 text-center align-middle whitespace-nowrap">${expStr}</td>
+                            <td class="px-2.5 py-2.5 text-center align-middle">${devicesHtml}</td>
+                            <td class="px-2.5 py-2.5 text-center align-middle min-w-[150px] max-w-[210px]">
                                 <div class="line-clamp-2 whitespace-pre-line leading-snug text-white font-medium mx-auto">${escapeHtml(rawNote)}</div>
                             </td>
-                            <td class="px-3 py-2.5 text-center align-middle whitespace-nowrap">${actionsHtml}</td>
+                            <td class="px-2.5 py-2.5 text-center align-middle whitespace-nowrap">${actionsHtml}</td>
                         </tr>
                     `;
                 }).join('');
