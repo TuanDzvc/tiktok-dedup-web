@@ -1902,14 +1902,18 @@
                 <button
                     type="button"
                     onclick="refreshAdminApiBalance(true)"
-                    class="px-2.5 py-1 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/50 flex items-center gap-1.5 transition"
-                    title="Số dư ví API hiện tại (VIP & Admin) — bấm để cập nhật mới nhất"
+                    class="group px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-cyan-500/35 hover:border-cyan-400/75 shadow-lg shadow-cyan-950/40 flex items-center gap-2 transition-all duration-200 active:scale-95"
+                    title="Số dư ví API hiện tại — bấm để làm mới"
                 >
-                    <i class="fa-solid fa-coins text-emerald-400 text-xs"></i>
-                    <div class="flex flex-col items-start leading-tight">
-                        <span id="adminNavBalanceUsd" class="text-[11px] font-black font-mono text-emerald-300">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd || 0).toFixed(4)) : 'Ví API'}</span>
-                        <span id="adminNavBalanceVnd" class="text-[10px] font-bold text-amber-300">${window._lastAdminBal ? ('~' + Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : 'Đang tải...'}</span>
+                    <span class="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 border border-emerald-400/40 flex items-center justify-center flex-shrink-0">
+                        <i class="fa-solid fa-wallet text-emerald-400 text-[11px]"></i>
+                    </span>
+                    <div class="flex items-center gap-2 leading-none">
+                        <span id="adminNavBalanceUsd" class="text-xs font-black tracking-tight text-white tabular-nums">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd || 0).toFixed(4)) : 'Ví API'}</span>
+                        <span class="hidden sm:inline-block w-px h-3.5 bg-slate-700/90"></span>
+                        <span id="adminNavBalanceVnd" class="hidden sm:inline-block px-1.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/30 text-[11px] font-extrabold text-cyan-300 tabular-nums">${window._lastAdminBal ? (Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : '...'}</span>
                     </div>
+                    <i class="fa-solid fa-arrows-rotate text-[10px] text-slate-500 group-hover:text-cyan-300 group-hover:rotate-180 transition-all duration-300 hidden md:inline-block"></i>
                 </button>
             ` : '';
             nav.innerHTML = `
@@ -1959,7 +1963,7 @@
             const navUsd = document.getElementById('adminNavBalanceUsd');
             const navVnd = document.getElementById('adminNavBalanceVnd');
             if (navUsd) navUsd.innerText = `$${balUsd.toFixed(4)}`;
-            if (navVnd) navVnd.innerText = `~${balVnd.toLocaleString('vi-VN')}đ`;
+            if (navVnd) navVnd.innerText = `${balVnd.toLocaleString('vi-VN')}đ`;
 
             const modUsd = document.getElementById('adminModalBalanceUsd');
             const modVnd = document.getElementById('adminModalBalanceVnd');
