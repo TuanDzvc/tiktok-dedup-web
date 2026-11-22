@@ -655,9 +655,9 @@
                             <table class="w-full text-left text-xs border-collapse">
                                 <thead class="bg-dark-900/95 text-slate-300 uppercase tracking-wider font-bold border-b border-slate-800 text-[11px]">
                                     <tr>
-                                        <th class="p-3 text-center w-12">#</th>
-                                        <th class="p-3 text-center w-20">Ảnh bìa</th>
-                                        <th class="p-3">Mô tả & Thời gian</th>
+                                        <th class="p-3 text-center w-11 whitespace-nowrap">#</th>
+                                        <th class="p-3 text-center whitespace-nowrap w-[78px] min-w-[78px]">Ảnh bìa</th>
+                                        <th class="p-3 text-center">Mô tả & Thời gian</th>
                                         <th class="p-3 text-center w-24">Lượt xem</th>
                                         <th class="p-3 text-center w-36">Tương tác</th>
                                         <th class="p-3 text-center w-20">Quốc gia</th>
@@ -3396,10 +3396,10 @@
                 const coverProxied = getProxiedImage(v.cover_url, 'Video', currentCheckCookie);
 
                 tr.innerHTML = `
-                    <td class="p-3 text-center text-slate-500 font-mono font-bold">${index + 1}</td>
-                    <td class="p-3 text-center">
-                        <div onclick="openModal('${v.aweme_id}')" class="relative group cursor-pointer inline-block rounded-lg overflow-hidden border border-slate-700">
-                            <img src="${coverProxied}" alt="Thumb" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-12 h-16 object-cover group-hover:scale-110 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = getProxiedImage('${v.cover_url}', 'Video', currentCheckCookie); } else { this.src='https://placehold.co/120x160/111726/38bdf8?text=TikTok'; }" />
+                    <td class="p-3 text-center text-slate-500 font-mono font-bold w-11">${index + 1}</td>
+                    <td class="p-2.5 text-center w-[78px] min-w-[78px]">
+                        <div onclick="openModal('${v.aweme_id}')" class="relative group cursor-pointer inline-block w-12 h-16 min-w-[48px] rounded-lg overflow-hidden border border-slate-700">
+                            <img src="${coverProxied}" alt="Thumb" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-12 h-16 min-w-[48px] max-w-none object-cover group-hover:scale-110 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = getProxiedImage('${v.cover_url}', 'Video', currentCheckCookie); } else { this.src='https://placehold.co/120x160/111726/38bdf8?text=TikTok'; }" />
                             ${isCopyright ? `
                                 <div class="absolute inset-x-0 bottom-0 py-0.5 bg-rose-950/95 border-t border-rose-700/80 text-[8px] font-black text-rose-200 text-center tracking-tighter leading-none shadow">
                                     Bản quyền
@@ -3410,8 +3410,12 @@
                             </div>
                         </div>
                     </td>
-                    <td class="p-3 min-w-[280px] max-w-lg">
-                        <p class="font-semibold whitespace-normal break-words leading-relaxed text-[13px] ${(v.desc && v.desc.trim()) ? 'text-white' : 'text-slate-500 italic'}">
+                    <td class="p-3 min-w-[260px] max-w-[420px]">
+                        <p
+                            title="${escapeHtml((v.desc && v.desc.trim()) ? v.desc.trim() : '')}"
+                            style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word;"
+                            class="font-semibold leading-snug text-[13px] ${(v.desc && v.desc.trim()) ? 'text-white' : 'text-slate-500 italic'}"
+                        >
                             ${escapeHtml((v.desc && v.desc.trim()) ? v.desc.trim() : (v.desc_clean && v.desc_clean !== '(không mô tả)' ? v.desc_clean : '(không có mô tả)'))}
                         </p>
                         <div class="flex items-center gap-2 mt-1 text-[11px] text-sky-400 font-mono">
