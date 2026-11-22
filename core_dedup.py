@@ -668,29 +668,36 @@ def _fetch_tikhub_multi_awemes(
         "Accept": "application/json",
     }
 
-    # 1. Cổng siêu rẻ $0.001 / trang (tới 30 video/trang, nhảy thẳng vào trang tiếp theo khi bấm Quét thêm)
+    # 1. Cổng siêu rẻ $0.001 / trang (rẻ gấp 10 lần fetch_multi_video $0.01/10 video)
+    clean_id_set = set(clean_ids)
     if sec_uid and len(clean_ids) >= 2 and time.time() >= _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL:
         cur_val = int(start_cursor_ms or 0)
-        for _page_idx in range(6):
-            if all(vid in results for vid in clean_ids):
+        max_pages = min(4, max(1, (len(clean_ids) + 8) // 9))
+        for _page_idx in range(max_pages):
+            missing_now = [vid for vid in clean_ids if vid not in results]
+            # Nếu chỉ còn đúng 1 video lẻ (VD video ghim cũ), gọi thẳng fetch_one_video ($0.001) chính xác 100% thay vì lật trang mò
+            if len(missing_now) <= 1:
                 break
             try:
                 r_post = requests.get(
                     "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos",
-                    params={"sec_user_id": sec_uid, "count": 30, "max_cursor": cur_val, "sort_type": 0},
+                    params={"sec_user_id": sec_uid, "count": 20, "max_cursor": cur_val, "sort_type": 0},
                     headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
                     timeout=8,
                 )
                 if r_post.status_code == 200:
                     p_data = (r_post.json() or {}).get("data") or {}
                     aw_list = p_data.get("aweme_list") if isinstance(p_data, dict) else (p_data if isinstance(p_data, list) else [])
+                    before_hits = sum(1 for vid in clean_id_set if vid in results)
                     if aw_list:
                         _cache_and_collect_awemes(aw_list, results)
+                    after_hits = sum(1 for vid in clean_id_set if vid in results)
                     has_more_p = bool(p_data.get("has_more")) if isinstance(p_data, dict) else False
                     next_cur_p = int(p_data.get("max_cursor") or 0) if isinstance(p_data, dict) else 0
                     if next_cur_p > 0:
                         _TIKHUB_SECUID_NEXT_CURSOR[sec_uid] = next_cur_p
-                    if not aw_list or not has_more_p or next_cur_p <= 0 or next_cur_p == cur_val:
+                    # Dừng ngay nếu trang vừa lấy không khớp thêm video mục tiêu nào hoặc đã hết trang
+                    if not aw_list or (after_hits == before_hits) or not has_more_p or next_cur_p <= 0 or next_cur_p == cur_val:
                         break
                     cur_val = next_cur_p
                 elif r_post.status_code == 402:
