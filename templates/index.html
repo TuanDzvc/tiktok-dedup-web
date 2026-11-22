@@ -1829,17 +1829,32 @@
             }
             const isAdmin = currentVipUser.role === 'admin';
             const isVip = Boolean(currentVipUser.is_vip);
-            let badgeCls = 'bg-slate-800/90 border-slate-600 text-slate-200 hover:bg-slate-700';
-            let iconCls = 'fa-user text-slate-300';
-            let roleLabel = `Thường: ${escapeHtml(currentVipUser.username)} (Chờ VIP)`;
+            let badgeCls = 'bg-slate-900/95 border-slate-600 hover:bg-slate-800';
+            let iconCls = 'fa-user text-slate-300 text-sm';
+            let roleHtml = `
+                <div class="flex flex-col items-start leading-tight">
+                    <span class="text-[11px] font-extrabold text-slate-300">Tài khoản Thường</span>
+                    <span class="text-[11px] font-mono font-bold text-cyan-300">${escapeHtml(currentVipUser.username)}</span>
+                </div>
+            `;
             if (isAdmin) {
-                badgeCls = 'bg-amber-950/90 border-amber-400/70 text-amber-200 hover:bg-amber-900/80 shadow-md shadow-amber-500/15';
-                iconCls = 'fa-users-gear text-amber-300';
-                roleLabel = `Quản Lý Acc (${escapeHtml(currentVipUser.username)})`;
+                badgeCls = 'bg-slate-900/95 border-amber-400/70 hover:bg-slate-800/95 shadow-md shadow-amber-500/15';
+                iconCls = 'fa-users-gear text-amber-300 text-sm';
+                roleHtml = `
+                    <div class="flex flex-col items-start leading-tight">
+                        <span class="text-xs font-extrabold text-amber-300">Quản Lý Acc</span>
+                        <span class="text-[11px] font-mono font-bold text-cyan-300">${escapeHtml(currentVipUser.username)}</span>
+                    </div>
+                `;
             } else if (isVip) {
-                badgeCls = 'bg-emerald-950/90 border-emerald-500/60 text-emerald-200 hover:bg-emerald-900/80';
-                iconCls = 'fa-crown text-yellow-300';
-                roleLabel = `VIP: ${escapeHtml(currentVipUser.username)}`;
+                badgeCls = 'bg-emerald-950/90 border-emerald-500/60 hover:bg-emerald-900/80';
+                iconCls = 'fa-crown text-yellow-300 text-sm';
+                roleHtml = `
+                    <div class="flex flex-col items-start leading-tight">
+                        <span class="text-xs font-extrabold text-emerald-300">Tài Khoản VIP</span>
+                        <span class="text-[11px] font-mono font-bold text-white">${escapeHtml(currentVipUser.username)}</span>
+                    </div>
+                `;
             }
             nav.innerHTML = `
                 <div class="flex items-center gap-1.5">
@@ -1847,16 +1862,16 @@
                     <button
                         type="button"
                         onclick="openVipAdminModal()"
-                        class="px-2.5 sm:px-3 py-1.5 rounded-xl ${badgeCls} border font-extrabold text-xs flex items-center gap-1.5 transition"
+                        class="px-3 py-1 rounded-xl ${badgeCls} border flex items-center gap-2 transition"
                         title="${isAdmin ? 'Bấm để mở Bảng Quản Lý Tài Khoản Khách & Đổi mật khẩu' : 'Bấm để xem thông tin / Đổi mật khẩu'}"
                     >
                         <i class="fa-solid ${iconCls}"></i>
-                        <span>${roleLabel}</span>
+                        ${roleHtml}
                     </button>
                     <button
                         type="button"
                         onclick="vipLogout()"
-                        class="px-2 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950 border border-slate-700 hover:border-rose-600/60 text-slate-300 hover:text-rose-300 text-xs font-bold transition"
+                        class="px-2.5 py-2 rounded-xl bg-slate-800/90 hover:bg-rose-950 border border-slate-700 hover:border-rose-600/60 text-slate-300 hover:text-rose-300 text-xs font-bold transition"
                         title="Đăng xuất tài khoản"
                     >
                         <i class="fa-solid fa-right-from-bracket"></i>
