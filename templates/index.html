@@ -689,11 +689,13 @@
                                 type="button" 
                                 id="btnLoadMore" 
                                 onclick="loadMoreVideos()"
-                                class="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 transition duration-200 inline-flex flex-wrap items-center justify-center gap-2.5 active:scale-95 border border-cyan-400/30"
+                                class="px-8 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 transition duration-200 inline-flex flex-col items-center justify-center gap-1 active:scale-95 border border-cyan-400/30"
                             >
-                                <i id="loadMoreIcon" class="fa-solid fa-arrows-rotate"></i>
-                                <span id="loadMoreText">➕ Quét thêm 18 video tiếp theo</span>
-                                <span id="loadMoreCostBadge" class="hidden px-2.5 py-0.5 rounded-lg bg-dark-950/75 border border-cyan-300/40 text-[11px] font-extrabold text-amber-300 tabular-nums shadow-inner">
+                                <span class="inline-flex items-center gap-2">
+                                    <i id="loadMoreIcon" class="fa-solid fa-arrows-rotate"></i>
+                                    <span id="loadMoreText">➕ Quét thêm 18 video tiếp theo</span>
+                                </span>
+                                <span id="loadMoreCostBadge" class="hidden px-2.5 py-0.5 rounded-lg bg-dark-950/80 border border-cyan-300/35 text-[11px] font-extrabold text-amber-300 tabular-nums shadow-inner">
                                     $0.0010 • ~26đ
                                 </span>
                             </button>
@@ -3305,14 +3307,14 @@
                 let origBtn = '';
                 if (origLink) {
                     origBtn = `
-                        <div class="mt-1 flex items-center justify-center gap-1">
+                        <div class="relative inline-flex items-center justify-center">
                             <a href="${origLink}" target="_blank" rel="noopener noreferrer" 
                                title="Mở video gốc trên TikTok:\n${origLink}"
-                               class="px-2 py-0.5 rounded-md bg-sky-950/90 hover:bg-sky-900 border border-sky-500/70 text-sky-300 hover:text-white text-[10px] font-bold inline-flex items-center gap-1 transition shadow-sm">
+                               class="px-2.5 py-0.5 rounded-lg bg-sky-950/90 hover:bg-sky-900 border border-sky-500/70 text-sky-300 hover:text-white text-[10px] font-bold inline-flex items-center justify-center gap-1 transition shadow-sm">
                                 <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> gốc ↗
                             </a>
                             <button onclick="copyText('${origLink}')" title="Sao chép link video gốc" 
-                               class="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-300 transition text-[10px]">
+                               class="absolute left-full ml-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-300 transition text-[10px]">
                                 <i class="fa-regular fa-copy"></i>
                             </button>
                         </div>
@@ -3324,36 +3326,36 @@
                 let dupBadge = '';
                 if (isCopyright) {
                     dupBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
+                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm" title="${penTitle || 'Khiếu nại bản quyền (Mã 141)'}"><i class="fa-solid fa-copyright text-rose-400"></i> Bản quyền</span>
                         </div>
                     `;
                 } else if (v.is_crp_punished && (v.is_fyp_restricted || v.shadow)) {
                     dupBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
+                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm" title="${penTitle}"><i class="fa-solid fa-ban text-rose-400"></i> Không nguyên tác & Mất FYP</span>
-                            ${origBtn ? `<div class="absolute top-full left-1/2 -translate-x-1/2 pt-1 z-10 whitespace-nowrap">${origBtn}</div>` : ''}
+                            ${origBtn}
                         </div>
                     `;
                 } else if (v.is_crp_punished) {
                     dupBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
+                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm" title="${penTitle || 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Creator Rewards)'}"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> Không nguyên tác</span>
-                            ${origBtn ? `<div class="absolute top-full left-1/2 -translate-x-1/2 pt-1 z-10 whitespace-nowrap">${origBtn}</div>` : ''}
+                            ${origBtn}
                         </div>
                     `;
                 } else if (v.is_fyp_restricted && isThisDup) {
                     dupBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
+                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
-                            ${origBtn ? `<div class="absolute top-full left-1/2 -translate-x-1/2 pt-1 z-10 whitespace-nowrap">${origBtn}</div>` : ''}
+                            ${origBtn}
                         </div>
                     `;
                 } else if (isThisDup) {
                     dupBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
+                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal" title="${penTitle}"><i class="fa-solid fa-repeat"></i> Trùng</span>
-                            ${origBtn ? `<div class="absolute top-full left-1/2 -translate-x-1/2 pt-1 z-10 whitespace-nowrap">${origBtn}</div>` : ''}
+                            ${origBtn}
                         </div>
                     `;
                 } else if (v.is_fyp_restricted) {
@@ -3652,7 +3654,7 @@
 
             document.getElementById('modalCoverImg').src = getProxiedImage(video.cover_url);
             document.getElementById('modalDesc').innerText = video.desc || '(không có mô tả)';
-            document.getElementById('modalDate').innerText = `🕒 Đăng ngày: ${video.date_local || video.date_utc || '—'}`;
+            document.getElementById('modalDate').innerHTML = `<span class="inline-flex items-center gap-1.5"><i class="fa-regular fa-clock text-amber-400"></i><span class="text-cyan-300 font-bold">Đăng ngày:</span><span class="text-white font-extrabold font-mono">${escapeHtml(video.date_local || video.date_utc || '—')}</span></span>`;
             document.getElementById('modalExternalLink').href = video.share_url;
             document.getElementById('modalDirectPlay').href = video.share_url;
 
