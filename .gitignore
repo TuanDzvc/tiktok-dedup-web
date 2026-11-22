@@ -6,3 +6,6 @@ __pycache__/
 *.vbs
 
 external_login_debug.log
+groupid_cache.json
+server.log
+PUBLIC_DOMAIN.txt

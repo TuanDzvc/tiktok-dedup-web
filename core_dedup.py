@@ -547,6 +547,202 @@ def _load_tiktokmanager_cache() -> dict:
         pass
     return info_map
 
+
+_TIKHUB_ENV_CACHE: Dict[str, Any] = {"mtime": 0.0, "key": ""}
+_GROUPID_CACHE_LOCK = threading.Lock()
+_GROUPID_CACHE_LOADED = False
+_GROUPID_CACHE: Dict[str, Dict[str, Any]] = {}
+_GROUPID_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "groupid_cache.json")
+
+
+def _get_tikhub_api_key() -> str:
+    """Đọc TIKHUB_API_KEY từ biến môi trường hoặc file .env (tự cập nhật khi file .env thay đổi)."""
+    env_val = os.environ.get("TIKHUB_API_KEY", "").strip()
+    if env_val:
+        return env_val
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    try:
+        if os.path.exists(env_path):
+            mt = os.path.getmtime(env_path)
+            if mt != _TIKHUB_ENV_CACHE.get("mtime"):
+                found_key = ""
+                with open(env_path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        s = line.strip()
+                        if not s or s.startswith("#") or "=" not in s:
+                            continue
+                        k, v = s.split("=", 1)
+                        if k.strip() == "TIKHUB_API_KEY":
+                            found_key = v.strip().strip('"').strip("'")
+                            break
+                _TIKHUB_ENV_CACHE["mtime"] = mt
+                _TIKHUB_ENV_CACHE["key"] = found_key
+            return str(_TIKHUB_ENV_CACHE.get("key") or "")
+    except Exception:
+        pass
+    return ""
+
+
+def _load_persistent_groupid_cache() -> Dict[str, Dict[str, Any]]:
+    """Tải bộ nhớ đệm group_id vĩnh viễn trên ổ cứng để không tốn lượt gọi API lặp lại."""
+    global _GROUPID_CACHE_LOADED
+    with _GROUPID_CACHE_LOCK:
+        if not _GROUPID_CACHE_LOADED:
+            _GROUPID_CACHE_LOADED = True
+            try:
+                if os.path.exists(_GROUPID_CACHE_PATH):
+                    with open(_GROUPID_CACHE_PATH, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        _GROUPID_CACHE.update(data)
+            except Exception:
+                pass
+        return _GROUPID_CACHE
+
+
+def _save_persistent_groupid_cache() -> None:
+    """Lưu nguyên tử bộ nhớ đệm group_id xuống groupid_cache.json."""
+    with _GROUPID_CACHE_LOCK:
+        try:
+            tmp_path = _GROUPID_CACHE_PATH + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(_GROUPID_CACHE, f, ensure_ascii=False)
+            os.replace(tmp_path, _GROUPID_CACHE_PATH)
+        except Exception:
+            pass
+
+
+def _fetch_tikhub_multi_awemes(video_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Gọi batch POST /api/v1/tiktok/app/v3/fetch_multi_video lấy group_id, region & NFF chuẩn Mobile."""
+    api_key = _get_tikhub_api_key()
+    clean_ids = [str(v).strip() for v in video_ids if str(v).strip().isdigit()]
+    if not api_key or not clean_ids:
+        return {}
+
+    results: Dict[str, Dict[str, Any]] = {}
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    chunks = [clean_ids[i:i + 10] for i in range(0, len(clean_ids), 10)]
+
+    def _call_chunk(chunk_ids: List[str]) -> List[Dict[str, Any]]:
+        try:
+            resp = requests.post(
+                "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_multi_video",
+                json=chunk_ids,
+                headers=headers,
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                payload = resp.json()
+                data = payload.get("data")
+                if isinstance(data, list):
+                    return [x for x in data if isinstance(x, dict)]
+                if isinstance(data, dict):
+                    arr = data.get("aweme_details") or data.get("aweme_list") or []
+                    return [x for x in arr if isinstance(x, dict)]
+            else:
+                print(f"[TikHubGroupId] HTTP {resp.status_code} khi lấy batch {len(chunk_ids)} video")
+        except Exception as err:
+            print(f"[TikHubGroupId] Lỗi kết nối batch: {err}")
+        return []
+
+    raw_awemes: List[Dict[str, Any]] = []
+    if len(chunks) == 1:
+        raw_awemes = _call_chunk(chunks[0])
+    else:
+        with ThreadPoolExecutor(max_workers=min(3, len(chunks))) as pool:
+            for res_list in pool.map(_call_chunk, chunks):
+                raw_awemes.extend(res_list)
+
+    now_ts = int(time.time())
+    cache_ref = _load_persistent_groupid_cache()
+    changed = False
+    for aw in raw_awemes:
+        aid = str(aw.get("aweme_id") or aw.get("id") or "").strip()
+        if not aid:
+            continue
+        gid = str(aw.get("group_id") or aw.get("groupId") or "").strip()
+        reg = str(aw.get("region") or "").strip().upper()
+        nff = bool(aw.get("is_nff_or_nr"))
+        results[aid] = aw
+        if gid:
+            with _GROUPID_CACHE_LOCK:
+                cache_ref[aid] = {
+                    "group_id": gid,
+                    "region": reg,
+                    "is_nff_or_nr": nff,
+                    "ts": now_ts,
+                }
+                changed = True
+    if changed:
+        _save_persistent_groupid_cache()
+    return results
+
+
+def sync_items_tikhub_groupid(raw_items: List[Dict[str, Any]], tkm_cache: Optional[Dict[str, Any]] = None) -> None:
+    """Đồng bộ trực tiếp group_id, region và cờ is_nff_or_nr cho danh sách video (ưu tiên cache 0đ trước)."""
+    if not raw_items:
+        return
+    p_cache = _load_persistent_groupid_cache()
+    tkm_map = tkm_cache or {}
+    missing_ids: List[str] = []
+    seen_missing = set()
+
+    for it in raw_items:
+        aid = str(it.get("id") or it.get("aweme_id") or it.get("item_id") or "").strip()
+        if not aid:
+            continue
+
+        # Bắt Duet / Stitch gốc từ Web nếu có
+        duet_info = it.get("duetInfo") if isinstance(it.get("duetInfo"), dict) else {}
+        duet_from = str(duet_info.get("duetFromId") or "").strip()
+        if duet_from and duet_from != "0" and duet_from != aid and len(duet_from) >= 15:
+            if not it.get("group_id"):
+                it["group_id"] = duet_from
+
+        # Kiểm tra cache groupid_cache.json trước
+        c_entry = p_cache.get(aid)
+        if isinstance(c_entry, dict) and c_entry.get("group_id"):
+            it["group_id"] = str(c_entry["group_id"])
+            c_reg = str(c_entry.get("region") or "").strip().upper()
+            if len(c_reg) == 2 and c_reg not in ("EU", "XO"):
+                it["region"] = c_reg
+            if c_entry.get("is_nff_or_nr") is True:
+                it["is_nff_or_nr"] = True
+            continue
+
+        existing_gid = str(it.get("group_id") or it.get("groupId") or (tkm_map.get(aid) or {}).get("group_id") or "").strip()
+        if existing_gid and existing_gid not in ("0", "None", "null"):
+            continue
+
+        if aid not in seen_missing:
+            seen_missing.add(aid)
+            missing_ids.append(aid)
+
+    if not missing_ids or not _get_tikhub_api_key():
+        return
+
+    fetched_awemes = _fetch_tikhub_multi_awemes(missing_ids)
+    if not fetched_awemes:
+        return
+
+    for it in raw_items:
+        aid = str(it.get("id") or it.get("aweme_id") or it.get("item_id") or "").strip()
+        aw = fetched_awemes.get(aid)
+        if not isinstance(aw, dict):
+            continue
+        gid = str(aw.get("group_id") or aw.get("groupId") or "").strip()
+        if gid and gid not in ("0", "None", "null"):
+            it["group_id"] = gid
+        reg = str(aw.get("region") or "").strip().upper()
+        if len(reg) == 2:
+            it["region"] = reg
+        if aw.get("is_nff_or_nr") is True:
+            it["is_nff_or_nr"] = True
+
 class TikTokPlaywrightWorker:
     """
     Browser Worker chạy nền duy nhất (Singleton) giữ Chromium luôn mở sẵn.
@@ -1752,6 +1948,43 @@ def fetch_channel_info_and_posts(
                             }
                     except Exception:
                         pass
+                if not fallback_target_item and _get_tikhub_api_key():
+                    try:
+                        th_map = _fetch_tikhub_multi_awemes([target_vid])
+                        th_aw = th_map.get(str(target_vid))
+                        if isinstance(th_aw, dict) and (th_aw.get("aweme_id") or th_aw.get("id")):
+                            th_auth = th_aw.get("author") if isinstance(th_aw.get("author"), dict) else {}
+                            th_stat = th_aw.get("statistics") if isinstance(th_aw.get("statistics"), dict) else {}
+                            th_vid = th_aw.get("video") if isinstance(th_aw.get("video"), dict) else {}
+                            th_cov = ((th_vid.get("origin_cover") or th_vid.get("cover") or {}).get("url_list") or [""])[0]
+                            th_av = ((th_auth.get("avatar_larger") or th_auth.get("avatar_medium") or th_auth.get("avatar_thumb") or {}).get("url_list") or [""])[0]
+                            au = str(th_auth.get("unique_id") or username or "").strip()
+                            if au and not username:
+                                username = au
+                                channel_info["uniqueId"] = au
+                            fallback_target_item = {
+                                "id": str(th_aw.get("aweme_id") or th_aw.get("id")),
+                                "group_id": str(th_aw.get("group_id") or ""),
+                                "desc": th_aw.get("desc") or "",
+                                "createTime": th_aw.get("create_time") or 0,
+                                "duration": th_vid.get("duration") or 0,
+                                "region": str(th_aw.get("region") or channel_info.get("region") or "US").upper(),
+                                "cover_url": th_cov,
+                                "play_count": th_stat.get("play_count") or 0,
+                                "digg_count": th_stat.get("digg_count") or 0,
+                                "comment_count": th_stat.get("comment_count") or 0,
+                                "share_count": th_stat.get("share_count") or 0,
+                                "collect_count": th_stat.get("collect_count") or 0,
+                                "is_nff_or_nr": bool(th_aw.get("is_nff_or_nr")),
+                                "author": {
+                                    "id": str(th_auth.get("uid") or ""),
+                                    "uniqueId": au,
+                                    "nickname": th_auth.get("nickname") or au,
+                                    "avatarLarger": th_av,
+                                },
+                            }
+                    except Exception:
+                        pass
                 if fallback_target_item:
                     if oembed_restricted:
                         fallback_target_item["_oembed_restricted"] = True
@@ -1807,6 +2040,7 @@ def fetch_channel_info_and_posts(
     # 5. Định dạng và kiểm tra trùng lặp cho từng video
     video_list = []
     tkm_cache = _load_tiktokmanager_cache()
+    sync_items_tikhub_groupid(raw_items, tkm_cache)
     ch_followers = int(channel_info.get("followers") or 0)
 
     for it in raw_items:
