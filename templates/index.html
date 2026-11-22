@@ -580,17 +580,17 @@
                         </div>
                     </div>
 
-                    <!-- Thông báo chế độ Miễn phí (10 lượt/ngày theo Mã máy & khóa link Video Gốc) -->
+                    <!-- Thông báo chế độ Miễn phí trọn vẹn 10 lượt/ngày theo Mã máy -->
                     <div id="freeModeUpgradeBanner" class="hidden px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-950/70 via-slate-900/90 to-rose-950/60 border border-amber-500/50 text-amber-100 text-xs sm:text-[13px] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 shadow-lg shadow-amber-950/25">
                         <div class="flex items-center gap-2.5">
-                            <i class="fa-solid fa-lock text-amber-400 text-sm flex-shrink-0"></i>
+                            <i class="fa-solid fa-bolt text-emerald-400 text-sm flex-shrink-0"></i>
                             <span id="freeModeUpgradeText">
-                                Bạn đang dùng <b class="text-emerald-300">Chế độ Miễn Phí (10 lượt/ngày theo Mã máy)</b> — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b> & mở khóa xem <b>Video Gốc (Gốc ↗)</b>!
+                                Bạn đang dùng <b class="text-emerald-300">Miễn Phí Trọn Vẹn (10 lượt/ngày theo Mã máy — Đủ Check Trùng & Video Gốc)</b> — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b>!
                             </span>
                         </div>
                         <button type="button" onclick="openVipModal(true)" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs whitespace-nowrap shadow-md transition active:scale-95 flex items-center gap-1.5 flex-shrink-0">
                             <i class="fa-solid fa-crown text-yellow-200"></i>
-                            <span>Đăng Nhập Mở Khóa</span>
+                            <span>Đăng Nhập VIP</span>
                         </button>
                     </div>
 
@@ -1451,10 +1451,10 @@
                             <span class="text-[11px] font-black text-emerald-400">10 lượt / ngày</span>
                         </div>
                         <ul class="space-y-2 text-xs text-slate-300 leading-snug pt-1">
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Trùng lặp Video & Mất đề xuất FYP</b></span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Vi phạm Bản quyền / Tắt tiếng / Quốc gia</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Trải nghiệm <b>trọn vẹn 100% tính năng</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Trùng lặp</b> & mở thẳng <b class="text-sky-300">Video Gốc (Gốc ↗)</b></span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Mất FYP / Bản quyền / Tắt tiếng / Quốc gia</b></span></li>
                             <li class="flex items-center gap-2 sm:whitespace-nowrap text-amber-300"><i class="fa-solid fa-clock flex-shrink-0"></i><span>Giới hạn <b>10 lượt / ngày</b> (tính theo <b>Mã máy</b>)</span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap text-rose-400"><i class="fa-solid fa-lock flex-shrink-0"></i><span><b>Khóa</b> xem link Video Gốc (<b>🔒 Gốc ↗</b>)</span></li>
                         </ul>
                     </div>
 
@@ -1467,16 +1467,16 @@
                             <span class="text-[11px] font-black text-amber-300">Không giới hạn</span>
                         </div>
                         <ul class="space-y-2 text-xs text-slate-200 leading-snug pt-1">
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Quét <b>KHÔNG GIỚI HẠN</b> số lượt mỗi ngày</span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span><b>Mở khóa nút <span class="text-sky-300">Gốc ↗</span></b> mở thẳng <b>Video Gốc</b></span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Sao chép nhanh link gốc & xuất CSV đầy đủ</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Quét <b>KHÔNG GIỚI HẠN</b> số lượt mỗi ngày (24/7)</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Không bị khóa sau 10 lượt — thoải mái soi sỉ nhiều kênh</span></li>
+                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Đầy đủ Check Trùng, mở <b class="text-sky-300">Gốc ↗</b> & Xuất CSV</span></li>
                             <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Ưu tiên tốc độ xử lý & hỗ trợ trực tiếp 24/7</span></li>
                         </ul>
                     </div>
                 </div>
 
                 <p class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center sm:whitespace-nowrap">
-                    💡 Khách có tài khoản bấm nút <b class="text-amber-300">👑 Đăng Nhập VIP</b> ở góc phải trên màn hình để quét Không giới hạn & mở khóa Video Gốc.
+                    💡 Khách có tài khoản bấm nút <b class="text-amber-300">👑 Đăng Nhập VIP</b> ở góc phải trên màn hình để quét Không giới hạn mỗi ngày.
                 </p>
 
                 <!-- Hàng nút full 100% diện tích chiều ngang popup -->
@@ -1801,9 +1801,9 @@
                 const rem = Math.max(0, Number(q.remaining ?? (q.limit - q.used)));
                 const dev = escapeHtml(q.device_id || getHardwareDeviceId());
                 const remCls = rem <= 2 ? 'text-rose-400' : 'text-cyan-300';
-                txtEl.innerHTML = `Chế độ <b class="text-emerald-300">Miễn Phí</b> (Mã máy <b class="font-mono text-slate-200">${dev}</b> • Đã dùng <b class="text-amber-300">${q.used}/${q.limit}</b> lượt hôm nay — Còn <b class="${remCls}">${rem} lượt</b>) — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b> & mở khóa xem <b>Video Gốc (Gốc ↗)</b>!`;
+                txtEl.innerHTML = `Chế độ <b class="text-emerald-300">Miễn Phí Trọn Vẹn</b> (Mã máy <b class="font-mono text-slate-200">${dev}</b> • Đã dùng <b class="text-amber-300">${q.used}/${q.limit}</b> lượt hôm nay — Còn <b class="${remCls}">${rem} lượt</b> đầy đủ tính năng) — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b>!`;
             } else {
-                txtEl.innerHTML = `Bạn đang dùng <b class="text-emerald-300">Chế độ Miễn Phí (10 lượt/ngày theo Mã máy)</b> — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b> & mở khóa xem <b>Video Gốc (Gốc ↗)</b>!`;
+                txtEl.innerHTML = `Bạn đang dùng <b class="text-emerald-300">Chế độ Miễn Phí Trọn Vẹn (10 lượt/ngày theo Mã máy)</b> — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b> mỗi ngày!`;
             }
         }
 
@@ -3387,28 +3387,28 @@
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span data-tip="${penTitle || 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT & Mất đề xuất FYP'}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-ban text-rose-400"></i> Không nguyên tác & Mất FYP</span>
-                            ${origBtn || (!lastScanVipMode ? lockedOrigBtn : '')}
+                            ${origBtn}
                         </div>
                     `;
                 } else if (v.is_crp_punished) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span data-tip="Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Hiện KHÔNG bị mất đề xuất FYP)" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> Không nguyên tác</span>
-                            ${origBtn || (!lastScanVipMode ? lockedOrigBtn : '')}
+                            ${origBtn}
                         </div>
                     `;
                 } else if (v.is_fyp_restricted && isThisDup) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị Trùng nội dung, vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
-                            ${origBtn || (!lastScanVipMode ? lockedOrigBtn : '')}
+                            ${origBtn}
                         </div>
                     `;
                 } else if (isThisDup) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span data-tip="Chỉ bị Trùng nội dung (Trùng Group ID với video gốc) — Hiện KHÔNG bị mất đề xuất FYP" class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng</span>
-                            ${origBtn || (!lastScanVipMode ? lockedOrigBtn : '')}
+                            ${origBtn}
                         </div>
                     `;
                 } else if (v.is_fyp_restricted) {
@@ -3674,11 +3674,7 @@
                                     <span>Gốc</span> <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
                                 </a>
                             </div>
-                            ` : (!lastScanVipMode ? `
-                            <span data-tip="🔒 Phải đăng nhập tài khoản VIP mới check ra được video gốc!" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-600/80 text-slate-400 font-bold flex items-center gap-1 cursor-not-allowed select-none opacity-85">
-                                <i class="fa-solid fa-lock text-[9px] text-amber-400"></i> <span>Gốc ↗</span>
-                            </span>
-                            ` : '')}
+                            ` : ''}
                         </div>
                         ` : ''}
                     </div>
@@ -3745,13 +3741,7 @@
                 if (origLockedBox) origLockedBox.classList.add('hidden');
             } else {
                 if (origBox) origBox.classList.add('hidden');
-                if (origLockedBox) {
-                    if ((video.is_dup || video.is_crp_punished) && !lastScanVipMode) {
-                        origLockedBox.classList.remove('hidden');
-                    } else {
-                        origLockedBox.classList.add('hidden');
-                    }
-                }
+                if (origLockedBox) origLockedBox.classList.add('hidden');
             }
 
             document.getElementById('videoModal').classList.remove('hidden');

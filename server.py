@@ -1143,8 +1143,8 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                     "quota_exceeded": True,
                     "free_quota": q_stat,
                     "error": (
-                        f"⛔ Thiết bị của bạn (Mã máy: {dev_id}) đã dùng hết {FREE_DAILY_LIMIT}/{FREE_DAILY_LIMIT} lượt kiểm tra Miễn Phí hôm nay! "
-                        f"Vui lòng đăng nhập Tài khoản VIP để quét không giới hạn & mở khóa xem Video Gốc."
+                        f"⛔ Thiết bị của bạn (Mã máy: {dev_id}) đã dùng hết {FREE_DAILY_LIMIT}/{FREE_DAILY_LIMIT} lượt kiểm tra Miễn Phí trọn vẹn hôm nay! "
+                        f"Vui lòng đăng nhập Tài khoản VIP để quét KHÔNG GIỚI HẠN số lượt mỗi ngày."
                     ),
                 },
             )
@@ -1171,7 +1171,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
             record_user_check_async(clean_user, client_ip)
 
     # Chạy phân tích trong thread riêng tránh xung đột Playwright sync với asyncio loop
-    # Cả Free (trong 10 lượt/ngày theo Mã máy) và VIP đều được check Trùng thực sự; riêng Free sẽ bị ẩn hoàn toàn link & ID Video Gốc ở phía server
+    # Free được trải nghiệm trọn vẹn 100% tính năng (bao gồm cả Check Trùng & xem link Video Gốc) trong 10 lượt/ngày theo Mã máy
     import asyncio
     res = await asyncio.to_thread(
         fetch_channel_info_and_posts,
@@ -1207,20 +1207,6 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         else:
             res["vip_mode"] = False
             res["free_quota"] = _consume_free_quota(dev_id, checked_username)
-            for v_item in (res.get("list") or []):
-                if isinstance(v_item, dict):
-                    v_item["group_id"] = ""
-                    v_item["groupId"] = ""
-                    v_item["origin_url"] = ""
-                    v_item["has_origin_link"] = False
-                    if v_item.get("penalty_details"):
-                        v_item["penalty_details"] = re.sub(
-                            r"\s*\(Group:\s*\d+\)",
-                            "",
-                            str(v_item["penalty_details"]),
-                        ).replace("Trùng lặp Group ID", "Trùng lặp nội dung với video gốc trên TikTok")
-                    if v_item.get("shadowReason"):
-                        v_item["shadowReason"] = re.sub(r"\s*\(Group:\s*\d+\)", "", str(v_item["shadowReason"]))
 
     # Kích hoạt tải trước ảnh bìa vào RAM cache song song trong nền (0.001s khi trình duyệt yêu cầu)
     v_list = res.get("list", [])
