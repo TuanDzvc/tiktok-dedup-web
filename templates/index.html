@@ -1412,123 +1412,150 @@
     </div>
 
     <!-- ============================================================================== -->
-    <!-- POPUP THÔNG BÁO CHẾ ĐỘ MIỄN PHÍ VS VIP & ĐĂNG NHẬP VIP / ADMIN -->
+    <!-- 1. POPUP THÔNG BÁO KHI MỞ WEB (KHÔNG CHỨA Ô ĐĂNG NHẬP - NỀN MỜ NHẸ - TẮT TRONG NGÀY) -->
     <!-- ============================================================================== -->
-    <div id="vipWelcomeModal" class="fixed inset-0 z-[95] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 transition-all duration-300 hidden">
-        <div class="relative max-w-2xl w-full max-h-[94vh] flex flex-col bg-dark-900 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden">
-            <div class="absolute -top-20 -right-20 w-56 h-56 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
-            <div class="absolute -bottom-20 -left-20 w-56 h-56 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
+    <div id="vipWelcomeModal" onclick="if(event.target===this) closeNoticeModal()" class="fixed inset-0 z-[94] bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
+        <div class="relative max-w-xl w-full flex flex-col bg-dark-900/95 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden">
+            <div class="absolute -top-16 -right-16 w-44 h-44 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-16 -left-16 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
             <!-- Header -->
-            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-4 bg-dark-950/90 relative z-10 flex-shrink-0">
+            <div class="flex items-center justify-between gap-3 border-b border-slate-800/90 px-5 py-3.5 bg-dark-950/80 relative z-10">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/25 to-rose-500/25 border border-amber-400/50 flex items-center justify-center text-amber-300 text-lg shadow-inner">
-                        <i class="fa-solid fa-crown"></i>
+                    <div class="w-9 h-9 rounded-2xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300 text-base">
+                        <i class="fa-solid fa-bullhorn"></i>
                     </div>
                     <div>
-                        <h3 class="text-base sm:text-lg font-black text-white tracking-tight">Thông Báo Chế Độ Sử Dụng Hệ Thống</h3>
-                        <p class="text-[11px] sm:text-xs text-slate-400">Phân quyền Khách Miễn Phí & Tài khoản VIP / Admin</p>
+                        <h3 class="text-sm sm:text-base font-black text-white tracking-tight">Thông Báo Chế Độ Sử Dụng Hệ Thống</h3>
+                        <p class="text-[11px] text-slate-400">Quy định sử dụng Miễn Phí & Tài khoản VIP</p>
                     </div>
                 </div>
-                <button type="button" onclick="closeVipModal()" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800/80 transition" title="Đóng và dùng bản Miễn phí">
+                <button type="button" onclick="closeNoticeModal()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800/80 transition" title="Đóng">
                     <i class="fa-solid fa-xmark text-base"></i>
                 </button>
             </div>
 
             <!-- Body -->
-            <div class="p-4 sm:p-5 space-y-4 overflow-y-auto relative z-10 custom-scrollbar">
-                <!-- 2 cột so sánh rõ ràng -->
+            <div class="p-4 sm:p-5 space-y-4 relative z-10">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <!-- Cột Free -->
-                    <div class="p-4 rounded-2xl bg-slate-950/80 border border-slate-700/80 space-y-2.5">
+                    <div class="p-3.5 rounded-2xl bg-slate-950/85 border border-slate-700/80 space-y-2">
                         <div class="flex items-center justify-between">
-                            <span class="px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-600/60 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
-                                <i class="fa-solid fa-bolt"></i> KHÁCH MIỄN PHÍ
+                            <span class="px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-600/60 text-emerald-300 text-[11px] font-extrabold flex items-center gap-1.5">
+                                <i class="fa-solid fa-bolt"></i> CHẾ ĐỘ MIỄN PHÍ
                             </span>
-                            <span class="text-xs font-black text-emerald-400">0đ / Không cần Login</span>
+                            <span class="text-[11px] font-black text-emerald-400">Free 0đ</span>
                         </div>
                         <ul class="space-y-1.5 text-xs text-slate-300 leading-relaxed pt-1">
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Kiểm tra <b>Mất đề xuất FYP / Bóp tương tác</b></span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Kiểm tra <b>Vi phạm Bản quyền / Tắt tiếng / Gỡ video</b></span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Xem thông tin kênh, Quốc gia, Ngày tạo UID</span></li>
-                            <li class="flex items-start gap-2 text-rose-400/90"><i class="fa-solid fa-lock text-rose-400 mt-0.5"></i><span><b>Không</b> quét Trùng lặp & không hiện link Video Gốc</span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Check <b>Mất đề xuất FYP / Shadowban</b></span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Check <b>Vi phạm Bản quyền / Tắt tiếng</b></span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i><span>Xem thông tin kênh, Quốc gia, Ngày tạo</span></li>
+                            <li class="flex items-start gap-2 text-rose-400"><i class="fa-solid fa-lock mt-0.5"></i><span><b>Không</b> check Trùng lặp & Video Gốc</span></li>
                         </ul>
                     </div>
 
                     <!-- Cột VIP -->
-                    <div class="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-950/90 to-rose-950/40 border border-amber-500/60 space-y-2.5 shadow-lg shadow-amber-950/20">
+                    <div class="p-3.5 rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-950/90 to-rose-950/40 border border-amber-500/60 space-y-2">
                         <div class="flex items-center justify-between">
-                            <span class="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 text-xs font-extrabold flex items-center gap-1.5">
-                                <i class="fa-solid fa-crown text-yellow-300"></i> KHÁCH VIP / ADMIN
+                            <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 text-[11px] font-extrabold flex items-center gap-1.5">
+                                <i class="fa-solid fa-crown text-yellow-300"></i> TÀI KHOẢN VIP
                             </span>
-                            <span class="text-xs font-black text-amber-300">Cần Đăng Nhập</span>
+                            <span class="text-[11px] font-black text-amber-300">Cần Login</span>
                         </div>
                         <ul class="space-y-1.5 text-xs text-slate-200 leading-relaxed pt-1">
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Bao gồm toàn bộ tính năng bản Miễn Phí</span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span><b>Quét Trùng Lặp Video (Group ID gốc Mobile)</b></span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Hiện nhãn <b class="text-rose-400">Trùng</b> & nút <b class="text-sky-300">gốc ↗</b> mở thẳng <b>Video Gốc</b></span></li>
-                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Bắt chuẩn Quốc gia IP thực tế của từng video</span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Bao gồm toàn bộ tính năng Miễn Phí</span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span><b>Mở khóa Check Trùng Lặp Video</b></span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Hiện nút <b class="text-sky-300">gốc ↗</b> mở thẳng <b>Video Gốc</b></span></li>
+                            <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 mt-0.5"></i><span>Quốc gia IP thực tế chuẩn từng video</span></li>
                         </ul>
                     </div>
                 </div>
 
-                <!-- Khung Đăng Nhập VIP / Admin ngay bên dưới -->
-                <form onsubmit="submitVipLogin(event); return false;" class="p-4 rounded-2xl bg-dark-950/90 border border-slate-800 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs sm:text-sm font-extrabold text-amber-300 flex items-center gap-2">
-                            <i class="fa-solid fa-user-shield"></i> Đăng Nhập Tài Khoản VIP / Admin
-                        </span>
-                        <span class="text-[11px] text-slate-400">Mở khóa Check Trùng 100%</span>
-                    </div>
-                    <div id="vipLoginError" class="hidden p-2.5 rounded-xl bg-rose-950/80 border border-rose-600/70 text-rose-200 text-xs font-semibold"></div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div class="relative">
-                            <i class="fa-solid fa-user text-slate-500 text-xs absolute left-3.5 top-1/2 -translate-y-1/2"></i>
-                            <input
-                                type="text"
-                                id="vipUsernameInput"
-                                placeholder="Tài khoản VIP / Admin..."
-                                autocomplete="username"
-                                class="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
-                            />
-                        </div>
-                        <div class="relative">
-                            <i class="fa-solid fa-lock text-slate-500 text-xs absolute left-3.5 top-1/2 -translate-y-1/2"></i>
-                            <input
-                                type="password"
-                                id="vipPasswordInput"
-                                placeholder="Mật khẩu..."
-                                autocomplete="current-password"
-                                class="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
-                            />
-                        </div>
-                    </div>
-                    <div class="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
-                        <button
-                            type="submit"
-                            id="btnVipLoginSubmit"
-                            class="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-amber-500/25 transition active:scale-95 flex items-center justify-center gap-2"
-                        >
-                            <i class="fa-solid fa-key text-yellow-200"></i>
-                            <span>Đăng Nhập Mở Khóa Check Trùng</span>
-                        </button>
-                        <button
-                            type="button"
-                            onclick="closeVipModal()"
-                            class="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600/80 text-slate-200 font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5"
-                        >
-                            <span>Dùng Bản Miễn Phí (Chỉ FYP)</span>
-                        </button>
-                    </div>
-                </form>
+                <p class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-center leading-relaxed">
+                    💡 Khách có tài khoản VIP vui lòng bấm nút <b class="text-amber-300">👑 Đăng Nhập VIP</b> ở góc phải trên cùng màn hình để mở khóa Check Trùng.
+                </p>
+
+                <!-- Nút đóng & tắt 24h (sang ngày mới tự hiện lại) -->
+                <div class="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-1">
+                    <button
+                        type="button"
+                        onclick="dismissNoticeForToday()"
+                        class="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/80 text-slate-300 hover:text-white font-bold text-xs transition flex items-center justify-center gap-2"
+                    >
+                        <i class="fa-regular fa-bell-slash text-amber-400"></i>
+                        <span>Tắt thông báo hôm nay (24h)</span>
+                    </button>
+                    <button
+                        type="button"
+                        onclick="closeNoticeModal()"
+                        class="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs shadow-lg shadow-cyan-500/20 transition active:scale-95"
+                    >
+                        Đã Hiểu
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- ============================================================================== -->
-    <!-- MODAL QUẢN TRỊ ADMIN (TẠO / XÓA NICK VIP CHO KHÁCH & ĐỔI MẬT KHẨU) -->
+    <!-- 2. MODAL ĐĂNG NHẬP VIP / ADMIN RIÊNG (MỞ KHI BẤM NÚT ĐĂNG NHẬP VIP) -->
     <!-- ============================================================================== -->
-    <div id="vipAdminModal" class="fixed inset-0 z-[96] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 transition-all duration-300 hidden">
+    <div id="vipLoginModal" onclick="if(event.target===this) closeVipModal()" class="fixed inset-0 z-[95] bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
+        <div class="relative max-w-md w-full flex flex-col bg-dark-900/95 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-3.5 bg-dark-950/90">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300">
+                        <i class="fa-solid fa-crown"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-extrabold text-white">Đăng Nhập VIP / Admin</h3>
+                        <p class="text-[11px] text-slate-400">Mở khóa Check Trùng Lặp & Link Video Gốc</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeVipModal()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+            <form onsubmit="submitVipLogin(event); return false;" class="p-5 space-y-3.5">
+                <div id="vipLoginError" class="hidden p-2.5 rounded-xl bg-rose-950/80 border border-rose-600/70 text-rose-200 text-xs font-semibold"></div>
+                <div class="space-y-2.5">
+                    <div class="relative">
+                        <i class="fa-solid fa-user text-slate-500 text-xs absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                        <input
+                            type="text"
+                            id="vipUsernameInput"
+                            placeholder="Tài khoản VIP / Admin..."
+                            autocomplete="username"
+                            class="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
+                        />
+                    </div>
+                    <div class="relative">
+                        <i class="fa-solid fa-lock text-slate-500 text-xs absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                        <input
+                            type="password"
+                            id="vipPasswordInput"
+                            placeholder="Mật khẩu..."
+                            autocomplete="current-password"
+                            class="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white font-medium focus:outline-none transition"
+                        />
+                    </div>
+                </div>
+                <button
+                    type="submit"
+                    id="btnVipLoginSubmit"
+                    class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-amber-500/25 transition active:scale-95 flex items-center justify-center gap-2"
+                >
+                    <i class="fa-solid fa-key text-yellow-200"></i>
+                    <span>Đăng Nhập Ngay</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================================== -->
+    <!-- 3. MODAL QUẢN TRỊ ADMIN (TẠO / XÓA NICK VIP CHO KHÁCH & ĐỔI MẬT KHẨU) -->
+    <!-- ============================================================================== -->
+    <div id="vipAdminModal" onclick="if(event.target===this) closeVipAdminModal()" class="fixed inset-0 z-[96] bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
         <div class="relative max-w-3xl w-full max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden">
             <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-3.5 bg-dark-950/90 flex-shrink-0">
                 <div class="flex items-center gap-2.5">
@@ -1688,8 +1715,37 @@
             `;
         }
 
-        function openVipModal(focusInput = false) {
-            const m = document.getElementById('vipWelcomeModal');
+        function getLocalDateKey() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function isNoticeDismissedToday() {
+            const savedDate = localStorage.getItem('tikflow_notice_hide_date') || '';
+            const savedUntil = parseInt(localStorage.getItem('tikflow_notice_hide_until') || '0', 10);
+            if (!savedDate) return false;
+            // Sang ngày mới hoặc hết 24h là tự hiện lại
+            return savedDate === getLocalDateKey() && Date.now() < savedUntil;
+        }
+
+        function openNoticeModal() {
+            document.getElementById('vipWelcomeModal')?.classList.remove('hidden');
+        }
+
+        function closeNoticeModal() {
+            document.getElementById('vipWelcomeModal')?.classList.add('hidden');
+        }
+
+        function dismissNoticeForToday() {
+            localStorage.setItem('tikflow_notice_hide_date', getLocalDateKey());
+            localStorage.setItem('tikflow_notice_hide_until', String(Date.now() + 24 * 3600 * 1000));
+            closeNoticeModal();
+            showToast('🔕 Đã tắt thông báo hôm nay (sẽ tự hiển thị lại khi sang ngày mới).');
+        }
+
+        function openVipModal(focusInput = true) {
+            closeNoticeModal();
+            const m = document.getElementById('vipLoginModal');
             if (!m) return;
             const errBox = document.getElementById('vipLoginError');
             if (errBox) errBox.classList.add('hidden');
@@ -1700,7 +1756,7 @@
         }
 
         function closeVipModal() {
-            document.getElementById('vipWelcomeModal')?.classList.add('hidden');
+            document.getElementById('vipLoginModal')?.classList.add('hidden');
         }
 
         async function submitVipLogin(e) {
@@ -1776,8 +1832,10 @@
             }
             currentVipUser = null;
             renderVipNav();
-            // Hiện Popup thông báo phân quyền Free vs VIP ngay khi mở trang web nếu chưa login
-            openVipModal(false);
+            // Hiện Popup thông báo phân quyền Free vs VIP ngay khi mở trang web (nếu chưa tắt trong ngày)
+            if (!isNoticeDismissedToday()) {
+                openNoticeModal();
+            }
         }
 
         function openVipAdminModal() {
