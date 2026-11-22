@@ -1666,6 +1666,7 @@
                                 <thead class="bg-slate-900/70 text-slate-200 font-bold border-b border-slate-800 whitespace-nowrap">
                                     <tr>
                                         <th class="px-3 py-2.5 text-center">Tài khoản</th>
+                                        <th class="px-3 py-2.5 text-center">Mật khẩu</th>
                                         <th class="px-3 py-2.5 text-center">Quyền</th>
                                         <th class="px-3 py-2.5 text-center">Lượt quét</th>
                                         <th class="px-3 py-2.5 text-center">Hạn dùng</th>
@@ -2135,15 +2136,22 @@
                         }).join('');
                         devicesHtml = `<div>${headerChip}<div class="space-y-1 max-h-24 overflow-y-auto custom-scrollbar">${rowsChip}</div></div>`;
                     }
+                    const rawNote = String(u.note || '—').replace(' (Super Admin', '\n(Super Admin');
+                    const pwVal = String(u.password_plain || '—');
                     return `
                         <tr class="hover:bg-slate-900/60 align-middle">
                             <td class="px-3 py-2.5 font-mono font-bold text-white text-center align-middle whitespace-nowrap">${escapeHtml(u.username)}</td>
+                            <td class="px-3 py-2.5 font-mono font-bold text-amber-300 text-center align-middle whitespace-nowrap">
+                                <button type="button" onclick="copyText('${escapeHtml(pwVal)}')" class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-200 hover:text-white transition" title="Bấm để sao chép mật khẩu">
+                                    ${escapeHtml(pwVal)}
+                                </button>
+                            </td>
                             <td class="px-3 py-2.5 text-center align-middle whitespace-nowrap">${roleBadge}</td>
                             <td class="px-3 py-2.5 font-mono text-cyan-300 font-extrabold text-center align-middle whitespace-nowrap">${u.scan_count || 0}</td>
                             <td class="px-3 py-2.5 text-center align-middle whitespace-nowrap">${expStr}</td>
                             <td class="px-3 py-2.5 text-center align-middle min-w-[230px]">${devicesHtml}</td>
-                            <td class="px-3 py-2.5 text-center align-middle min-w-[170px] max-w-[220px]">
-                                <div class="line-clamp-2 leading-snug text-white font-medium mx-auto">${escapeHtml(u.note || '—')}</div>
+                            <td class="px-3 py-2.5 text-center align-middle min-w-[160px] max-w-[210px]">
+                                <div class="line-clamp-2 whitespace-pre-line leading-snug text-white font-medium mx-auto">${escapeHtml(rawNote)}</div>
                             </td>
                             <td class="px-3 py-2.5 text-center align-middle whitespace-nowrap">${actionsHtml}</td>
                         </tr>

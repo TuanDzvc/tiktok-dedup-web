@@ -420,7 +420,7 @@ def _extract_vip_user(req: Request, body: Optional[Dict[str, Any]] = None) -> Op
     return _verify_vip_token(tok)
 
 
-def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = None, include_password: bool = False) -> Dict[str, Any]:
     raw_devs = u.get("devices") if isinstance(u.get("devices"), dict) else {}
     bmap = blocked_map or {}
     dev_list = []
@@ -436,7 +436,7 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
             "blocked": is_blk,
         })
     dev_list.sort(key=lambda x: -x["last_seen"])
-    return {
+    out = {
         "username": u.get("username"),
         "role": u.get("role", "member"),
         "is_vip": _has_vip_privilege(u),
@@ -448,6 +448,9 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
         "max_devices": int(u.get("max_devices") if u.get("max_devices") is not None else (0 if u.get("role") == "admin" else 2)),
         "devices": dev_list,
     }
+    if include_password:
+        out["password_plain"] = str(u.get("password_plain") or "—")
+    return out
 
 app = FastAPI(title="TikTok Dedup Studio Web", version="2.0")
 
@@ -638,6 +641,7 @@ async def api_vip_login(req: Request):
             return JSONResponse(status_code=401, content={"success": False, "error": "Sai tên tài khoản hoặc mật khẩu!"})
         if not u_obj.get("active", True):
             return JSONResponse(status_code=403, content={"success": False, "error": "Tài khoản này đã bị tạm khóa."})
+        u_obj["password_plain"] = pwd
         dev_err = _record_and_check_device_unlocked(u_obj, dev_id, dev_label, client_ip, bmap)
         _save_vip_users_unlocked(users)
         if dev_err:
@@ -678,6 +682,7 @@ async def api_vip_register(req: Request):
         new_rec = {
             "username": uname,
             "password_hash": _hash_password(pwd),
+            "password_plain": pwd,
             "role": "member",
             "active": True,
             "expires_at": 0,
@@ -743,6 +748,7 @@ async def api_vip_change_password(req: Request):
         if not cur or not _verify_password(old_pwd, str(cur.get("password_hash") or "")):
             return JSONResponse(status_code=400, content={"success": False, "error": "Mật khẩu hiện tại không đúng!"})
         cur["password_hash"] = _hash_password(new_pwd)
+        cur["password_plain"] = new_pwd
         cur["token_ver"] = int(cur.get("token_ver") or 1) + 1
         _save_vip_users_unlocked(users)
         new_tok = _create_vip_token(cur["username"], cur["token_ver"])
@@ -757,7 +763,7 @@ async def api_vip_admin_list_users(req: Request):
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
         bmap = _load_blocked_devices_unlocked()
-        out = [_public_vip_user(v, bmap) for v in users.values() if isinstance(v, dict)]
+        out = [_public_vip_user(v, bmap, include_password=True) for v in users.values() if isinstance(v, dict)]
     out.sort(key=lambda x: (0 if x["role"] == "admin" else 1, -x["created_at"]))
     return JSONResponse(content={"success": True, "users": out})
 
@@ -858,6 +864,7 @@ async def api_vip_admin_upsert_user(req: Request):
         if existing:
             if pwd:
                 existing["password_hash"] = _hash_password(pwd)
+                existing["password_plain"] = pwd
                 existing["token_ver"] = int(existing.get("token_ver") or 1) + 1
             if target_u != u_obj["username"]:
                 existing["role"] = role
@@ -867,7 +874,7 @@ async def api_vip_admin_upsert_user(req: Request):
                 existing["note"] = str(note_in).strip()[:120]
             if max_devs_in is not None and str(max_devs_in).strip() != "":
                 existing["max_devices"] = max(1, int(max_devs_in))
-            saved_pub = _public_vip_user(existing, bmap)
+            saved_pub = _public_vip_user(existing, bmap, include_password=True)
         else:
             m_dev = 2
             if max_devs_in is not None and str(max_devs_in).strip() != "":
@@ -875,6 +882,7 @@ async def api_vip_admin_upsert_user(req: Request):
             new_rec = {
                 "username": target_u,
                 "password_hash": _hash_password(pwd),
+                "password_plain": pwd,
                 "role": role,
                 "active": active,
                 "expires_at": exp_ts,
