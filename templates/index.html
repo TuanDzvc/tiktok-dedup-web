@@ -750,7 +750,7 @@
             </div>
             <div id="modalOriginBox" class="hidden p-3 rounded-xl bg-sky-950/80 border border-sky-600/70 text-sky-200 text-xs flex flex-col gap-1.5 shadow-inner">
                 <div class="flex items-center justify-between font-bold text-sky-300">
-                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-link"></i> Link Video Gốc (Phát hiện trùng):</span>
+                    <span id="modalOriginTitle" class="flex items-center gap-1.5"><i class="fa-solid fa-link"></i> Link Video Gốc (Phát hiện trùng):</span>
                     <span id="modalOriginGroupId" class="text-[11px] font-mono text-sky-400"></span>
                 </div>
                 <div class="flex items-center gap-2">
@@ -763,7 +763,7 @@
                         <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                     </a>
                 </div>
-                <p class="text-[11px] text-amber-300/95 font-medium leading-snug">
+                <p id="modalOriginNote" class="text-[11px] text-amber-300/95 font-medium leading-snug">
                     💡 Lưu ý: Nếu bấm mở thấy báo <b>"Video hiện không khả dụng"</b> tức là video gốc đã bị xóa hoặc ẩn riêng tư.
                 </p>
             </div>
@@ -4493,13 +4493,18 @@
 
                 // Status badges matching tool
                 const penTitle = (v.penalty_details || v.shadowReason || '').replace(/"/g, '&quot;');
+                const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
+                const isSameChDup = Boolean(v.is_same_channel_dup || (isThisDup && v.group_id && String(v.group_id) !== String(v.aweme_id) && currentVideos.some(x => String(x.aweme_id) === String(v.group_id))));
                 const origLink = v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : '');
+                const origTip = isSameChDup
+                    ? 'Bấm để mở xem Video Gốc (bài đăng trước đó trên CHÍNH KÊNH NÀY)&#10;💡 Cùng kênh nhưng khác ID bài đăng &amp; lượt xem'
+                    : 'Bấm để mở xem Video Gốc trên TikTok&#10;💡 Nếu hiện &quot;Video hiện không khả dụng&quot; tức là video gốc đã bị xóa hoặc ẩn riêng tư';
                 let origBtn = '';
                 if (origLink) {
                     origBtn = `
                         <div class="relative inline-flex items-center justify-center">
                             <a href="${origLink}" target="_blank" rel="noopener noreferrer" 
-                               data-tip="Bấm để mở xem Video Gốc trên TikTok&#10;💡 Nếu hiện &quot;Video hiện không khả dụng&quot; tức là video gốc đã bị xóa hoặc ẩn riêng tư"
+                               data-tip="${origTip}"
                                class="w-[84px] h-7 px-2.5 rounded-lg bg-sky-950/95 hover:bg-sky-900 border border-sky-500/75 text-sky-300 hover:text-white text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 transition shadow-sm">
                                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Gốc ↗
                             </a>
@@ -4520,7 +4525,6 @@
                     </div>
                 `;
 
-                const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
                 const isCopyright = Boolean(v.is_copyright || v.status_code === 141 || (v.penalty_details && v.penalty_details.toLowerCase().includes('bản quyền')));
                 let dupBadge = '';
                 if (v._dedup_locked) {
@@ -4561,12 +4565,17 @@
                 } else if (v.is_fyp_restricted && isThisDup) {
                     dupBadge = `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị trùng nội dung với video gốc&#10;Vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> Trùng & Mất FYP</span>
+                            <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị trùng nội dung với video gốc&#10;Vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> ${isSameChDup ? 'Trùng chính kênh & Mất FYP' : 'Trùng & Mất FYP'}</span>
                             ${origBtn}
                         </div>
                     `;
                 } else if (isThisDup) {
-                    dupBadge = `
+                    dupBadge = isSameChDup ? `
+                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
+                            <span data-tip="Video đăng đúp giống hệt 1 video đã đăng trước đó trên CHÍNH KÊNH NÀY&#10;Hiện KHÔNG bị mất đề xuất FYP" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng chính kênh</span>
+                            ${origBtn}
+                        </div>
+                    ` : `
                         <div class="inline-flex flex-col items-center justify-center gap-1.5">
                             <span data-tip="Chỉ bị trùng nội dung với video gốc&#10;Hiện KHÔNG bị mất đề xuất FYP" class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng</span>
                             ${origBtn}
@@ -4743,6 +4752,7 @@
                 const isCopyright = Boolean(v.is_copyright || v.status_code === 141 || (v.penalty_details && v.penalty_details.toLowerCase().includes('bản quyền')));
                 const isFyp = Boolean(v.is_fyp_restricted || v.shadow || (v.has_penalty && !v.is_crp_punished) || isCopyright);
                 const isDup = isThisDup;
+                const isSameChDup = Boolean(v.is_same_channel_dup || (isDup && v.group_id && String(v.group_id) !== String(v.aweme_id) && currentVideos.some(x => String(x.aweme_id) === String(v.group_id))));
 
                 // Yêu cầu: "cái nào mất fyp làm viền màu đỏ"
                 let borderClass = 'border border-slate-700/80 bg-slate-900/70 hover:border-slate-500';
@@ -4766,13 +4776,13 @@
                         ? `<span class="px-2.5 py-1.5 rounded-xl bg-amber-500/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-amber-200 drop-shadow flex items-center gap-1 backdrop-blur-md animate-pulse">🚨 MẤT FYP</span>`
                         : `<button type="button" onclick="event.stopPropagation(); openVipModal(true, 'register');" data-tip="🔒 Đã hết 10 lượt Miễn Phí hôm nay&#10;Phải đăng ký VIP mới xem được Trùng lặp &amp; Án phạt" class="pointer-events-auto cursor-pointer px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/90 to-orange-500/90 hover:from-amber-400 hover:to-orange-400 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-amber-200 drop-shadow flex items-center gap-1.5 backdrop-blur-md transition active:scale-95"><i class="fa-solid fa-crown text-yellow-200"></i> VIP</button>`;
                 } else if (isFyp && isDup) {
-                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md animate-pulse">🔴 TRÙNG / MẤT FYP</span>`;
+                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md animate-pulse">${isSameChDup ? '🔴 TRÙNG CHÍNH KÊNH / MẤT FYP' : '🔴 TRÙNG / MẤT FYP'}</span>`;
                 } else if (isFyp) {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-amber-500/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-amber-200 drop-shadow flex items-center gap-1 backdrop-blur-md animate-pulse">🚨 MẤT FYP</span>`;
                 } else if (v.is_crp_punished && !isFyp) {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🔴 KHÔNG NGUYÊN TÁC</span>`;
                 } else if (isDup) {
-                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🔴 TRÙNG</span>`;
+                    centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-rose-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-rose-200 drop-shadow flex items-center gap-1 backdrop-blur-md">${isSameChDup ? '🔴 TRÙNG CHÍNH KÊNH' : '🔴 TRÙNG'}</span>`;
                 } else {
                     centerBadge = `<span class="px-2.5 py-1.5 rounded-xl bg-emerald-600/95 text-white font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-2xl border-2 border-emerald-200 drop-shadow flex items-center gap-1 backdrop-blur-md">🟢 SẠCH</span>`;
                 }
@@ -4828,7 +4838,7 @@
                         ${isDup ? `
                         <div class="pt-1.5 border-t border-slate-800 flex items-center justify-between text-[10px]">
                             <span class="text-rose-400 font-bold flex items-center gap-1">
-                                <i class="fa-solid fa-triangle-exclamation"></i> Trùng
+                                <i class="fa-solid fa-triangle-exclamation"></i> ${isSameChDup ? 'Trùng chính kênh' : 'Trùng'}
                             </span>
                             ${(v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null')) ? `
                             <div class="flex items-center gap-1">
@@ -4868,6 +4878,8 @@
                         origin_url: sItem.origin_url,
                         group_id: sItem.group_id,
                         is_dup: sItem.is_dup,
+                        is_same_channel_dup: sItem.is_same_channel_dup,
+                        penalty_details: sItem.penalty_details,
                         shadowReason: sItem.has_penalty ? 'Video có dấu hiệu án phạt hoặc vi phạm chính sách' : ''
                     };
                 }
@@ -4897,7 +4909,10 @@
             const origInput = document.getElementById('modalOriginInput');
             const origLink = document.getElementById('modalOriginLink');
             const origGid = document.getElementById('modalOriginGroupId');
+            const origTitle = document.getElementById('modalOriginTitle');
+            const origNote = document.getElementById('modalOriginNote');
             const origUrl = video.origin_url || (video.group_id && String(video.group_id) !== String(video.aweme_id) && String(video.group_id) !== '0' && String(video.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${video.group_id}` : '');
+            const isSameChDup = Boolean(video.is_same_channel_dup || (video.group_id && String(video.group_id) !== String(video.aweme_id) && (currentVideos.some(x => String(x.aweme_id) === String(video.group_id)) || (studioPosts || []).some(x => String(x.item_id || x.aweme_id) === String(video.group_id)))));
             if (video._dedup_locked) {
                 if (origBox) origBox.classList.add('hidden');
                 if (origLockedBox) origLockedBox.classList.remove('hidden');
@@ -4905,6 +4920,16 @@
                 origInput.value = origUrl;
                 origLink.href = origUrl;
                 if (origGid) origGid.innerText = video.group_id ? `Group: ${video.group_id}` : '';
+                if (origTitle) {
+                    origTitle.innerHTML = isSameChDup
+                        ? '<i class="fa-solid fa-link"></i> Link Video Gốc (<span class="text-amber-300">Trùng chính kênh</span>):'
+                        : '<i class="fa-solid fa-link"></i> Link Video Gốc (Phát hiện trùng):';
+                }
+                if (origNote) {
+                    origNote.innerHTML = isSameChDup
+                        ? '💡 <b>Trùng chính kênh:</b> Video này đăng đúp giống hệt một bài đã đăng trước đó trên <b>chính kênh này</b> (cùng kênh nhưng khác ID bài đăng &amp; lượt xem).'
+                        : '💡 Lưu ý: Nếu bấm mở thấy báo <b>"Video hiện không khả dụng"</b> tức là video gốc đã bị xóa hoặc ẩn riêng tư.';
+                }
                 origBox.classList.remove('hidden');
                 if (origLockedBox) origLockedBox.classList.add('hidden');
             } else {
@@ -4937,7 +4962,7 @@
                 i + 1,
                 v.aweme_id,
                 v.play_count,
-                v._dedup_locked ? "Cần VIP" : (v.is_dup ? "Trùng lặp" : "Không trùng"),
+                v._dedup_locked ? "Cần VIP" : (v.is_dup ? (v.is_same_channel_dup ? "Trùng chính kênh" : "Trùng lặp") : "Không trùng"),
                 (v.is_fyp_restricted || v.shadow) ? "Mất FYP" : "Bình thường",
                 v.date_local || v.date_utc,
                 formatCountryFull(v.region, v.region_display),
@@ -6732,6 +6757,7 @@
                 const isPriv = item.visibility_code === 2;
                 const isFrd = item.visibility_code === 3;
                 const isPub = item.visibility_code === 1;
+                const isStudioSameChDup = Boolean(item.is_same_channel_dup || (item.group_id && String(item.group_id) !== String(item.item_id) && studioPosts.some(x => String(x.item_id || x.aweme_id) === String(item.group_id))));
 
                 return `
                     <tr class="hover:bg-slate-800/40 transition duration-150 h-[70px] ${isSelected ? 'bg-cyan-950/20' : ''}" id="studioRow_${item.item_id}">
@@ -6787,12 +6813,12 @@
                                 ` : (item.is_crp_punished ? `
                                     <div class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-rose-950/90 border border-rose-700/80 text-rose-300 font-bold shadow-sm" title="${escapeHtml(item.penalty_details || 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT')}">
                                         <i class="fa-solid fa-triangle-exclamation text-rose-400 text-[8px]"></i>
-                                        <span>Không nguyên bản${(item.group_id && item.group_id !== item.item_id) ? ` · Trùng #${item.group_id}` : ''}</span>
+                                        <span>Không nguyên bản${(item.group_id && item.group_id !== item.item_id) ? ` · ${isStudioSameChDup ? 'Trùng chính kênh' : 'Trùng'} #${item.group_id}` : ''}</span>
                                     </div>
                                 ` : ((item.is_dup && item.group_id && item.group_id !== item.item_id) ? `
                                     <div class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800 text-rose-300 font-bold">
                                         <i class="fa-solid fa-triangle-exclamation text-[8px]"></i>
-                                        <span>Trùng (#${item.group_id})</span>
+                                        <span>${isStudioSameChDup ? 'Trùng chính kênh' : 'Trùng'} (#${item.group_id})</span>
                                     </div>
                                 ` : ''))}
                             </div>

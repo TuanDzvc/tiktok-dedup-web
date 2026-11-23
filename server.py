@@ -3064,6 +3064,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                 if isinstance(v_item, dict):
                     v_item["_dedup_locked"] = True
                     v_item["is_dup"] = False
+                    v_item["is_same_channel_dup"] = False
                     v_item["group_id"] = ""
                     v_item["groupId"] = ""
                     v_item["origin_url"] = ""

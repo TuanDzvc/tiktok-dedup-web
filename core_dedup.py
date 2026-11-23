@@ -2587,6 +2587,7 @@ def fetch_channel_info_and_posts(
         region = normalize_country_code(it.get("region") or it.get("locationCreated") or it.get("country_code") or it.get("geo") or cached_free_reg or cached_meta.get("region") or ch_reg)
 
         group_id = str(it.get("group_id") or it.get("groupId") or cached_meta.get("group_id") or "") if allow_paid_groupid else ""
+        is_same_channel_dup = False
 
         # Lọc bỏ báo trùng ảo (Same-Channel Series Cluster):
         # Khi cùng 1 kênh cắt nhiều phần khác nhau (Part 1, Part 2...) của cùng 1 show/bối cảnh & đăng cùng tiêu đề,
@@ -2612,7 +2613,9 @@ def fetch_channel_info_and_posts(
                     is_exact_self_repost = abs(this_ms - orig_ms) <= 400 and (this_sz == 0 or orig_sz == 0 or abs(this_sz - orig_sz) / max(this_sz, orig_sz) < 0.03)
                 elif this_dur_s > 0 and orig_dur_s > 0:
                     is_exact_self_repost = abs(this_dur_s - orig_dur_s) < 1.0 and (this_sz == 0 or orig_sz == 0 or abs(this_sz - orig_sz) / max(this_sz, orig_sz) < 0.03)
-                if not is_exact_self_repost:
+                if is_exact_self_repost:
+                    is_same_channel_dup = True
+                else:
                     # Là 2 phần video khác nhau trên chính kênh này (không phải đăng đúp cùng 1 video, không phải reup kênh khác)
                     group_id = aweme_id
 
@@ -2727,13 +2730,23 @@ def fetch_channel_info_and_posts(
             if has_real_group_dup:
                 dup_origin_vid = group_id
         elif has_real_group_dup:
-            dup_reason = "Trùng lặp nội dung với video gốc trên TikTok"
+            dup_reason = (
+                "Trùng chính kênh (Đăng đúp cùng 1 video trên chính kênh này)"
+                if is_same_channel_dup
+                else "Trùng lặp nội dung với video gốc trên TikTok"
+            )
             dup_origin_vid = group_id
         elif cached_meta.get("is_dup"):
             dup_reason = "Trùng lặp nội dung (Khớp cache TikTok Manager)"
             c_gid = str(cached_meta.get("group_id") or "").strip()
             if c_gid and c_gid != aweme_id and c_gid not in ("0", "None", "null"):
                 dup_origin_vid = c_gid
+                c_cache_orig = p_gid_cache_ref.get(dup_origin_vid) if isinstance(p_gid_cache_ref, dict) else None
+                if (dup_origin_vid in own_channel_map) or (
+                    cur_ch_uid and cur_ch_uid != "---" and isinstance(c_cache_orig, dict) and c_cache_orig.get("author_uid") == cur_ch_uid
+                ):
+                    is_same_channel_dup = True
+                    dup_reason = "Trùng chính kênh (Đăng đúp cùng 1 video trên chính kênh này)"
         elif (display_penalty_type != 0 or display_policy != 0) and not is_restored:
             dup_reason = "Vi phạm chính sách trùng lặp / Bản quyền nội dung"
 
@@ -2849,7 +2862,10 @@ def fetch_channel_info_and_posts(
         origin_url = ""
         target_orig_id = dup_origin_vid or (group_id if has_real_group_dup else "")
         if target_orig_id and target_orig_id != aweme_id and target_orig_id not in ("0", "None", "null"):
-            origin_url = f"https://www.tiktok.com/@tiktok/video/{target_orig_id}"
+            if is_same_channel_dup and clean_u:
+                origin_url = f"https://www.tiktok.com/@{clean_u}/video/{target_orig_id}"
+            else:
+                origin_url = f"https://www.tiktok.com/@tiktok/video/{target_orig_id}"
 
         post_data = {
             "id": aweme_id,
@@ -2859,6 +2875,7 @@ def fetch_channel_info_and_posts(
             "groupId": group_id,
             "origin_url": origin_url,
             "has_origin_link": bool(origin_url),
+            "is_same_channel_dup": bool(is_same_channel_dup and bool(target_orig_id)),
             "desc": desc,
             "desc_clean": clean_desc_text(desc),
             "play_count": play_cnt,

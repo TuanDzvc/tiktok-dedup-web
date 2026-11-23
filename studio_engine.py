@@ -897,6 +897,11 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
         # Parse chuẩn hóa toàn bộ dữ liệu video & trích xuất Avatar kênh từ item
         parsed_list = []
         author_avatar = ""
+        studio_own_ids = {
+            str(x.get("item_id") or x.get("aweme_id") or "").strip()
+            for x in raw_items
+            if isinstance(x, dict) and str(x.get("item_id") or x.get("aweme_id") or "").strip()
+        }
 
         for it in raw_items:
             # Tìm avatar kênh từ thông tin author nếu có
@@ -1005,6 +1010,7 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
             # Trùng lặp & Án phạt
             group_id = str(it.get("group_id") or it.get("groupId") or "")
             is_group_dup = bool(group_id and group_id != aid and group_id not in ("0", "None", "null"))
+            is_same_channel_dup = bool(is_group_dup and group_id in studio_own_ids)
             is_crp_punished = bool(it.get("is_crp_punished", False))
             is_fyp_restricted = bool(it.get("is_fyp_restricted", False) or it.get("shadow", False) or it.get("shadowban", False))
             raw_pen_det = str(it.get("penalty_details") or "").strip()
@@ -1013,6 +1019,8 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 pen_details = f"{crp_pen_det} · {raw_pen_det}"
             else:
                 pen_details = crp_pen_det or raw_pen_det
+            if is_same_channel_dup and not pen_details:
+                pen_details = "Trùng chính kênh (Đăng đúp cùng 1 video trên chính kênh này)"
             is_dup = bool(is_group_dup or is_crp_punished)
             in_rev = bool(it.get("in_review"))
             penalty_ctx = it.get("penaltyContext") if isinstance(it.get("penaltyContext"), dict) else {}
@@ -1045,6 +1053,7 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 "visibility_label": visibility_label,
                 "visibility_badge": visibility_badge,
                 "is_dup": is_dup,
+                "is_same_channel_dup": is_same_channel_dup,
                 "is_crp_punished": is_crp_punished,
                 "is_fyp_restricted": is_fyp_restricted,
                 "penalty_details": pen_details,
@@ -1052,7 +1061,11 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 "is_takedown": is_takedown,
                 "status_code": st_code,
                 "group_id": group_id,
-                "origin_url": f"https://www.tiktok.com/@tiktok/video/{group_id}" if is_group_dup else "",
+                "origin_url": (
+                    f"https://www.tiktok.com/@{item_author}/video/{group_id}"
+                    if (is_group_dup and is_same_channel_dup and item_author)
+                    else (f"https://www.tiktok.com/@tiktok/video/{group_id}" if is_group_dup else "")
+                ),
                 "has_penalty": has_penalty,
                 "share_url": f"https://www.tiktok.com/@{item_author}/video/{aid}" if item_author else f"https://www.tiktok.com/video/{aid}"
             })
