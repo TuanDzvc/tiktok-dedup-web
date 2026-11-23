@@ -481,6 +481,13 @@ def _extract_device_info(req: Request, body: Optional[Dict[str, Any]] = None) ->
     return clean_id, clean_lbl, client_ip
 
 
+TEN_DEVICE_USERS = {"admin", "tuandzvcc"}
+
+
+def _default_max_devices_for_user(username: str) -> int:
+    return 10 if str(username or "").strip().lower() in TEN_DEVICE_USERS else 1
+
+
 def _record_and_check_device_unlocked(
     u_rec: Dict[str, Any],
     dev_id: str,
@@ -496,20 +503,11 @@ def _record_and_check_device_unlocked(
 
     now_ts = int(time.time())
     prev = devs.get(dev_id) if isinstance(devs.get(dev_id), dict) else {}
+    uname = str(u_rec.get("username") or "").strip().lower()
+    is_super_admin = str(u_rec.get("role") or "").lower() == "admin"
 
-    # Chủ hệ thống (Admin) luôn được phép, không bao giờ tự khóa máy chủ web
-    if str(u_rec.get("role") or "").lower() == "admin":
-        devs[dev_id] = {
-            "id": dev_id,
-            "label": dev_label or prev.get("label") or "PC Admin",
-            "ip": client_ip,
-            "last_seen": now_ts,
-            "blocked": False,
-        }
-        return None
-
-    # Kiểm tra danh sách mã máy bị Admin khóa cứng hoặc bị khóa trên tài khoản này
-    if dev_id in blocked_map or bool(prev.get("blocked")):
+    # Kiểm tra danh sách mã máy bị Admin khóa cứng hoặc bị khóa trên tài khoản này (miễn trừ blocked_map toàn cục cho Super Admin)
+    if (not is_super_admin and dev_id in blocked_map) or bool(prev.get("blocked")):
         devs[dev_id] = {
             "id": dev_id,
             "label": dev_label or prev.get("label") or "",
@@ -522,8 +520,8 @@ def _record_and_check_device_unlocked(
             return f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên khóa truy cập!"
         return f"⛔ Thiết bị {dev_id} đã bị từ chối đăng nhập trên tài khoản này (Chống chia sẻ tài khoản)!"
 
-    # Kiểm tra giới hạn số lượng máy tối đa trên 1 tài khoản (mặc định 10 máy)
-    max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else 10)
+    # Giới hạn số lượng mã máy: admin & tuandzvcc = 10 máy, tất cả tài khoản khác mặc định = 1 mã máy cố định (đổi IP trên cùng mã máy vẫn hợp lệ)
+    max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else _default_max_devices_for_user(uname))
     if dev_id not in devs and max_devs > 0:
         active_ids = [k for k, v in devs.items() if isinstance(v, dict) and not v.get("blocked")]
         if len(active_ids) >= max_devs:
@@ -535,11 +533,13 @@ def _record_and_check_device_unlocked(
                 "blocked": True,
                 "auto_limit": True,
             }
+            if max_devs == 1:
+                return f"⛔ Tài khoản này chỉ cho phép đăng nhập cố định trên 1 mã máy duy nhất ({active_ids[0]})! Thiết bị lạ ({dev_id}) bị chặn để chống share tài khoản."
             return f"⛔ Tài khoản chỉ cho phép tối đa {max_devs} thiết bị! Mã máy mới ({dev_id}) bị chặn để chống share acc."
 
     devs[dev_id] = {
         "id": dev_id,
-        "label": dev_label or prev.get("label") or "",
+        "label": dev_label or prev.get("label") or ("PC Admin" if is_super_admin else ""),
         "ip": client_ip,
         "last_seen": now_ts,
         "blocked": False,
@@ -790,7 +790,7 @@ def _fulfill_vip_order_unlocked(
         u_rec["role"] = "vip"
         u_rec["active"] = True
         if u_rec.get("max_devices") is None:
-            u_rec["max_devices"] = 10
+            u_rec["max_devices"] = _default_max_devices_for_user(uname)
         if old_role == "vip" and old_exp <= 0:
             u_rec["expires_at"] = 0
         else:
@@ -991,7 +991,7 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
         "note": str(u.get("note") or ""),
         "scan_count": int(u.get("scan_count") or 0),
         "created_at": int(u.get("created_at") or 0),
-        "max_devices": int(u.get("max_devices") if u.get("max_devices") is not None else (0 if u.get("role") == "admin" else 10)),
+        "max_devices": int(u.get("max_devices") if u.get("max_devices") is not None else _default_max_devices_for_user(str(u.get("username") or ""))),
         "devices": dev_list,
     }
     if include_password:
@@ -1251,7 +1251,7 @@ async def api_vip_register(req: Request):
             "scan_count": 0,
             "created_at": now_ts,
             "token_ver": 1,
-            "max_devices": 10,
+            "max_devices": _default_max_devices_for_user(uname),
             "devices": {
                 dev_id: {
                     "id": dev_id,
@@ -2089,7 +2089,7 @@ async def api_vip_admin_device_action(req: Request):
         rec = users.get(target_u)
         if not isinstance(rec, dict):
             return JSONResponse(status_code=404, content={"success": False, "error": "Không tìm thấy tài khoản này."})
-        if rec.get("role") == "admin":
+        if rec.get("role") == "admin" and action != "reset_all":
             return JSONResponse(status_code=400, content={"success": False, "error": "Không thể khóa thiết bị của Chủ hệ thống!"})
 
         devs = rec.setdefault("devices", {})
@@ -2183,7 +2183,7 @@ async def api_vip_admin_upsert_user(req: Request):
                 existing["max_devices"] = max(1, int(max_devs_in))
             saved_pub = _public_vip_user(existing, bmap, include_password=True)
         else:
-            m_dev = 10
+            m_dev = _default_max_devices_for_user(target_u)
             if max_devs_in is not None and str(max_devs_in).strip() != "":
                 m_dev = max(1, int(max_devs_in))
             new_rec = {

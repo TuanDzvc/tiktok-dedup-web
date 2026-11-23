@@ -1755,7 +1755,7 @@
                             <input type="text" id="admNewUser" placeholder="Username (vd: khach01)" required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="text" id="admNewPass" minlength="6" placeholder="Mật khẩu (từ 6 ký tự)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="number" id="admNewDays" placeholder="Số ngày (0 = Vĩnh viễn)" min="0" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
-                            <input type="number" id="admNewMaxDevs" placeholder="Số máy tối đa (mặc định: 10)" min="1" max="100" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
+                            <input type="number" id="admNewMaxDevs" placeholder="Số máy tối đa (mặc định: 1)" min="1" max="100" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="text" id="admNewNote" placeholder="Ghi chú (tên khách/Zalo)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                         </div>
                         <div class="flex justify-end">
@@ -2154,6 +2154,13 @@
         function getHardwareDeviceId() {
             if (_cachedHwDeviceId) return _cachedHwDeviceId;
             try {
+                const persisted = localStorage.getItem('tikflow_hw_device_id_v1') || '';
+                if (/^DEV-[0-9A-Z]{6,12}$/.test(persisted)) {
+                    _cachedHwDeviceId = persisted;
+                    return _cachedHwDeviceId;
+                }
+            } catch (e) {}
+            try {
                 let glRenderer = '';
                 const canvas = document.createElement('canvas');
                 const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -2178,9 +2185,13 @@
                     h2 = Math.imul(h2, 0x85ebca6b) >>> 0;
                 }
                 _cachedHwDeviceId = 'DEV-' + h1.toString(16).toUpperCase().padStart(8, '0').slice(0, 4) + h2.toString(16).toUpperCase().padStart(8, '0').slice(0, 4);
+                try { localStorage.setItem('tikflow_hw_device_id_v1', _cachedHwDeviceId); } catch (e) {}
             } catch (e) {
                 _cachedHwDeviceId = localStorage.getItem('tikflow_fallback_dev') || ('DEV-' + Math.random().toString(16).slice(2, 10).toUpperCase());
-                localStorage.setItem('tikflow_fallback_dev', _cachedHwDeviceId);
+                try {
+                    localStorage.setItem('tikflow_fallback_dev', _cachedHwDeviceId);
+                    localStorage.setItem('tikflow_hw_device_id_v1', _cachedHwDeviceId);
+                } catch (err) {}
             }
             return _cachedHwDeviceId;
         }
@@ -2817,12 +2828,13 @@
                         </div>`;
                     const devs = Array.isArray(u.devices) ? u.devices : [];
                     const activeDevCount = devs.filter(d => !d.blocked).length;
-                    const maxDevsLabel = u.role === 'admin' ? '∞' : (u.max_devices || 10);
+                    const defaultMaxDevs = (u.username === 'admin' || u.username === 'tuandzvcc') ? 10 : 1;
+                    const maxDevsNum = u.max_devices || defaultMaxDevs;
                     let devicesHtml = '<span class="text-slate-400 text-[11px]">Chưa đăng nhập máy nào</span>';
                     if (devs.length > 0) {
-                        const headerChip = `<div class="text-[11px] font-bold mb-1 ${u.role !== 'admin' && devs.length > (u.max_devices || 10) ? 'text-rose-400' : 'text-cyan-300'}">
-                            Đã ghi nhận: ${activeDevCount}/${maxDevsLabel} máy
-                            ${!isSelf ? `<button type="button" onclick="adminDeviceAction('${escapeHtml(u.username)}', '', 'reset_all')" class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white border border-slate-600" title="Xóa lịch sử máy cũ khi khách đổi thiết bị">🔄 Reset</button>` : ''}
+                        const headerChip = `<div class="text-[11px] font-bold mb-1 ${activeDevCount > maxDevsNum ? 'text-rose-400' : 'text-cyan-300'}">
+                            Đã ghi nhận: ${activeDevCount}/${maxDevsNum} máy
+                            ${(!isSelf || u.role === 'admin') ? `<button type="button" onclick="adminDeviceAction('${escapeHtml(u.username)}', '', 'reset_all')" class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white border border-slate-600" title="Xóa lịch sử máy cũ khi khách đổi thiết bị">🔄 Reset</button>` : ''}
                         </div>`;
                         const rowsChip = devs.map(d => {
                             const blk = Boolean(d.blocked);
