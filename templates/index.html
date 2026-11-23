@@ -279,16 +279,25 @@
                         </button>
                     </div>
 
-                    <!-- KHU VỰC KÊNH ĐÃ THÊM: Lưới 3 hàng x 4 cột (3x4 = 12 nick tối đa) -->
+                    <!-- KHU VỰC KÊNH ĐÃ THÊM: Thu gọn mặc định, bấm mũi tên để ẩn/hiện danh sách -->
                     <div id="quickAccountPillsRow" class="hidden pt-1 pb-1 text-xs select-none">
-                        <div class="flex items-center justify-between mb-2 px-1">
-                            <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                                <i class="fa-solid fa-bolt text-amber-400 text-xs"></i> Kênh đã thêm <span class="text-slate-500 font-normal hidden sm:inline">(Click để quét nhanh)</span>:
+                        <button type="button" onclick="toggleQuickAccountPills()" class="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/75 hover:bg-slate-800/90 border border-slate-700/80 hover:border-cyan-500/50 transition group">
+                            <span class="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
+                                <i class="fa-solid fa-bolt text-amber-400 text-xs"></i>
+                                <span>Kênh đã thêm</span>
+                                <span id="quickAccountHintText" class="text-slate-400 font-normal hidden sm:inline">(Bấm để hiện danh sách quét nhanh)</span>
                             </span>
-                            <span id="quickAccountCountBadge" class="text-[11px] text-cyan-400 font-semibold"></span>
-                        </div>
-                        <div id="quickAccountPillsList" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            <!-- Populated by JS: Lưới 3 hàng x 4 cột = 3x4 -->
+                            <span class="flex items-center gap-2">
+                                <span id="quickAccountCountBadge" class="text-[11px] text-cyan-400 font-semibold"></span>
+                                <span class="w-5 h-5 rounded-lg bg-slate-800 group-hover:bg-cyan-950 border border-slate-600/80 group-hover:border-cyan-500/60 flex items-center justify-center text-cyan-300 transition">
+                                    <i id="quickAccountToggleArrow" class="fa-solid fa-chevron-down text-[10px] transition-transform duration-200"></i>
+                                </span>
+                            </span>
+                        </button>
+                        <div id="quickAccountPillsBody" class="hidden pt-2">
+                            <div id="quickAccountPillsList" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <!-- Populated by JS: Lưới 3 hàng x 4 cột = 3x4 -->
+                            </div>
                         </div>
                     </div>
 
@@ -4764,7 +4773,32 @@
                 }
 
                 pillsList.innerHTML = pillsHtml;
+                applyQuickAccountPillsVisibility();
             }
+        }
+
+        function applyQuickAccountPillsVisibility() {
+            const body = document.getElementById('quickAccountPillsBody');
+            const arrow = document.getElementById('quickAccountToggleArrow');
+            const hint = document.getElementById('quickAccountHintText');
+            const isOpen = sessionStorage.getItem('tikflow_quick_pills_open') === '1';
+            if (body) {
+                if (isOpen) body.classList.remove('hidden');
+                else body.classList.add('hidden');
+            }
+            if (arrow) {
+                if (isOpen) arrow.classList.add('rotate-180');
+                else arrow.classList.remove('rotate-180');
+            }
+            if (hint) {
+                hint.innerText = isOpen ? '(Click kênh để quét nhanh · Bấm để thu gọn)' : '(Bấm để hiện danh sách quét nhanh)';
+            }
+        }
+
+        function toggleQuickAccountPills() {
+            const cur = sessionStorage.getItem('tikflow_quick_pills_open') === '1';
+            sessionStorage.setItem('tikflow_quick_pills_open', cur ? '0' : '1');
+            applyQuickAccountPillsVisibility();
         }
 
         let isSyncingStudioAvatars = false;

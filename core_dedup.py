@@ -304,7 +304,24 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
                 crp_d = j.get("crp_analytics_data") or {}
                 vid_info = j.get("video_analytics_video_info") or {}
                 progs = vid_info.get("video_analytics_programs") or []
-                is_pun = (crp_d.get("is_punished") is True) or any(isinstance(pr, dict) and pr.get("is_punished") is True for pr in progs)
+                has_explicit_reason = bool(
+                    crp_d.get("disqualify_reason")
+                    or crp_d.get("punish_reason")
+                    or crp_d.get("ineligible_reason")
+                    or any(
+                        isinstance(pr, dict) and (
+                            pr.get("disqualify_reason")
+                            or pr.get("punish_reason")
+                            or pr.get("ineligible_reason")
+                        )
+                        for pr in progs
+                    )
+                )
+                is_pun = (
+                    (crp_d.get("is_punished") is True)
+                    or any(isinstance(pr, dict) and pr.get("is_punished") is True for pr in progs)
+                    or has_explicit_reason
+                )
                 if is_pun:
                     p["is_crp_punished"] = True
                     p["is_dup"] = True
