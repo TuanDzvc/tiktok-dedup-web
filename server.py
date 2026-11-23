@@ -533,8 +533,8 @@ def _record_and_check_device_unlocked(
         }
         u_rec["updated_at"] = now_ts
         if dev_id in blocked_map:
-            return f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên khóa truy cập!"
-        return f"⛔ Thiết bị {dev_id} đã bị từ chối đăng nhập trên tài khoản này (Chống chia sẻ tài khoản)!"
+            return f"⛔ Mã máy {dev_id} đã bị Quản trị viên khóa truy cập!"
+        return f"⛔ Mã máy {dev_id} bị từ chối đăng nhập (Chống share acc)!"
 
     # Giới hạn số lượng mã máy: admin & tuandzvcc = 10 máy, tất cả tài khoản khác mặc định = 1 mã máy cố định (đổi IP trên cùng mã máy vẫn hợp lệ)
     max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else _default_max_devices_for_user(uname))
@@ -551,8 +551,8 @@ def _record_and_check_device_unlocked(
             }
             u_rec["updated_at"] = now_ts
             if max_devs == 1:
-                return f"⛔ Tài khoản này chỉ cho phép đăng nhập cố định trên 1 mã máy duy nhất ({active_ids[0]})! Thiết bị lạ ({dev_id}) bị chặn để chống share tài khoản."
-            return f"⛔ Tài khoản chỉ cho phép tối đa {max_devs} thiết bị! Mã máy mới ({dev_id}) bị chặn để chống share acc."
+                return f"⛔ Tài khoản chỉ dùng 1 máy ({active_ids[0]}), chặn máy {dev_id}!"
+            return f"⛔ Đã đủ {max_devs} máy tối đa, chặn máy mới ({dev_id})!"
 
     devs[dev_id] = {
         "id": dev_id,
@@ -1609,7 +1609,7 @@ async def api_vip_register(req: Request):
     with _VIP_LOCK:
         bmap = _load_blocked_devices_unlocked()
         if dev_id in bmap:
-            return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên từ chối đăng ký!"})
+            return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": f"⛔ Mã máy {dev_id} đã bị Quản trị viên từ chối đăng ký!"})
         users = _load_vip_users_unlocked()
         if uname in users:
             return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản này đã có người đăng ký! Vui lòng chọn tên khác."})
@@ -2780,7 +2780,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         elif dev_id in bmap_db:
             return JSONResponse(
                 status_code=403,
-                content={"success": False, "device_blocked": True, "error": f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên khóa truy cập!"},
+                content={"success": False, "device_blocked": True, "error": f"⛔ Mã máy {dev_id} đã bị Quản trị viên khóa truy cập!"},
             )
 
     allow_paid_dedup = True
