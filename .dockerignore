@@ -1,0 +1,11 @@
+.git
+.env
+*.log
+__pycache__/
+*.pyc
+groupid_cache.json
+vip_users.json
+vip_blocked_devices.json
+free_daily_quota.json
+sheet_config.json
+test folder [with spaces]/

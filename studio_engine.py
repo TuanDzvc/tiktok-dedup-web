@@ -19,7 +19,10 @@ import datetime
 import threading
 import socket
 from urllib.parse import urlparse
-import socks
+try:
+    import socks
+except ImportError:
+    socks = None
 from typing import Any, Dict, List, Optional, Tuple
 import requests
 

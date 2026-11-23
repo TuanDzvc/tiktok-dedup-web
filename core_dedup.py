@@ -2036,13 +2036,15 @@ def fetch_channel_info_and_posts(
     next_cursor = 0
 
     # 4. LẤY VIDEO & QUÉT ÁN PHẠT:
-    # Trường hợp A: Tài khoản có trong hệ thống Tool (Dùng Cookie Studio quét 100% án phạt & FYP)
-    if is_self_account and api_get_post_list and effective_cookie:
+    # Trường hợp A: Tài khoản có trong hệ thống Tool hoặc gắn Cookie Studio (quét 100% án phạt, Quỹ BKT & FYP cả trên PC lẫn Cloud)
+    if is_self_account and effective_cookie:
         try:
-            posts_res = api_get_post_list(
-                effective_cookie, matched_acc_ua, matched_acc_proxy,
-                sec_uid=sec_uid, max_cursor=max_cursor, count=50
-            ) or {}
+            posts_res = (
+                api_get_post_list(
+                    effective_cookie, matched_acc_ua, matched_acc_proxy,
+                    sec_uid=sec_uid, max_cursor=max_cursor, count=50
+                ) or {}
+            ) if api_get_post_list else {}
             all_studio_items = posts_res.get("items") or []
             if not all_studio_items:
                 try:

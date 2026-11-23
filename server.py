@@ -557,6 +557,7 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 
 def _load_vip_users_unlocked() -> Dict[str, Dict[str, Any]]:
     users: Dict[str, Dict[str, Any]] = {}
+    changed = False
     if VIP_USERS_FILE.exists():
         try:
             raw = json.loads(VIP_USERS_FILE.read_text(encoding="utf-8"))
@@ -564,13 +565,27 @@ def _load_vip_users_unlocked() -> Dict[str, Dict[str, Any]]:
                 users = raw
         except Exception:
             users = {}
-    if not users:
-        env_map = _read_local_env()
-        adm_u = (os.environ.get("ADMIN_DEFAULT_USER") or env_map.get("ADMIN_DEFAULT_USER") or "admin").strip().lower()
-        adm_p = os.environ.get("ADMIN_DEFAULT_PASS") or env_map.get("ADMIN_DEFAULT_PASS") or "Admin@2026"
+
+    env_map = _read_local_env()
+    seed_b64 = (os.environ.get("VIP_USERS_SEED_B64") or env_map.get("VIP_USERS_SEED_B64") or "").strip()
+    if seed_b64:
+        try:
+            seeded = json.loads(base64.b64decode(seed_b64).decode("utf-8"))
+            if isinstance(seeded, dict):
+                for k, v in seeded.items():
+                    if k and k not in users and isinstance(v, dict):
+                        users[k] = v
+                        changed = True
+        except Exception as e:
+            logger.error(f"[VIPAuth] Lỗi giải mã VIP_USERS_SEED_B64: {e}")
+
+    adm_u = (os.environ.get("ADMIN_DEFAULT_USER") or env_map.get("ADMIN_DEFAULT_USER") or ("admin" if not users else "")).strip().lower()
+    adm_p = os.environ.get("ADMIN_DEFAULT_PASS") or env_map.get("ADMIN_DEFAULT_PASS") or "Admin@2026"
+    if adm_u and adm_u not in users:
         users[adm_u] = {
             "username": adm_u,
             "password_hash": _hash_password(adm_p),
+            "password_plain": adm_p,
             "role": "admin",
             "active": True,
             "expires_at": 0,
@@ -579,6 +594,9 @@ def _load_vip_users_unlocked() -> Dict[str, Dict[str, Any]]:
             "created_at": int(time.time()),
             "token_ver": 1,
         }
+        changed = True
+
+    if changed:
         _save_vip_users_unlocked(users)
     return users
 
@@ -1096,6 +1114,152 @@ async def api_vip_admin_sheet_script(req: Request):
         "script": gs_file.read_text(encoding="utf-8"),
         "sheet_id": "1HRGpokdDkzyHFCvJBDishlkR7HaVp6BgyBJPxNCW2A0",
         "split_free_by_ip": _load_sheet_config().get("split_free_by_ip", False),
+    })
+
+
+def _upsert_local_env_key(key: str, val: str) -> None:
+    """Cập nhật hoặc thêm biến key=val vào file .env local mà không làm hỏng các dòng khác."""
+    clean_val = str(val or "").replace("\r", "").replace("\n", "").strip()
+    if not clean_val or os.getenv("IS_CLOUD") or os.getenv("RENDER"):
+        return
+    try:
+        lines = ENV_FILE.read_text(encoding="utf-8", errors="ignore").splitlines() if ENV_FILE.exists() else []
+        out_lines = []
+        replaced = False
+        for ln in lines:
+            stripped = ln.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped and stripped.split("=", 1)[0].strip() == key:
+                out_lines.append(f"{key}={clean_val}")
+                replaced = True
+            else:
+                out_lines.append(ln)
+        if not replaced:
+            out_lines.append(f"{key}={clean_val}")
+        ENV_FILE.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    except Exception as e:
+        logger.error(f"[RenderSync] Không lưu được {key} vào .env: {e}")
+
+
+def _ensure_github_deploy_webhook(hook_url: str) -> bool:
+    """Tự động gắn Render Deploy Hook vào GitHub Webhooks để mỗi lần push là Render tự cập nhật 24/7."""
+    try:
+        rem = subprocess.check_output(["git", "remote", "get-url", "origin"], cwd=str(BASE_DIR), text=True, timeout=5).strip()
+        m = re.match(r"^https://([^@]+)@github\.com/([^/]+/[^/.]+?)(?:\.git)?$", rem)
+        if not m:
+            return False
+        gh_tok, repo_slug = m.group(1), m.group(2)
+        hdrs = {"Authorization": f"token {gh_tok}", "Accept": "application/vnd.github+json"}
+        hook_base = hook_url.split("?")[0]
+        r_list = requests.get(f"https://api.github.com/repos/{repo_slug}/hooks", headers=hdrs, timeout=10)
+        if r_list.status_code != 200:
+            return False
+        hooks = r_list.json() or []
+        for h in hooks:
+            cfg = h.get("config") or {}
+            cur_u = str(cfg.get("url") or "")
+            if cur_u == hook_url:
+                return True
+            if cur_u.split("?")[0] == hook_base and h.get("id"):
+                r_patch = requests.patch(
+                    f"https://api.github.com/repos/{repo_slug}/hooks/{h['id']}",
+                    headers=hdrs,
+                    json={"active": True, "events": ["push"], "config": {"url": hook_url, "content_type": "json", "insecure_ssl": "0"}},
+                    timeout=10,
+                )
+                return r_patch.status_code in (200, 201)
+        r_add = requests.post(
+            f"https://api.github.com/repos/{repo_slug}/hooks",
+            headers=hdrs,
+            json={"name": "web", "active": True, "events": ["push"], "config": {"url": hook_url, "content_type": "json", "insecure_ssl": "0"}},
+            timeout=10,
+        )
+        return r_add.status_code in (200, 201)
+    except Exception:
+        return False
+
+
+@app.get("/api/vip/admin/render-env")
+async def api_vip_admin_render_env(req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền xem cấu hình Render Cloud."})
+    env_map = _read_local_env()
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        seed_b64 = base64.b64encode(json.dumps(users, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).decode("ascii")
+        user_count = len(users)
+    tikhub_key = (core_dedup._get_tikhub_api_key() or "").strip()
+    adm_u = (os.environ.get("ADMIN_DEFAULT_USER") or env_map.get("ADMIN_DEFAULT_USER") or "admin").strip().lower()
+    adm_p = os.environ.get("ADMIN_DEFAULT_PASS") or env_map.get("ADMIN_DEFAULT_PASS") or "Admin@2026"
+    vip_sec = _get_vip_secret().decode("utf-8", errors="ignore")
+    sheet_url = _get_sheet_webhook_url()
+    hook_val = (os.environ.get("RENDER_DEPLOY_HOOK") or env_map.get("RENDER_DEPLOY_HOOK") or "").strip()
+
+    lines = [
+        "IS_CLOUD=true",
+        f"TIKHUB_API_KEY={tikhub_key}",
+        f"ADMIN_DEFAULT_USER={adm_u}",
+        f"ADMIN_DEFAULT_PASS={adm_p}",
+        f"VIP_AUTH_SECRET={vip_sec}",
+        f"SHEET_WEBHOOK_URL={sheet_url}",
+        f"VIP_USERS_SEED_B64={seed_b64}",
+    ]
+    return JSONResponse(content={
+        "success": True,
+        "env_text": "\n".join(lines),
+        "has_deploy_hook": bool(hook_val),
+        "user_count": user_count,
+    })
+
+
+@app.post("/api/vip/admin/render-deploy")
+async def api_vip_admin_render_deploy(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    u_obj = _extract_vip_user(req, body)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền kích hoạt deploy Render."})
+
+    raw_hook = str(body.get("deploy_hook_url") or "").strip()
+    env_map = _read_local_env()
+    hook_url = raw_hook or (os.environ.get("RENDER_DEPLOY_HOOK") or env_map.get("RENDER_DEPLOY_HOOK") or "").strip()
+    if not hook_url.startswith("https://api.render.com/deploy/srv-"):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": "Thiếu hoặc sai định dạng Render Deploy Hook! Vào Render -> Settings -> Deploy Hook, copy link https://api.render.com/deploy/srv-... dán vào ô rồi bấm lại.",
+            },
+        )
+
+    if raw_hook:
+        _upsert_local_env_key("RENDER_DEPLOY_HOOK", hook_url)
+
+    def _run_deploy():
+        gh_ok = _ensure_github_deploy_webhook(hook_url)
+        try:
+            resp = requests.post(hook_url, timeout=15)
+            code = int(resp.status_code)
+        except Exception as exc:
+            return False, gh_ok, 0, str(exc)
+        return code in (200, 201, 202), gh_ok, code, ""
+
+    import asyncio
+    triggered, gh_linked, http_code, req_err = await asyncio.to_thread(_run_deploy)
+    if not triggered:
+        err_msg = f"Không gọi được Render Deploy Hook ({req_err or f'HTTP {http_code}'}). Hãy kiểm tra lại link Deploy Hook trong Render -> Settings."
+        return JSONResponse(status_code=400 if http_code else 502, content={"success": False, "triggered": False, "github_webhook_linked": gh_linked, "error": err_msg})
+
+    msg = "🚀 Đã kích hoạt Render build phiên bản mới (mất ~2-4 phút là xong)!"
+    if gh_linked:
+        msg += " Đã gắn luôn GitHub Webhook: từ nay mỗi lần đẩy code mới là Render tự động cập nhật theo 24/7!"
+    return JSONResponse(content={
+        "success": True,
+        "triggered": True,
+        "github_webhook_linked": gh_linked,
+        "message": msg,
     })
 
 
