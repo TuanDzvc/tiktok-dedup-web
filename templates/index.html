@@ -590,11 +590,11 @@
                     </div>
 
                     <!-- Thông báo chế độ Miễn phí trọn vẹn 10 lượt/ngày theo Mã máy -->
-                    <div id="freeModeUpgradeBanner" class="hidden px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-950/70 via-slate-900/90 to-rose-950/60 border border-amber-500/50 text-amber-100 text-xs sm:text-[13px] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 shadow-lg shadow-amber-950/25">
-                        <div class="flex items-center gap-2.5">
+                    <div id="freeModeUpgradeBanner" class="hidden px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-950/70 via-slate-900/90 to-rose-950/60 border border-amber-500/50 text-amber-100 text-xs sm:text-[13px] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 shadow-lg shadow-amber-950/25">
+                        <div class="flex items-center gap-2 min-w-0">
                             <i class="fa-solid fa-bolt text-emerald-400 text-sm flex-shrink-0"></i>
-                            <span id="freeModeUpgradeText">
-                                Bạn đang dùng <b class="text-emerald-300">Miễn Phí Trọn Vẹn (10 lượt/ngày theo Mã máy — Đủ Check Trùng & Video Gốc)</b> — <b class="text-amber-300">Đăng nhập VIP</b> để quét <b>Không giới hạn</b>!
+                            <span id="freeModeUpgradeText" class="lg:whitespace-nowrap">
+                                Chế độ <b class="text-emerald-300">Miễn Phí (10 lượt full/ngày theo Mã máy)</b> — Bấm <b class="text-amber-300">Đăng Ký/Đăng Nhập VIP</b> để quét <b>Không giới hạn</b>!
                             </span>
                         </div>
                         <button type="button" onclick="openVipModal(true)" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs whitespace-nowrap shadow-md transition active:scale-95 flex items-center gap-1.5 flex-shrink-0">
@@ -1755,7 +1755,7 @@
                             <input type="text" id="admNewUser" placeholder="Username (vd: khach01)" required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="text" id="admNewPass" minlength="6" placeholder="Mật khẩu (từ 6 ký tự)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="number" id="admNewDays" placeholder="Số ngày (0 = Vĩnh viễn)" min="0" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
-                            <input type="number" id="admNewMaxDevs" placeholder="Số máy tối đa (mặc định: 2)" min="1" max="20" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
+                            <input type="number" id="admNewMaxDevs" placeholder="Số máy tối đa (mặc định: 10)" min="1" max="100" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="text" id="admNewNote" placeholder="Ghi chú (tên khách/Zalo)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                         </div>
                         <div class="flex justify-end">
@@ -1959,13 +1959,13 @@
                 const rem = Math.max(0, Number(q.remaining ?? (q.limit - q.used)));
                 const dev = escapeHtml(q.device_id || getHardwareDeviceId());
                 if (rem <= 0) {
-                    txtEl.innerHTML = `Đã hết <b class="text-rose-400">${q.limit}/${q.limit} lượt</b> check Trùng lặp Miễn Phí hôm nay (Mã máy <b class="font-mono text-slate-200">${dev}</b>) — Vẫn check <b>User &amp; Video miễn phí</b>, bấm <b class="text-amber-300">Đăng Ký/Đăng Nhập VIP</b> để mở cột <b>Trùng lặp &amp; Án phạt</b>!`;
+                    txtEl.innerHTML = `Đã hết <b class="text-rose-400">${q.limit}/${q.limit} lượt</b> Free hôm nay (<b class="font-mono text-slate-200">${dev}</b>) — Vẫn check <b>User &amp; Video</b>, mở <b class="text-amber-300">VIP</b> để xem cột <b>Trùng lặp &amp; Án phạt</b>!`;
                 } else {
                     const remCls = rem <= 2 ? 'text-rose-400' : 'text-cyan-300';
-                    txtEl.innerHTML = `Chế độ <b class="text-emerald-300">Miễn Phí Trọn Vẹn</b> (Mã máy <b class="font-mono text-slate-200">${dev}</b> • Đã dùng <b class="text-amber-300">${q.used}/${q.limit}</b> lượt hôm nay — Còn <b class="${remCls}">${rem} lượt</b> đầy đủ tính năng) — <b class="text-amber-300">Đăng Ký/Đăng Nhập VIP</b> để quét <b>Không giới hạn</b>!`;
+                    txtEl.innerHTML = `Miễn Phí hôm nay: <b class="text-amber-300">${q.used}/${q.limit}</b> lượt (<b class="font-mono text-slate-200">${dev}</b> • Còn <b class="${remCls}">${rem} lượt</b> đủ tính năng) — Mở <b class="text-amber-300">VIP</b> để quét <b>Không giới hạn</b>!`;
                 }
             } else {
-                txtEl.innerHTML = `Bạn đang dùng <b class="text-emerald-300">Chế độ Miễn Phí Trọn Vẹn (10 lượt/ngày theo Mã máy)</b> — <b class="text-amber-300">Đăng Ký/Đăng Nhập VIP</b> để quét <b>Không giới hạn</b> mỗi ngày!`;
+                txtEl.innerHTML = `Chế độ <b class="text-emerald-300">Miễn Phí (10 lượt full/ngày theo Mã máy)</b> — Bấm <b class="text-amber-300">Đăng Ký/Đăng Nhập VIP</b> để quét <b>Không giới hạn</b>!`;
             }
         }
 
@@ -2554,10 +2554,10 @@
                         </div>`;
                     const devs = Array.isArray(u.devices) ? u.devices : [];
                     const activeDevCount = devs.filter(d => !d.blocked).length;
-                    const maxDevsLabel = u.role === 'admin' ? '∞' : (u.max_devices || 2);
+                    const maxDevsLabel = u.role === 'admin' ? '∞' : (u.max_devices || 10);
                     let devicesHtml = '<span class="text-slate-400 text-[11px]">Chưa đăng nhập máy nào</span>';
                     if (devs.length > 0) {
-                        const headerChip = `<div class="text-[11px] font-bold mb-1 ${u.role !== 'admin' && devs.length > (u.max_devices || 2) ? 'text-rose-400' : 'text-cyan-300'}">
+                        const headerChip = `<div class="text-[11px] font-bold mb-1 ${u.role !== 'admin' && devs.length > (u.max_devices || 10) ? 'text-rose-400' : 'text-cyan-300'}">
                             Đã ghi nhận: ${activeDevCount}/${maxDevsLabel} máy
                             ${!isSelf ? `<button type="button" onclick="adminDeviceAction('${escapeHtml(u.username)}', '', 'reset_all')" class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white border border-slate-600" title="Xóa lịch sử máy cũ khi khách đổi thiết bị">🔄 Reset</button>` : ''}
                         </div>`;

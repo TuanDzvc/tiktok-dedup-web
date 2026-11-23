@@ -500,8 +500,8 @@ def _record_and_check_device_unlocked(
             return f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên khóa truy cập!"
         return f"⛔ Thiết bị {dev_id} đã bị từ chối đăng nhập trên tài khoản này (Chống chia sẻ tài khoản)!"
 
-    # Kiểm tra giới hạn số lượng máy tối đa trên 1 tài khoản (mặc định 2 máy)
-    max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else 2)
+    # Kiểm tra giới hạn số lượng máy tối đa trên 1 tài khoản (mặc định 10 máy)
+    max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else 10)
     if dev_id not in devs and max_devs > 0:
         active_ids = [k for k, v in devs.items() if isinstance(v, dict) and not v.get("blocked")]
         if len(active_ids) >= max_devs:
@@ -702,7 +702,7 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
         "note": str(u.get("note") or ""),
         "scan_count": int(u.get("scan_count") or 0),
         "created_at": int(u.get("created_at") or 0),
-        "max_devices": int(u.get("max_devices") if u.get("max_devices") is not None else (0 if u.get("role") == "admin" else 2)),
+        "max_devices": int(u.get("max_devices") if u.get("max_devices") is not None else (0 if u.get("role") == "admin" else 10)),
         "devices": dev_list,
     }
     if include_password:
@@ -962,7 +962,7 @@ async def api_vip_register(req: Request):
             "scan_count": 0,
             "created_at": now_ts,
             "token_ver": 1,
-            "max_devices": 2,
+            "max_devices": 10,
             "devices": {
                 dev_id: {
                     "id": dev_id,
@@ -1472,7 +1472,7 @@ async def api_vip_admin_upsert_user(req: Request):
                 existing["max_devices"] = max(1, int(max_devs_in))
             saved_pub = _public_vip_user(existing, bmap, include_password=True)
         else:
-            m_dev = 2
+            m_dev = 10
             if max_devs_in is not None and str(max_devs_in).strip() != "":
                 m_dev = max(1, int(max_devs_in))
             new_rec = {
