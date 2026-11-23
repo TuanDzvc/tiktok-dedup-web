@@ -2880,7 +2880,6 @@ async def api_vip_admin_delete_user(target_user: str, req: Request):
 _ROUTER_PROXY_TARGETS = [
     {"id": "preset:us_la", "port": 11101, "name": "California (Los Angeles)", "country": "US", "host": "192.168.2.101", "default": True, "group": "🇺🇸 Hoa Kỳ (US)"},
     {"id": "preset:us_nyc", "port": 11104, "name": "New York (NYC)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
-    {"id": "preset:us_sv", "port": 11102, "name": "Silicon Valley", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
     {"id": "preset:us_lv", "port": 11103, "name": "Las Vegas", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
     {"id": "preset:us_dc", "port": 11105, "name": "Washington DC", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
     {"id": "preset:us_la2", "port": 11110, "name": "Los Angeles (#2)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
@@ -2895,6 +2894,8 @@ _ROUTER_PROXY_MAP = {item["id"]: item for item in _ROUTER_PROXY_TARGETS}
 def _resolve_proxy_value(proxy_val: str) -> str:
     """Giải mã mã proxy nội bộ (preset:...) sang địa chỉ SOCKS5 thực chỉ khi chạy tại Backend Local."""
     s = str(proxy_val or "").strip()
+    if s == "preset:us_sv":
+        s = "preset:us_la"
     if not s or s in ("direct", "custom"):
         return ""
     is_cloud = bool(os.getenv("IS_CLOUD") or os.getenv("RENDER"))

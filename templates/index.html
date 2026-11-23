@@ -5744,7 +5744,7 @@
 
         function sanitizeStudioProxyValue(val) {
             const clean = sanitizeLegacyInternalProxy(val);
-            if (!clean || clean === 'custom') return 'preset:us_la';
+            if (!clean || clean === 'custom' || clean === 'preset:us_sv') return 'preset:us_la';
             if (clean === 'direct' || clean.startsWith('preset:')) return clean;
             if (isValidCustomProxyValue(clean)) return clean;
             return 'preset:us_la';
