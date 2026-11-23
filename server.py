@@ -360,11 +360,16 @@ _PEER_SYNC_RUN_LOCK = threading.Lock()
 _APPLYING_REMOTE_SYNC = False
 RENDER_SYNC_BASE = (os.environ.get("RENDER_SYNC_BASE") or "https://tiktok-dedup-web.onrender.com").rstrip("/")
 PRIMARY_SYNC_BASE = (os.environ.get("PRIMARY_SYNC_BASE") or "https://checktiktok.site").rstrip("/")
+SUPABASE_SYNC_BUCKET = "tikflow-vip-vault"
+SUPABASE_SYNC_OBJECT = "sync_snapshot.json"
 _PEER_SYNC_STATUS: Dict[str, Any] = {
     "last_ok_at": 0,
     "last_error": "",
     "last_direction": "",
     "user_count": 0,
+    "supabase_configured": False,
+    "supabase_ok_at": 0,
+    "supabase_error": "",
 }
 PAYOS_API_BASE = "https://api-merchant.payos.vn"
 PAYOS_BANK_NAMES = {
@@ -1176,69 +1181,215 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
     return {"changed": any_changed, "user_count": len(m_users)}
 
 
+def _get_supabase_sync_config() -> Dict[str, Any]:
+    """Đọc cấu hình kho lưu trữ đám mây Supabase (từ env / .env / fallback local trên PC)."""
+    env_map = _read_local_env()
+    sb_url = (
+        os.environ.get("SUPABASE_SYNC_URL")
+        or env_map.get("SUPABASE_SYNC_URL")
+        or os.environ.get("SUPABASE_URL")
+        or env_map.get("SUPABASE_URL")
+        or ""
+    ).strip().rstrip("/")
+    sb_key = (
+        os.environ.get("SUPABASE_SYNC_KEY")
+        or env_map.get("SUPABASE_SYNC_KEY")
+        or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or env_map.get("SUPABASE_SERVICE_ROLE_KEY")
+        or ""
+    ).strip()
+    if (not sb_url or not sb_key) and not _is_cloud_runtime():
+        try:
+            dev_vars_f = BASE_DIR.parent / "cloudflare_register_worker" / ".dev.vars"
+            wrangler_f = BASE_DIR.parent / "cloudflare_register_worker" / "wrangler.toml"
+            if dev_vars_f.exists() and not sb_key:
+                for ln in dev_vars_f.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    s = ln.strip()
+                    if s and not s.startswith("#") and "=" in s:
+                        k, v = s.split("=", 1)
+                        if k.strip() == "SUPABASE_SERVICE_ROLE_KEY":
+                            sb_key = v.strip().strip('"').strip("'")
+            if wrangler_f.exists() and not sb_url:
+                m_u = re.search(r'SUPABASE_URL\s*=\s*"([^"]+)"', wrangler_f.read_text(encoding="utf-8", errors="ignore"))
+                if m_u:
+                    sb_url = m_u.group(1).strip().rstrip("/")
+        except Exception:
+            pass
+    configured = bool(sb_url.startswith("https://") and len(sb_key) > 20)
+    _PEER_SYNC_STATUS["supabase_configured"] = configured
+    return {"url": sb_url, "key": sb_key, "configured": configured}
+
+
+def _supabase_headers(sb_cfg: Dict[str, Any]) -> Dict[str, str]:
+    k = sb_cfg["key"]
+    return {"apikey": k, "Authorization": f"Bearer {k}"}
+
+
+def _supabase_ensure_bucket_sync(sb_cfg: Dict[str, Any]) -> bool:
+    if not sb_cfg.get("configured"):
+        return False
+    hdrs = _supabase_headers(sb_cfg)
+    try:
+        r_get = requests.get(f"{sb_cfg['url']}/storage/v1/bucket/{SUPABASE_SYNC_BUCKET}", headers=hdrs, timeout=8)
+        if r_get.status_code == 200:
+            return True
+        r_new = requests.post(
+            f"{sb_cfg['url']}/storage/v1/bucket",
+            headers={**hdrs, "Content-Type": "application/json"},
+            json={"id": SUPABASE_SYNC_BUCKET, "name": SUPABASE_SYNC_BUCKET, "public": False},
+            timeout=10,
+        )
+        return r_new.status_code in (200, 201, 409)
+    except Exception as exc:
+        logger.warning(f"[SupabaseSync] Lỗi kiểm tra/tạo bucket: {exc}")
+        return False
+
+
+def _supabase_pull_snapshot_sync(sb_cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not sb_cfg.get("configured"):
+        return None
+    try:
+        r = requests.get(
+            f"{sb_cfg['url']}/storage/v1/object/{SUPABASE_SYNC_BUCKET}/{SUPABASE_SYNC_OBJECT}",
+            headers=_supabase_headers(sb_cfg),
+            timeout=10,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            return data if isinstance(data, dict) else None
+        return None
+    except Exception as exc:
+        logger.warning(f"[SupabaseSync] Lỗi đọc snapshot: {exc}")
+        return None
+
+
+def _supabase_push_snapshot_sync(snap: Dict[str, Any], sb_cfg: Dict[str, Any]) -> bool:
+    if not sb_cfg.get("configured"):
+        return False
+    hdrs = {
+        **_supabase_headers(sb_cfg),
+        "Content-Type": "application/json",
+        "x-upsert": "true",
+    }
+    payload_bytes = json.dumps(snap, ensure_ascii=False).encode("utf-8")
+    obj_url = f"{sb_cfg['url']}/storage/v1/object/{SUPABASE_SYNC_BUCKET}/{SUPABASE_SYNC_OBJECT}"
+    try:
+        r = requests.post(obj_url, headers=hdrs, data=payload_bytes, timeout=12)
+        if r.status_code in (400, 404):
+            if _supabase_ensure_bucket_sync(sb_cfg):
+                r = requests.post(obj_url, headers=hdrs, data=payload_bytes, timeout=12)
+        return r.status_code in (200, 201)
+    except Exception as exc:
+        logger.warning(f"[SupabaseSync] Lỗi ghi snapshot: {exc}")
+        return False
+
+
 def _sync_two_way_with_peer_sync(push_after_pull: bool = True) -> Dict[str, Any]:
-    """Đồng bộ 2 chiều qua HTTP với máy chủ đối diện (chạy ngoài _VIP_LOCK để không nghẽn API)."""
+    """Đồng bộ 2 chiều qua Supabase Storage (bền vững) + HTTP Peer PC ⇄ Render."""
     if not _PEER_SYNC_RUN_LOCK.acquire(blocking=False):
         return {"ok": True, "skipped": "busy"}
     try:
         is_cloud = _is_cloud_runtime()
-        peer_base = PRIMARY_SYNC_BASE if is_cloud else RENDER_SYNC_BASE
-        if not peer_base:
-            return {"ok": False, "error": "missing_peer_base"}
-        url = f"{peer_base}/api/internal/sync-state"
-        hdrs = {
-            "X-Sync-Token": _get_sync_token(),
-            "X-Sync-Origin": "render" if is_cloud else "pc",
-        }
+        sb_cfg = _get_supabase_sync_config()
+        sb_ok = False
+        sb_pulled = False
 
+        # 1. Kéo & trộn bản bền vững từ Supabase Storage (ưu tiên số 1 để không bao giờ mất data kể cả khi Render sleep)
+        if sb_cfg.get("configured"):
+            try:
+                sb_remote = _supabase_pull_snapshot_sync(sb_cfg)
+                if sb_remote is not None:
+                    sb_pulled = True
+                    with _VIP_LOCK:
+                        _merge_sync_state_unlocked(sb_remote)
+                if push_after_pull or sb_remote is None:
+                    with _VIP_LOCK:
+                        snap_sb = _export_sync_snapshot_unlocked()
+                    if _supabase_push_snapshot_sync(snap_sb, sb_cfg):
+                        sb_ok = True
+                        _PEER_SYNC_STATUS["supabase_ok_at"] = int(time.time())
+                        _PEER_SYNC_STATUS["supabase_error"] = ""
+                        _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
+                        _PEER_SYNC_STATUS["last_error"] = ""
+                        _PEER_SYNC_STATUS["user_count"] = len(snap_sb.get("users") or {})
+                    else:
+                        _PEER_SYNC_STATUS["supabase_error"] = "push_failed"
+                elif sb_pulled:
+                    sb_ok = True
+                    _PEER_SYNC_STATUS["supabase_ok_at"] = int(time.time())
+                    _PEER_SYNC_STATUS["supabase_error"] = ""
+                    _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
+                    _PEER_SYNC_STATUS["last_error"] = ""
+            except Exception as e_sb:
+                _PEER_SYNC_STATUS["supabase_error"] = str(e_sb)
+
+        # 2. Đồng bộ trực tiếp PC ⇄ Render (bổ trợ thời gian thực)
+        peer_base = PRIMARY_SYNC_BASE if is_cloud else RENDER_SYNC_BASE
+        peer_ok = False
+        peer_changed = False
         pulled_remote: Optional[Dict[str, Any]] = None
         pull_err = ""
-        try:
-            r_get = requests.get(url, headers=hdrs, timeout=25)
-            if r_get.status_code == 200:
-                j_get = r_get.json()
-                if j_get.get("self_echo"):
-                    return {"ok": True, "skipped": "self_echo"}
-                if j_get.get("success") and isinstance(j_get.get("snapshot"), dict):
-                    pulled_remote = j_get["snapshot"]
-            else:
-                pull_err = f"GET HTTP {r_get.status_code}"
-        except Exception as e_get:
-            pull_err = f"GET {e_get}"
+        if peer_base:
+            url = f"{peer_base}/api/internal/sync-state"
+            hdrs = {
+                "X-Sync-Token": _get_sync_token(),
+                "X-Sync-Origin": "render" if is_cloud else "pc",
+            }
+            try:
+                r_get = requests.get(url, headers=hdrs, timeout=20)
+                if r_get.status_code == 200:
+                    j_get = r_get.json()
+                    if j_get.get("self_echo"):
+                        pull_err = ""
+                    elif j_get.get("success") and isinstance(j_get.get("snapshot"), dict):
+                        pulled_remote = j_get["snapshot"]
+                else:
+                    pull_err = f"GET HTTP {r_get.status_code}"
+            except Exception as e_get:
+                pull_err = f"GET {e_get}"
 
-        if pulled_remote is not None:
-            with _VIP_LOCK:
-                _merge_sync_state_unlocked(pulled_remote)
+            if pulled_remote is not None:
+                with _VIP_LOCK:
+                    _merge_sync_state_unlocked(pulled_remote)
+                if sb_ok:
+                    with _VIP_LOCK:
+                        snap_after_peer = _export_sync_snapshot_unlocked()
+                    _supabase_push_snapshot_sync(snap_after_peer, sb_cfg)
 
-        if push_after_pull:
-            with _VIP_LOCK:
-                snap = _export_sync_snapshot_unlocked()
-            r_post = requests.post(url, headers=hdrs, json={"snapshot": snap}, timeout=35)
-            if r_post.status_code != 200:
-                err_s = f"POST HTTP {r_post.status_code}"
-                _PEER_SYNC_STATUS["last_error"] = err_s
-                return {"ok": False, "error": err_s}
-            j_post = r_post.json()
-            if j_post.get("self_echo"):
-                return {"ok": True, "skipped": "self_echo"}
-            _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
-            _PEER_SYNC_STATUS["last_error"] = ""
-            _PEER_SYNC_STATUS["last_direction"] = "render->pc" if is_cloud else "pc<->render"
-            _PEER_SYNC_STATUS["user_count"] = len(snap.get("users") or {})
+            if push_after_pull and (not is_cloud or pulled_remote is not None):
+                try:
+                    with _VIP_LOCK:
+                        snap = _export_sync_snapshot_unlocked()
+                    r_post = requests.post(url, headers=hdrs, json={"snapshot": snap}, timeout=25)
+                    if r_post.status_code == 200:
+                        j_post = r_post.json()
+                        if not j_post.get("self_echo"):
+                            peer_ok = True
+                            peer_changed = bool(j_post.get("changed"))
+                            _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
+                            _PEER_SYNC_STATUS["last_error"] = ""
+                            _PEER_SYNC_STATUS["last_direction"] = "supabase+render" if sb_ok else ("render->pc" if is_cloud else "pc<->render")
+                            _PEER_SYNC_STATUS["user_count"] = len(snap.get("users") or {})
+                    else:
+                        pull_err = f"POST HTTP {r_post.status_code}"
+                except Exception as e_post:
+                    pull_err = str(e_post)
+
+        if sb_ok or peer_ok or (not pull_err and pulled_remote is not None):
+            if sb_ok and not peer_ok:
+                _PEER_SYNC_STATUS["last_direction"] = "supabase_cloud"
             return {
                 "ok": True,
-                "user_count": _PEER_SYNC_STATUS["user_count"],
-                "pulled": pulled_remote is not None,
-                "peer_changed": bool(j_post.get("changed")),
+                "supabase_ok": sb_ok,
+                "peer_ok": peer_ok,
+                "user_count": _PEER_SYNC_STATUS.get("user_count", 0),
+                "pulled": bool(sb_pulled or pulled_remote is not None),
+                "peer_changed": peer_changed,
             }
 
-        if pull_err:
-            _PEER_SYNC_STATUS["last_error"] = pull_err
-            return {"ok": False, "error": pull_err}
-        _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
-        _PEER_SYNC_STATUS["last_error"] = ""
-        _PEER_SYNC_STATUS["last_direction"] = "pc->render(pull)"
-        return {"ok": True, "user_count": _PEER_SYNC_STATUS.get("user_count", 0)}
+        err_final = pull_err or _PEER_SYNC_STATUS.get("supabase_error") or "sync_failed"
+        _PEER_SYNC_STATUS["last_error"] = err_final
+        return {"ok": False, "error": err_final}
     except Exception as exc:
         _PEER_SYNC_STATUS["last_error"] = str(exc)
         return {"ok": False, "error": str(exc)}
@@ -1504,17 +1655,27 @@ def start_cloudflare_tunnel(port: int = 8000):
 
 @app.on_event("startup")
 def on_startup():
+    # Khôi phục ngay bản dữ liệu bền vững mới nhất từ Supabase Cloud trước khi phục vụ (bảo toàn 100% dù Render sleep/restart)
+    try:
+        sb_cfg = _get_supabase_sync_config()
+        if sb_cfg.get("configured"):
+            sb_snap = _supabase_pull_snapshot_sync(sb_cfg)
+            if sb_snap is not None:
+                with _VIP_LOCK:
+                    _merge_sync_state_unlocked(sb_snap)
+                _PEER_SYNC_STATUS["supabase_ok_at"] = int(time.time())
+                _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
+                _PEER_SYNC_STATUS["last_direction"] = "supabase_boot_restore"
+    except Exception as e_boot:
+        logger.warning(f"[SupabaseSync] Bỏ qua khôi phục lúc khởi động: {e_boot}")
+
     # Chỉ bật cloudflare tunnel trên máy tính local, không bật khi chạy trên cloud (Render/VPS)
     if not _is_cloud_runtime():
         t = threading.Thread(target=start_cloudflare_tunnel, args=(int(os.getenv("PORT", 8000)),), daemon=True)
         t.start()
 
     def _peer_sync_loop():
-        if _is_cloud_runtime():
-            time.sleep(2.0)
-            _sync_two_way_with_peer_sync(push_after_pull=False)
-            return
-        time.sleep(3.0)
+        time.sleep(2.5)
         while True:
             _sync_two_way_with_peer_sync(push_after_pull=True)
             time.sleep(60)
@@ -2302,6 +2463,12 @@ async def api_vip_admin_render_env(req: Request):
             f"PAYOS_API_KEY={payos_cfg['api_key']}",
             f"PAYOS_CHECKSUM_KEY={payos_cfg['checksum_key']}",
         ])
+    sb_cfg = _get_supabase_sync_config()
+    if sb_cfg.get("configured"):
+        lines.extend([
+            f"SUPABASE_SYNC_URL={sb_cfg['url']}",
+            f"SUPABASE_SYNC_KEY={sb_cfg['key']}",
+        ])
     return JSONResponse(content={
         "success": True,
         "env_text": "\n".join(lines),
@@ -2351,15 +2518,21 @@ async def api_internal_post_sync_state(req: Request):
 async def api_vip_admin_sync_render_now(req: Request):
     u_obj = _extract_vip_user(req)
     if not u_obj or u_obj.get("role") != "admin":
-        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền đồng bộ Render."})
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền đồng bộ đám mây."})
     res = await asyncio.to_thread(_sync_two_way_with_peer_sync, True)
     if not res.get("ok"):
-        return JSONResponse(status_code=502, content={"success": False, "error": f"Không đồng bộ được sang Render: {res.get('error')}", "peer_sync": dict(_PEER_SYNC_STATUS)})
+        return JSONResponse(status_code=502, content={"success": False, "error": f"Đồng bộ thất bại: {res.get('error')}", "peer_sync": dict(_PEER_SYNC_STATUS)})
+    targets = []
+    if res.get("supabase_ok"):
+        targets.append("Supabase Cloud")
+    if res.get("peer_ok"):
+        targets.append("Render")
+    target_txt = " & ".join(targets) if targets else "Cloud"
     return JSONResponse(content={
         "success": True,
         "user_count": res.get("user_count", 0),
         "peer_sync": dict(_PEER_SYNC_STATUS),
-        "message": f"✅ Đã đồng bộ tự động 2 chiều xong {res.get('user_count', 0)} tài khoản giữa PC & Render!",
+        "message": f"✅ Đã đồng bộ xong {res.get('user_count', 0)} tài khoản lên {target_txt}!",
     })
 
 

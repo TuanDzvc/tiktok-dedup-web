@@ -1834,11 +1834,11 @@
                             </div>
                         </div>
                         <p class="text-[11px] text-slate-300 leading-relaxed">
-                            Khi tắt PC, <code class="px-1 py-0.5 rounded bg-slate-800 text-cyan-300">checktiktok.site</code> tự chuyển sang máy chủ Render 24/7. Mọi tài khoản, mã máy &amp; đơn VIP QR mới tự động đồng bộ 2 chiều giữa <b class="text-emerald-300">PC ⇄ Render</b> ngay lập tức — kể cả tắt máy khách vẫn đăng nhập bình thường.
+                            Khi tắt PC, <code class="px-1 py-0.5 rounded bg-slate-800 text-cyan-300">checktiktok.site</code> tự chuyển sang máy chủ Render 24/7. Toàn bộ tài khoản, mã máy &amp; đơn VIP QR tự động đồng bộ qua <b class="text-emerald-300">Supabase Cloud + Render</b> — kể cả tắt máy tính nhiều ngày và Render khởi động lại cũng không bao giờ mất tài khoản khách.
                         </p>
                         <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 pt-0.5">
                             <button type="button" id="btnSyncRenderNow" onclick="syncAccountsToRenderNow()" class="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow whitespace-nowrap">
-                                <i class="fa-solid fa-arrows-rotate"></i> Đồng Bộ Tài Khoản Sang Render Ngay
+                                <i class="fa-solid fa-arrows-rotate"></i> Đồng Bộ Ngay (Supabase &amp; Render)
                             </button>
                             <button type="button" onclick="copyRenderEnvConfig()" class="px-3.5 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow whitespace-nowrap">
                                 <i class="fa-regular fa-copy"></i> Copy Cấu Hình .env Cho Render
@@ -3211,11 +3211,12 @@
                     const ps = data.peer_sync;
                     if (ps.last_ok_at) {
                         const tStr = new Date(Number(ps.last_ok_at) * 1000).toLocaleTimeString('vi-VN');
+                        const modeLbl = ps.supabase_configured ? 'Kho Supabase + Render' : 'Đồng bộ PC ⇄ Render';
                         syncBadge.className = 'px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-emerald-950 border border-emerald-500/50 text-emerald-300';
-                        syncBadge.innerText = `🟢 Đã đồng bộ ${ps.user_count || data.user_count || 0} acc lúc ${tStr}`;
+                        syncBadge.innerText = `🟢 ${modeLbl}: ${ps.user_count || data.user_count || 0} acc (${tStr})`;
                     } else if (ps.last_error) {
                         syncBadge.className = 'px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-amber-950 border border-amber-500/50 text-amber-300';
-                        syncBadge.innerText = `⚠️ Đang chờ Render: ${ps.last_error}`;
+                        syncBadge.innerText = `⚠️ Đang chờ đồng bộ: ${ps.last_error}`;
                     }
                 }
                 if (data.has_deploy_hook) {
