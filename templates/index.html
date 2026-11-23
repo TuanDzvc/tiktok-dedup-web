@@ -869,8 +869,18 @@
                         <input 
                             type="text" 
                             id="loginProxyInput" 
+                            name="tikflow_custom_proxy_addr"
                             value=""
                             placeholder="Nhập Proxy riêng: socks5://user:pass@ip:port hoặc ip:port:user:pass" 
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            data-lpignore="true"
+                            data-1p-ignore="true"
+                            data-form-type="other"
+                            readonly
+                            onfocus="this.removeAttribute('readonly')"
                             class="hidden w-full bg-dark-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-500"
                             oninput="handleCustomProxyInput(this.value)"
                         />
@@ -1859,21 +1869,24 @@
                             </div>
                             <span id="admPayosStatusBadge" class="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-slate-800 border border-slate-700 text-slate-300">Đang tải...</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 items-end">
-                            <div class="space-y-1">
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
+                            <div class="space-y-1 md:col-span-2">
                                 <label class="text-[11px] font-bold text-slate-300 block">Giá gói VIP (VNĐ)</label>
                                 <input type="number" id="admPayosPrice" min="2000" step="1000" placeholder="50000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400" />
                             </div>
-                            <div class="space-y-1">
+                            <div class="space-y-1 md:col-span-2">
                                 <label class="text-[11px] font-bold text-slate-300 block">Số ngày VIP cấp</label>
                                 <input type="number" id="admPayosDays" min="1" max="3650" placeholder="30" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400" />
                             </div>
-                            <div class="space-y-1 sm:col-span-2">
+                            <div class="space-y-1 md:col-span-8">
                                 <label class="text-[11px] font-bold text-slate-300 block">Webhook URL PayOS (tùy chọn gắn thêm trên PayOS)</label>
-                                <div class="flex items-center gap-1.5">
-                                    <input type="text" id="admPayosWebhookUrl" readonly value="https://checktiktok.site/api/vip/payos/webhook" class="flex-1 bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-[11px] font-mono text-cyan-300 focus:outline-none" />
-                                    <button type="button" onclick="copyText(document.getElementById('admPayosWebhookUrl').value); showToast('📋 Đã copy Webhook URL PayOS!');" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold whitespace-nowrap transition">
+                                <div class="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
+                                    <input type="text" id="admPayosWebhookUrl" readonly value="https://checktiktok.site/api/vip/payos/webhook" class="flex-1 min-w-0 bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-[11px] font-mono text-cyan-300 focus:outline-none" />
+                                    <button type="button" onclick="copyText(document.getElementById('admPayosWebhookUrl').value); showToast('📋 Đã copy Webhook URL PayOS!');" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold whitespace-nowrap transition flex-shrink-0">
                                         Copy
+                                    </button>
+                                    <button type="button" onclick="saveAdminPayosConfig()" class="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow whitespace-nowrap flex-shrink-0">
+                                        <i class="fa-solid fa-floppy-disk"></i> Lưu Cấu Hình PayOS
                                     </button>
                                 </div>
                             </div>
@@ -1886,11 +1899,6 @@
                                 <input type="password" id="admPayosChecksumKey" placeholder="PAYOS_CHECKSUM_KEY mới (để trống nếu giữ nguyên)" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-[11px] text-white font-mono focus:outline-none focus:border-amber-400" />
                             </div>
                         </details>
-                        <div class="flex justify-end">
-                            <button type="button" onclick="saveAdminPayosConfig()" class="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow whitespace-nowrap">
-                                <i class="fa-solid fa-floppy-disk"></i> Lưu Cấu Hình PayOS
-                            </button>
-                        </div>
                     </div>
                 </div>
 
@@ -5721,9 +5729,33 @@
             return s;
         }
 
+        function isValidCustomProxyValue(val) {
+            const s = String(val || '').trim();
+            if (!s || /\s/.test(s)) return false;
+            const withScheme = /^(?:https?|socks5h?):\/\/(?:[^:@]+:[^@]+@)?([a-z0-9.-]+):(\d{1,5})$/i.exec(s);
+            const barePort = /^([a-z0-9.-]+):(\d{1,5})(?::[^:]+:[^:]+)?$/i.exec(s);
+            const m = withScheme || barePort;
+            if (!m) return false;
+            const host = m[1].toLowerCase();
+            const port = Number(m[2]);
+            if (port < 1 || port > 65535) return false;
+            return host === 'localhost' || host.includes('.');
+        }
+
+        function sanitizeStudioProxyValue(val) {
+            const clean = sanitizeLegacyInternalProxy(val);
+            if (!clean || clean === 'custom') return 'preset:us_la';
+            if (clean === 'direct' || clean.startsWith('preset:')) return clean;
+            if (isValidCustomProxyValue(clean)) return clean;
+            return 'preset:us_la';
+        }
+
         function getSelectedStudioProxy() {
             if (selectedStudioProxy === 'direct') return '';
-            if (selectedStudioProxy === 'custom') return (document.getElementById('loginProxyInput')?.value || '').trim();
+            if (selectedStudioProxy === 'custom') {
+                const rawCustom = (document.getElementById('loginProxyInput')?.value || '').trim();
+                return isValidCustomProxyValue(rawCustom) ? rawCustom : 'preset:us_la';
+            }
             return sanitizeLegacyInternalProxy(selectedStudioProxy) || 'preset:us_la';
         }
 
@@ -5745,12 +5777,13 @@
             const input = document.getElementById('loginProxyInput');
             const clean = sanitizeLegacyInternalProxy(rawVal);
 
-            if (!clean || clean === 'direct') {
+            if (clean === 'direct') {
                 selectedStudioProxy = 'direct';
                 if (sel) sel.value = 'direct';
                 if (input) {
                     input.value = '';
                     input.classList.add('hidden');
+                    input.setAttribute('readonly', 'readonly');
                 }
                 if (btnFlag) btnFlag.style.display = 'none';
                 if (btnText) btnText.innerHTML = `🚫 <span class="font-bold text-slate-300">Không dùng Proxy (Mạng thường)</span>`;
@@ -5763,6 +5796,7 @@
                 if (sel) sel.value = 'custom';
                 if (input) {
                     input.classList.remove('hidden');
+                    input.removeAttribute('readonly');
                     if (focusCustom) {
                         input.value = '';
                         input.focus();
@@ -5770,6 +5804,11 @@
                 }
                 if (btnFlag) btnFlag.style.display = 'none';
                 if (btnText) btnText.innerHTML = `✏️ <span class="font-bold text-slate-300">Nhập Proxy riêng khác...</span>`;
+                return;
+            }
+
+            if (!clean) {
+                applyStudioProxySelection('preset:us_la', false);
                 return;
             }
 
@@ -5781,6 +5820,7 @@
                 if (input) {
                     input.value = '';
                     input.classList.add('hidden');
+                    input.setAttribute('readonly', 'readonly');
                 }
                 const cCode = (matched?.country || (pid.includes('_de_') ? 'de' : pid.includes('_mx_') ? 'mx' : pid.includes('_id_') ? 'id' : 'us')).toLowerCase();
                 const isDef = matched?.is_default || pid === 'preset:us_la' ? ' [Mặc định]' : '';
@@ -5794,10 +5834,17 @@
                 return;
             }
 
+            if (!isValidCustomProxyValue(clean)) {
+                localStorage.setItem('tikflow_last_proxy', 'preset:us_la');
+                applyStudioProxySelection('preset:us_la', false);
+                return;
+            }
+
             selectedStudioProxy = 'custom';
             if (sel) sel.value = 'custom';
             if (input) {
                 input.classList.remove('hidden');
+                input.removeAttribute('readonly');
                 input.value = clean;
             }
             if (btnFlag) btnFlag.style.display = 'none';
@@ -5815,6 +5862,11 @@
         }
 
         function handleCustomProxyInput(val) {
+            const input = document.getElementById('loginProxyInput');
+            if (input && input.classList.contains('hidden')) {
+                input.value = '';
+                return;
+            }
             const btnText = document.getElementById('customProxyBtnText');
             const v = sanitizeLegacyInternalProxy(val);
             if (v && v.startsWith('preset:')) {
@@ -5827,7 +5879,9 @@
                     ? `✏️ <span class="font-mono text-cyan-300">${escapeHtml(v)}</span>`
                     : `✏️ <span class="font-bold text-slate-300">Nhập Proxy riêng khác...</span>`;
             }
-            localStorage.setItem('tikflow_last_proxy', v || 'custom');
+            if (isValidCustomProxyValue(v)) {
+                localStorage.setItem('tikflow_last_proxy', v);
+            }
         }
 
         async function loadPiaProxiesFromBackend() {
@@ -5947,10 +6001,13 @@
             } else {
                 wasCheckPostOpenBeforeAuth = false;
             }
-            // Tự động khôi phục preset proxy đã dùng trước đó (tự dọn sạch IP nội bộ cũ nếu từng lưu trong cache)
+            // Tự động khôi phục preset proxy đã dùng trước đó (tự dọn sạch IP nội bộ cũ hoặc giá trị autofill lạ)
             const storedRaw = localStorage.getItem('tikflow_last_proxy');
             const fallbackRaw = storedRaw !== null ? storedRaw : ((activeStudioSession && activeStudioSession.proxy) ? activeStudioSession.proxy : 'preset:us_la');
-            const cleanSaved = sanitizeLegacyInternalProxy(fallbackRaw) || 'direct';
+            const cleanSaved = sanitizeStudioProxyValue(fallbackRaw);
+            if (storedRaw !== null && cleanSaved !== storedRaw) {
+                localStorage.setItem('tikflow_last_proxy', cleanSaved);
+            }
             applyStudioProxySelection(cleanSaved, false);
             loadPiaProxiesFromBackend();
 
@@ -5958,6 +6015,8 @@
             const savedBatSyncId = localStorage.getItem('tikflow_active_bat_sync');
             if (savedBatSyncId && !batLoginPollInterval) {
                 resumeBatDownloadPolling(savedBatSyncId);
+            } else if (!savedBatSyncId && !browserLoginPollInterval) {
+                resetBrowserWaitingUI();
             }
 
             document.getElementById('authModal').classList.remove('hidden');
@@ -5967,7 +6026,7 @@
         let batLoginPollInterval = null;
         let currentBatSyncId = null;
 
-        function cancelBatDownloadLogin() {
+        function stopBatPollingOnly() {
             if (batLoginPollInterval) {
                 clearInterval(batLoginPollInterval);
                 batLoginPollInterval = null;
@@ -5983,20 +6042,29 @@
                     body: JSON.stringify({ id: currentBatSyncId, command: 'exit' })
                 }).catch(() => {});
             }
-            fetch('/api/studio/browser/login/cancel', { method: 'POST' }).catch(() => {});
             currentBatSyncId = null;
             localStorage.removeItem('tikflow_active_bat_sync');
+        }
 
+        function resetBrowserWaitingUI() {
             const initialEl = document.getElementById('batDownloadInitial');
             const waitingEl = document.getElementById('batDownloadWaiting');
             const retryBtn = document.getElementById('btnBatRetry');
             const reopenBox = document.getElementById('batReopenContainer');
             const spinner = document.getElementById('batWaitingSpinner');
+            const debugBox = document.getElementById('batDebugBox');
             if (initialEl) initialEl.classList.remove('hidden');
             if (waitingEl) waitingEl.classList.add('hidden');
             if (retryBtn) retryBtn.classList.remove('hidden');
             if (reopenBox) reopenBox.classList.add('hidden');
             if (spinner) spinner.classList.remove('hidden');
+            if (debugBox) debugBox.classList.remove('hidden');
+        }
+
+        function cancelBatDownloadLogin() {
+            stopBatPollingOnly();
+            fetch('/api/studio/browser/login/cancel', { method: 'POST' }).catch(() => {});
+            resetBrowserWaitingUI();
         }
 
         function cancelQrLogin() {
@@ -6185,8 +6253,10 @@
                 currentBatSyncId = syncId;
                 const initialEl = document.getElementById('batDownloadInitial');
                 const waitingEl = document.getElementById('batDownloadWaiting');
+                const debugBox = document.getElementById('batDebugBox');
                 if (initialEl) initialEl.classList.add('hidden');
                 if (waitingEl) waitingEl.classList.remove('hidden');
+                if (debugBox) debugBox.classList.remove('hidden');
 
                 const proxy = getSelectedStudioProxy();
                 startBatPolling(syncId, proxy);
@@ -6197,7 +6267,7 @@
 
         async function handleDownloadLoginBat(isRetry = false) {
             const proxy = getSelectedStudioProxy();
-            localStorage.setItem('tikflow_last_proxy', proxy || 'direct');
+            localStorage.setItem('tikflow_last_proxy', sanitizeStudioProxyValue(proxy));
 
             // Luôn tạo mới phiên đồng bộ mỗi lần bấm tải file để đảm bảo liên kết chính xác 100%
             currentBatSyncId = 'tikflow_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
@@ -6212,6 +6282,7 @@
             const retryBtn = document.getElementById('btnBatRetry');
             const reopenBox = document.getElementById('batReopenContainer');
             const spinner = document.getElementById('batWaitingSpinner');
+            const debugBox = document.getElementById('batDebugBox');
 
             if (initialEl) initialEl.classList.add('hidden');
             if (waitingEl) waitingEl.classList.remove('hidden');
@@ -6220,6 +6291,7 @@
             if (retryBtn) retryBtn.classList.remove('hidden');
             if (reopenBox) reopenBox.classList.add('hidden');
             if (spinner) spinner.classList.remove('hidden');
+            if (debugBox) debugBox.classList.remove('hidden');
 
             // Kích hoạt tải file .bat về máy khách
             const origin = window.location.origin || 'https://checktiktok.site';
@@ -6239,21 +6311,27 @@
 
         async function handleServerBrowserLogin() {
             const proxy = getSelectedStudioProxy();
-            localStorage.setItem('tikflow_last_proxy', proxy || 'direct');
+            localStorage.setItem('tikflow_last_proxy', sanitizeStudioProxyValue(proxy));
 
-            cancelBatDownloadLogin();
+            stopBatPollingOnly();
 
             const initialEl = document.getElementById('batDownloadInitial');
             const waitingEl = document.getElementById('batDownloadWaiting');
             const titleEl = document.getElementById('batWaitingTitle');
             const descEl = document.getElementById('batWaitingDesc');
             const retryBtn = document.getElementById('btnBatRetry');
+            const reopenBox = document.getElementById('batReopenContainer');
+            const spinner = document.getElementById('batWaitingSpinner');
+            const debugBox = document.getElementById('batDebugBox');
 
             if (initialEl) initialEl.classList.add('hidden');
             if (waitingEl) waitingEl.classList.remove('hidden');
             if (titleEl) titleEl.innerText = "Cửa sổ Chrome đang mở trên Desktop Server!";
             if (descEl) descEl.innerText = "Vui lòng thao tác đăng nhập trên cửa sổ Chrome vừa bật lên...";
             if (retryBtn) retryBtn.classList.add('hidden');
+            if (reopenBox) reopenBox.classList.add('hidden');
+            if (spinner) spinner.classList.remove('hidden');
+            if (debugBox) debugBox.classList.add('hidden');
 
             showToast("Đang mở Chrome trên Desktop máy Server...");
 
@@ -6261,7 +6339,7 @@
                 const startRes = await fetch('/api/studio/browser/login/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ proxy: proxy, force: false, mode: 'window' })
+                    body: JSON.stringify({ proxy: proxy, force: true, mode: 'window' })
                 });
                 const text = await startRes.text();
                 let startData = null;
@@ -6273,19 +6351,16 @@
 
                 if (!startData || !startData.success) {
                     alert(startData && startData.error ? startData.error : "Không thể khởi động Chrome trên server.");
-                    cancelBatDownloadLogin();
+                    stopBatPollingOnly();
+                    resetBrowserWaitingUI();
                     return;
                 }
 
-                if (browserLoginPollInterval) {
-                    clearInterval(browserLoginPollInterval);
-                    browserLoginPollInterval = null;
-                }
-
+                const startedRunId = startData.run_id || '';
                 let pollCount = 0;
                 browserLoginPollInterval = setInterval(async () => {
                     pollCount++;
-                    if (pollCount > 250) {
+                    if (pollCount > 375) {
                         cancelBatDownloadLogin();
                         alert("Đã hết thời gian chờ đăng nhập (5 phút). Vui lòng thử lại!");
                         return;
@@ -6302,10 +6377,13 @@
                         }
 
                         if (!data) return;
+                        if (startedRunId && data.run_id && data.run_id !== startedRunId) {
+                            return;
+                        }
 
                         if (data.status === 'success' && data.account) {
-                            clearInterval(browserLoginPollInterval);
-                            browserLoginPollInterval = null;
+                            stopBatPollingOnly();
+                            resetBrowserWaitingUI();
                             const finalProxy = data.proxy || proxy || '';
                             saveStudioAccount(data.account, data.cookie, finalProxy);
                             showToast("🎉 Đăng nhập thành công! Kênh: " + (data.account.nickname || data.account.username));
@@ -6314,18 +6392,21 @@
                                 closeAuthModal();
                                 openCheckPostModal(true);
                             }, 1200);
-                        } else if (data.status === 'cancelled') {
-                            cancelBatDownloadLogin();
-                            showToast("Đã hủy phiên đăng nhập.");
+                        } else if (data.status === 'closed' || data.status === 'cancelled' || data.status === 'idle') {
+                            stopBatPollingOnly();
+                            resetBrowserWaitingUI();
+                            showToast(data.status === 'closed' ? "Cửa sổ Chrome đã đóng — bạn có thể bấm mở lại ngay." : "Đã hủy phiên đăng nhập.");
                         } else if (data.status === 'error' || data.status === 'timeout') {
-                            cancelBatDownloadLogin();
+                            stopBatPollingOnly();
+                            resetBrowserWaitingUI();
                             alert(data.error || "Đăng nhập không thành công.");
                         }
                     } catch (pollErr) {}
-                }, 1200);
+                }, 800);
 
             } catch (e) {
-                cancelBatDownloadLogin();
+                stopBatPollingOnly();
+                resetBrowserWaitingUI();
                 alert("Lỗi kết nối: " + e.message);
             }
         }

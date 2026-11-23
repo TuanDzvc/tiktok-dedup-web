@@ -2906,6 +2906,8 @@ def _resolve_proxy_value(proxy_val: str) -> str:
     m_pia = re.match(r"^preset:pia_(\d+)$", s)
     if m_pia:
         return "" if is_cloud else f"socks5://127.0.0.1:{m_pia.group(1)}"
+    if ":" not in s or any(ch.isspace() for ch in s):
+        return ""
     return s
 
 
@@ -4098,6 +4100,8 @@ def api_studio_pia_proxies():
         sorted_ports = sorted(active.keys(), key=lambda x: int(x))
         for port in sorted_ports:
             info = active[port]
+            if str(info.get("country", "")).strip().upper() == "HK":
+                continue
             p_int = int(port)
             r_name = re.sub(r"\s*\(?\b" + re.escape(str(p_int)) + r"\b\)?", "", str(info.get("region_name", ""))).strip() or f"Châu Á #{len(proxies) + 1}"
             p_id = f"preset:pia_{p_int}"
@@ -4107,7 +4111,7 @@ def api_studio_pia_proxies():
                 "region_id": info.get("region_id", ""),
                 "region_name": r_name,
                 "country": info.get("country", ""),
-                "group": "🌏 Châu Á (Singapore, Nhật Bản, Đài Loan, HK)",
+                "group": "🌏 Châu Á (Singapore, Nhật Bản, Đài Loan)",
             })
     except Exception:
         pass
