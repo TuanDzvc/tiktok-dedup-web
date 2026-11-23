@@ -1512,6 +1512,51 @@ async def api_vip_admin_delete_user(target_user: str, req: Request):
     return JSONResponse(content={"success": True})
 
 
+_ROUTER_PROXY_TARGETS = [
+    {"id": "preset:us_la", "port": 11101, "name": "California (Los Angeles)", "country": "US", "host": "192.168.2.101", "default": True, "group": "🇺🇸 Hoa Kỳ (US)"},
+    {"id": "preset:us_nyc", "port": 11104, "name": "New York (NYC)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+    {"id": "preset:us_sv", "port": 11102, "name": "Silicon Valley", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+    {"id": "preset:us_lv", "port": 11103, "name": "Las Vegas", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+    {"id": "preset:us_dc", "port": 11105, "name": "Washington DC", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+    {"id": "preset:us_la2", "port": 11110, "name": "Los Angeles (#2)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+    {"id": "preset:de_fra", "port": 11108, "name": "Frankfurt", "country": "DE", "host": "192.168.2.101", "group": "🇩🇪 Đức (Germany)"},
+    {"id": "preset:de_ber", "port": 11109, "name": "Berlin", "country": "DE", "host": "192.168.2.101", "group": "🇩🇪 Đức (Germany)"},
+    {"id": "preset:mx_mex", "port": 11107, "name": "Mexico City", "country": "MX", "host": "192.168.2.101", "group": "🇲🇽 Mexico"},
+    {"id": "preset:id_jkt", "port": 11106, "name": "Jakarta", "country": "ID", "host": "192.168.2.101", "group": "🇮🇩 Indonesia"},
+]
+_ROUTER_PROXY_MAP = {item["id"]: item for item in _ROUTER_PROXY_TARGETS}
+
+
+def _resolve_proxy_value(proxy_val: str) -> str:
+    """Giải mã mã proxy nội bộ (preset:...) sang địa chỉ SOCKS5 thực chỉ khi chạy tại Backend Local."""
+    s = str(proxy_val or "").strip()
+    if not s or s in ("direct", "custom"):
+        return ""
+    is_cloud = bool(os.getenv("IS_CLOUD") or os.getenv("RENDER"))
+    if s in _ROUTER_PROXY_MAP:
+        if is_cloud:
+            return ""
+        item = _ROUTER_PROXY_MAP[s]
+        return f"socks5://{item['host']}:{item['port']}"
+    m_pia = re.match(r"^preset:pia_(\d+)$", s)
+    if m_pia:
+        return "" if is_cloud else f"socks5://127.0.0.1:{m_pia.group(1)}"
+    return s
+
+
+def _mask_internal_proxy_for_client(proxy_val: str) -> str:
+    """Ẩn hoàn toàn IP LAN nội bộ (192.168.x / 127.0.0.1) trước khi trả về trình duyệt hoặc file tải."""
+    s = str(proxy_val or "").strip()
+    if not s:
+        return ""
+    if "192.168." in s or "127.0.0.1" in s:
+        for item in _ROUTER_PROXY_TARGETS:
+            if f":{item['port']}" in s:
+                return item["id"]
+        return "preset:us_la"
+    return s
+
+
 @app.post("/api/check")
 async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     """
@@ -1530,7 +1575,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     max_cursor = int(body.get("max_cursor") or 0)
     max_videos = 18
     cookie = str(body.get("cookie") or "").strip()
-    proxy = str(body.get("proxy") or "").strip()
+    proxy = _resolve_proxy_value(str(body.get("proxy") or ""))
     sec_uid = str(body.get("sec_uid") or "").strip()
 
     # Kiểm tra quyền VIP / Admin thực sự + kiểm tra Mã máy có bị khóa / vượt giới hạn thiết bị hoặc hết 10 lượt Free/ngày không
@@ -1797,7 +1842,8 @@ async def api_studio_cookie_import(req: Request):
         raise HTTPException(status_code=400, detail="Dữ liệu JSON không hợp lệ.")
     
     cookie_str = str(body.get("cookie") or "").strip()
-    proxy = str(body.get("proxy") or "").strip()
+    raw_proxy = _mask_internal_proxy_for_client(str(body.get("proxy") or ""))
+    proxy = _resolve_proxy_value(raw_proxy)
     if not cookie_str:
         raise HTTPException(status_code=400, detail="Vui lòng dán chuỗi Cookie!")
     
@@ -1810,7 +1856,7 @@ async def api_studio_cookie_import(req: Request):
         studio_engine.ACTIVE_STUDIO_ACCOUNTS[u_name] = {
             "account": acc_info,
             "cookie": cookie_str,
-            "proxy": proxy,
+            "proxy": raw_proxy,
             "updated_at": time.time()
         }
     uid_key = str(acc_info.get("uid") or "").strip()
@@ -1818,7 +1864,7 @@ async def api_studio_cookie_import(req: Request):
         studio_engine.ACTIVE_STUDIO_ACCOUNTS[uid_key] = {
             "account": acc_info,
             "cookie": cookie_str,
-            "proxy": proxy,
+            "proxy": raw_proxy,
             "updated_at": time.time()
         }
 
@@ -1842,7 +1888,7 @@ async def api_studio_posts(req: Request):
     
     count = int(body.get("count") or 50)
     max_cursor = int(body.get("max_cursor") or 0)
-    proxy = str(body.get("proxy") or "").strip()
+    proxy = _resolve_proxy_value(str(body.get("proxy") or ""))
     sec_uid = str(body.get("sec_uid") or "").strip()
     
     res = await run_in_threadpool(studio_engine.get_studio_post_list, cookie_str, proxy=proxy, count=count, max_cursor=max_cursor, sec_uid=sec_uid)
@@ -1859,7 +1905,7 @@ async def api_studio_item_visibility(req: Request):
     cookie_str = str(body.get("cookie") or "").strip()
     item_id = str(body.get("item_id") or "").strip()
     visibility = int(body.get("visibility") or 1)
-    proxy = str(body.get("proxy") or "").strip()
+    proxy = _resolve_proxy_value(str(body.get("proxy") or ""))
     
     if not cookie_str or not item_id:
         raise HTTPException(status_code=400, detail="Thiếu Cookie hoặc ID video.")
@@ -1877,7 +1923,7 @@ async def api_studio_item_delete(req: Request):
     
     cookie_str = str(body.get("cookie") or "").strip()
     item_id = str(body.get("item_id") or "").strip()
-    proxy = str(body.get("proxy") or "").strip()
+    proxy = _resolve_proxy_value(str(body.get("proxy") or ""))
     
     if not cookie_str or not item_id:
         raise HTTPException(status_code=400, detail="Thiếu Cookie hoặc ID video.")
@@ -1893,7 +1939,7 @@ async def api_studio_browser_login_start(req: Request):
     mode = "qr"
     try:
         body = await req.json()
-        proxy = str(body.get("proxy") or "").strip()
+        proxy = _resolve_proxy_value(str(body.get("proxy") or ""))
         force = bool(body.get("force", False))
         mode = str(body.get("mode") or "qr").strip().lower()
     except Exception:
@@ -1988,7 +2034,7 @@ def api_studio_external_login_status(req: Request, id: str = ""):
             "status": sess.get("status", "waiting"),
             "account": sess.get("account"),
             "cookie": sess.get("cookie"),
-            "proxy": sess.get("proxy", ""),
+            "proxy": _mask_internal_proxy_for_client(sess.get("proxy", "")),
             "detail": sess.get("detail", ""),
             "last_seen": sess.get("last_seen", 0)
         })
@@ -2075,12 +2121,18 @@ async def api_studio_external_login_sync(req: Request):
         body = await req.json()
         sync_id = str(body.get("id") or "").strip()
         cookie_str = str(body.get("cookie") or "").strip()
-        proxy = str(body.get("proxy") or "").strip()
+        raw_proxy = _mask_internal_proxy_for_client(str(body.get("proxy") or ""))
     except Exception:
         return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
 
     if not sync_id or not cookie_str:
         return JSONResponse(status_code=400, content={"success": False, "error": "Thiếu id hoặc cookie."})
+
+    with EXTERNAL_LOGIN_LOCK:
+        prev_sess = EXTERNAL_LOGIN_SESSIONS.get(sync_id) or {}
+        if not raw_proxy and prev_sess.get("proxy"):
+            raw_proxy = _mask_internal_proxy_for_client(str(prev_sess.get("proxy") or ""))
+    proxy = _resolve_proxy_value(raw_proxy)
 
     # Chuẩn hóa cookie có cả sessionid và sessionid_ss
     cdict = studio_engine.parse_cookie_dict(cookie_str)
@@ -2093,7 +2145,7 @@ async def api_studio_external_login_sync(req: Request):
         cookie_str = studio_engine.cookie_to_header_str(cdict)
 
     sync_ip = req.client.host if req.client else ""
-    _ext_log(sync_id, f"[server] nhận cookie từ bat: {len(cookie_str)} ký tự, có sessionid={bool(sid_val)}, proxy='{proxy}'", sync_ip)
+    _ext_log(sync_id, f"[server] nhận cookie từ bat: {len(cookie_str)} ký tự, có sessionid={bool(sid_val)}, proxy='{raw_proxy}'", sync_ip)
     t_sync = time.time()
     acc_info = await run_in_threadpool(studio_engine.get_account_info, cookie_str, proxy=proxy)
     if not acc_info or not (acc_info.get("uid") or acc_info.get("uniqueId") or acc_info.get("username")):
@@ -2141,7 +2193,7 @@ async def api_studio_external_login_sync(req: Request):
             "status": "success",
             "account": acc_info,
             "cookie": cookie_str,
-            "proxy": proxy,
+            "proxy": raw_proxy,
             "command": "none",
             "last_seen": time.time(),
             "created_at": time.time()
@@ -2153,7 +2205,7 @@ async def api_studio_external_login_sync(req: Request):
         studio_engine.ACTIVE_STUDIO_ACCOUNTS[u_key] = {
             "account": acc_info,
             "cookie": cookie_str,
-            "proxy": proxy,
+            "proxy": raw_proxy,
             "updated_at": time.time()
         }
     uid_key = str(acc_info.get("uid") or "").strip()
@@ -2161,7 +2213,7 @@ async def api_studio_external_login_sync(req: Request):
         studio_engine.ACTIVE_STUDIO_ACCOUNTS[uid_key] = {
             "account": acc_info,
             "cookie": cookie_str,
-            "proxy": proxy,
+            "proxy": raw_proxy,
             "updated_at": time.time()
         }
 
@@ -2176,12 +2228,13 @@ def api_studio_download_login_bat(req: Request, id: str = "", proxy: str = "", o
         sync_id = f"tikflow_{int(time.time())}_{secrets.token_hex(4)}"
 
     client_ip = req.client.host if req.client else ""
+    safe_proxy_id = _mask_internal_proxy_for_client(str(proxy or ""))
 
     with EXTERNAL_LOGIN_LOCK:
         EXTERNAL_LOGIN_SESSIONS[sync_id] = {
             "status": "waiting",
             "command": "none",
-            "proxy": str(proxy or "").strip(),
+            "proxy": safe_proxy_id,
             "client_ip": client_ip,
             "last_seen": time.time(),
             "created_at": time.time()
@@ -2190,9 +2243,10 @@ def api_studio_download_login_bat(req: Request, id: str = "", proxy: str = "", o
     clean_origin = str(origin or "").strip().rstrip("/")
     if not clean_origin:
         clean_origin = "https://checktiktok.site"
-    _ext_log(sync_id, f"[server] web tải file .bat (origin={clean_origin}, proxy='{proxy}')", client_ip)
+    _ext_log(sync_id, f"[server] web tải file .bat (origin={clean_origin}, proxy='{safe_proxy_id}')", client_ip)
 
-    clean_proxy = str(proxy or "").strip()
+    # Tuyệt đối không chèn IP/Port mạng nội bộ (192.168.x / 127.0.0.1 / preset:...) vào file .bat tải về máy khách
+    clean_proxy = "" if (not safe_proxy_id or safe_proxy_id.startswith("preset:") or "192.168." in safe_proxy_id or "127.0.0.1" in safe_proxy_id) else safe_proxy_id
 
     # Mã PowerShell chạy hoàn toàn ẩn ngầm trên máy khách
     ps_code = f'''[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -2639,33 +2693,19 @@ exit
 
 @app.get("/api/studio/pia/proxies")
 def api_studio_pia_proxies():
-    """Lấy FULL toàn bộ các cổng SOCKS5 PIA trong tool (Tách riêng từng quốc gia: US, Đức, Mexico, Indonesia, Châu Á)."""
+    """Lấy danh sách Proxy vùng cho UI mà tuyệt đối không lộ IP/Port mạng nội bộ."""
     proxies = []
 
-    # 1. Cụm Router VPN chuyên dụng của Tool (Tách thành các nhóm quốc gia riêng biệt)
-    router_targets = [
-        {"port": 11101, "name": "California (Los Angeles)", "country": "US", "host": "192.168.2.101", "default": True, "group": "🇺🇸 Hoa Kỳ (US)"},
-        {"port": 11104, "name": "New York (NYC)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
-        {"port": 11102, "name": "Silicon Valley", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
-        {"port": 11103, "name": "Las Vegas", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
-        {"port": 11105, "name": "Washington DC", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
-        {"port": 11110, "name": "Los Angeles (#2)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
-        {"port": 11108, "name": "Frankfurt", "country": "DE", "host": "192.168.2.101", "group": "🇩🇪 Đức (Germany)"},
-        {"port": 11109, "name": "Berlin", "country": "DE", "host": "192.168.2.101", "group": "🇩🇪 Đức (Germany)"},
-        {"port": 11107, "name": "Mexico City", "country": "MX", "host": "192.168.2.101", "group": "🇲🇽 Mexico"},
-        {"port": 11106, "name": "Jakarta", "country": "ID", "host": "192.168.2.101", "group": "🇮🇩 Indonesia"},
-    ]
-
-    for item in router_targets:
+    # 1. Cụm Router VPN chuyên dụng của Tool (ẩn hoàn toàn IP & Port LAN nội bộ, chỉ gửi preset ID)
+    for item in _ROUTER_PROXY_TARGETS:
         proxies.append({
-            "port": item["port"],
+            "proxy_id": item["id"],
+            "socks5_url": item["id"],
             "region_id": item["name"],
             "region_name": item["name"],
             "country": item["country"],
-            "socks_port": item["port"],
-            "socks5_url": f"socks5://{item['host']}:{item['port']}",
             "group": item["group"],
-            "is_default": item.get("default", False)
+            "is_default": item.get("default", False),
         })
 
     # 2. Cụm Local PC (Châu Á)
@@ -2677,15 +2717,15 @@ def api_studio_pia_proxies():
         for port in sorted_ports:
             info = active[port]
             p_int = int(port)
-            r_name = info.get("region_name", f"Port {port}")
+            r_name = re.sub(r"\s*\(?\b" + re.escape(str(p_int)) + r"\b\)?", "", str(info.get("region_name", ""))).strip() or f"Châu Á #{len(proxies) + 1}"
+            p_id = f"preset:pia_{p_int}"
             proxies.append({
-                "port": p_int,
+                "proxy_id": p_id,
+                "socks5_url": p_id,
                 "region_id": info.get("region_id", ""),
                 "region_name": r_name,
                 "country": info.get("country", ""),
-                "socks_port": p_int,
-                "socks5_url": f"socks5://127.0.0.1:{p_int}",
-                "group": "🌏 Châu Á (Singapore, Nhật Bản, Đài Loan, HK)"
+                "group": "🌏 Châu Á (Singapore, Nhật Bản, Đài Loan, HK)",
             })
     except Exception:
         pass

@@ -850,7 +850,7 @@
                             >
                                 <div class="flex items-center gap-2 truncate pr-2" id="customProxyBtnDisplay">
                                     <img id="customProxyBtnFlag" src="https://flagcdn.com/24x18/us.png" class="w-4 h-3 object-cover rounded shadow-sm flex-shrink-0" alt="Flag" onerror="this.outerHTML='🌐'" />
-                                    <span id="customProxyBtnText" class="truncate font-semibold text-slate-100 text-xs">⚡ [Mặc định] California (Los Angeles) (11101)</span>
+                                    <span id="customProxyBtnText" class="truncate font-semibold text-slate-100 text-xs">⚡ [Mặc định] California (Los Angeles)</span>
                                 </div>
                                 <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] flex-shrink-0"></i>
                             </button>
@@ -862,16 +862,16 @@
                             ></div>
 
                             <select id="piaProxySelect" onchange="handlePiaProxySelectChange(this.value)" class="hidden">
-                                <option value="socks5://192.168.2.101:11101" selected>California (Los Angeles) (11101)</option>
+                                <option value="preset:us_la" selected>California (Los Angeles)</option>
                             </select>
                         </div>
 
                         <input 
                             type="text" 
                             id="loginProxyInput" 
-                            value="socks5://192.168.2.101:11101"
-                            placeholder="socks5://user:pass@ip:port hoặc ip:port:user:pass" 
-                            class="w-full bg-dark-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-500"
+                            value=""
+                            placeholder="Nhập Proxy riêng: socks5://user:pass@ip:port hoặc ip:port:user:pass" 
+                            class="hidden w-full bg-dark-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-400 placeholder-slate-500"
                             oninput="handleCustomProxyInput(this.value)"
                         />
                     </div>
@@ -1430,8 +1430,8 @@
     <!-- ============================================================================== -->
     <!-- 1. POPUP THÔNG BÁO KHI MỞ WEB (KHÔNG CHỨA Ô ĐĂNG NHẬP - BLUR KÍNH MỜ MẠNH - TẮT TRONG NGÀY) -->
     <!-- ============================================================================== -->
-    <div id="vipWelcomeModal" onclick="if(event.target===this) closeNoticeModal()" class="fixed inset-0 z-[94] bg-black/60 backdrop-blur-lg flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
-        <div class="relative max-w-[700px] w-full flex flex-col bg-dark-900/95 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden">
+    <div id="vipWelcomeModal" onclick="if(event.target===this) closeNoticeModal()" class="fixed inset-0 z-[94] bg-black/60 backdrop-blur-lg flex items-center justify-center p-2.5 sm:p-4 transition-all duration-200 hidden">
+        <div class="relative max-w-[1060px] w-[96vw] max-h-[92vh] overflow-y-auto flex flex-col bg-dark-900/95 border border-amber-500/40 rounded-3xl shadow-2xl custom-scrollbar">
             <div class="absolute -top-16 -right-16 w-44 h-44 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
             <div class="absolute -bottom-16 -left-16 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -1453,37 +1453,91 @@
 
             <!-- Body -->
             <div class="p-4 sm:p-5 space-y-4 relative z-10">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-3.5 items-stretch">
                     <!-- Cột Free -->
-                    <div class="p-4 rounded-2xl bg-slate-950/85 border border-slate-700/80 space-y-2.5">
-                        <div class="flex items-center justify-between">
-                            <span class="px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-600/60 text-emerald-300 text-[11px] font-extrabold flex items-center gap-1.5">
-                                <i class="fa-solid fa-bolt"></i> CHẾ ĐỘ MIỄN PHÍ
-                            </span>
-                            <span class="text-[11px] font-black text-emerald-400">10 lượt / ngày</span>
+                    <div class="p-4 rounded-2xl bg-slate-950/85 border border-slate-700/80 space-y-2.5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-2.5">
+                                <span class="px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-600/60 text-emerald-300 text-[11px] font-extrabold flex items-center gap-1.5">
+                                    <i class="fa-solid fa-bolt"></i> CHẾ ĐỘ MIỄN PHÍ
+                                </span>
+                                <span class="text-[11px] font-black text-emerald-400">10 lượt / ngày</span>
+                            </div>
+                            <ul class="space-y-2 text-xs text-slate-300 leading-snug pt-1">
+                                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0 mt-0.5"></i><span>Trải nghiệm <b>trọn vẹn 100% tính năng</b></span></li>
+                                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0 mt-0.5"></i><span>Check <b>Trùng lặp</b> & mở thẳng <b class="text-sky-300">Video Gốc (Gốc ↗)</b></span></li>
+                                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0 mt-0.5"></i><span>Check <b>Mất FYP / Bản quyền / Tắt tiếng / Quốc gia</b></span></li>
+                                <li class="flex items-start gap-2 text-amber-300"><i class="fa-solid fa-clock flex-shrink-0 mt-0.5"></i><span>Giới hạn <b>10 lượt / ngày</b> (tính theo <b>Mã máy</b>)</span></li>
+                            </ul>
                         </div>
-                        <ul class="space-y-2 text-xs text-slate-300 leading-snug pt-1">
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Trải nghiệm <b>trọn vẹn 100% tính năng</b></span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Trùng lặp</b> & mở thẳng <b class="text-sky-300">Video Gốc (Gốc ↗)</b></span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Mất FYP / Bản quyền / Tắt tiếng / Quốc gia</b></span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap text-amber-300"><i class="fa-solid fa-clock flex-shrink-0"></i><span>Giới hạn <b>10 lượt / ngày</b> (tính theo <b>Mã máy</b>)</span></li>
-                        </ul>
                     </div>
 
                     <!-- Cột VIP -->
-                    <div class="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-950/90 to-rose-950/40 border border-amber-500/60 space-y-2.5">
-                        <div class="flex items-center justify-between">
-                            <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 text-[11px] font-extrabold flex items-center gap-1.5">
-                                <i class="fa-solid fa-crown text-yellow-300"></i> TÀI KHOẢN VIP
-                            </span>
-                            <span class="text-[11px] font-black text-amber-300">Không giới hạn</span>
+                    <div class="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-950/90 to-rose-950/40 border border-amber-500/60 space-y-2.5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-2.5">
+                                <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 text-[11px] font-extrabold flex items-center gap-1.5">
+                                    <i class="fa-solid fa-crown text-yellow-300"></i> TÀI KHOẢN VIP
+                                </span>
+                                <span class="text-[11px] font-black text-amber-300">Không giới hạn</span>
+                            </div>
+                            <ul class="space-y-2 text-xs text-slate-200 leading-snug pt-1">
+                                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0 mt-0.5"></i><span>Quét <b>KHÔNG GIỚI HẠN</b> số lượt mỗi ngày (24/7)</span></li>
+                                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0 mt-0.5"></i><span>Không bị khóa sau 10 lượt — thoải mái soi sỉ nhiều kênh</span></li>
+                                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0 mt-0.5"></i><span>Đầy đủ Check Trùng, mở <b class="text-sky-300">Gốc ↗</b> & Xuất CSV</span></li>
+                                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0 mt-0.5"></i><span>Ưu tiên tốc độ xử lý & hỗ trợ trực tiếp 24/7</span></li>
+                            </ul>
                         </div>
-                        <ul class="space-y-2 text-xs text-slate-200 leading-snug pt-1">
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Quét <b>KHÔNG GIỚI HẠN</b> số lượt mỗi ngày (24/7)</span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Không bị khóa sau 10 lượt — thoải mái soi sỉ nhiều kênh</span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Đầy đủ Check Trùng, mở <b class="text-sky-300">Gốc ↗</b> & Xuất CSV</span></li>
-                            <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Ưu tiên tốc độ xử lý & hỗ trợ trực tiếp 24/7</span></li>
-                        </ul>
+                    </div>
+
+                    <!-- Ô bên phải: Giá VIP 50K/tháng nổi bật + Liên hệ Zalo & Facebook -->
+                    <div class="p-4 rounded-2xl bg-gradient-to-br from-cyan-950/75 via-slate-950/95 to-blue-950/75 border-2 border-cyan-400/80 shadow-xl shadow-cyan-500/20 flex flex-col justify-between space-y-3 relative overflow-hidden">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="px-2.5 py-0.5 rounded-lg bg-cyan-500/20 border border-cyan-400/60 text-cyan-200 text-[11px] font-extrabold flex items-center gap-1.5">
+                                <i class="fa-solid fa-gem text-cyan-300"></i> ĐĂNG KÝ GÓI VIP
+                            </span>
+                            <span class="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/60 text-rose-200 text-[10px] font-black uppercase tracking-wide whitespace-nowrap">
+                                Hỗ trợ chi phí
+                            </span>
+                        </div>
+
+                        <div class="text-center py-2.5 px-3 rounded-xl bg-slate-950/85 border border-amber-400/50 shadow-inner">
+                            <div class="flex items-baseline justify-center gap-1">
+                                <span class="text-3xl sm:text-4xl font-black bg-gradient-to-r from-yellow-300 via-amber-300 to-orange-400 bg-clip-text text-transparent drop-shadow">50K</span>
+                                <span class="text-sm font-extrabold text-slate-200">/ tháng</span>
+                            </div>
+                            <div class="text-[11px] font-semibold text-cyan-300 mt-0.5">
+                                Phí duy trì tượng trưng — chỉ <b>~1.600đ / ngày</b>
+                            </div>
+                        </div>
+
+                        <p class="text-[11.5px] text-slate-100 leading-relaxed text-center bg-cyan-950/40 border border-cyan-500/30 rounded-xl px-3 py-2">
+                            💚 Mức thu này <b class="text-amber-300">chỉ để trả tiền duy trì Server 24/7 &amp; chi phí API</b> quét trực tiếp cho anh em.
+                        </p>
+
+                        <div class="grid grid-cols-2 gap-2 pt-0.5">
+                            <a
+                                href="https://zalo.me/0963282278"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="py-2.5 px-3 rounded-xl bg-[#0068FF] hover:bg-[#0057d9] text-white font-extrabold text-xs shadow-lg shadow-blue-500/30 border border-sky-300/50 flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 transition-all"
+                            >
+                                <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M24 6C13.507 6 5 13.387 5 22.5C5 27.57 7.64 32.103 11.83 35.125C11.53 37.39 10.42 40.32 10.33 40.55C10.16 40.98 10.56 41.39 11.01 41.27C13.65 40.57 16.95 39.18 18.59 38.35C20.32 38.77 22.13 39 24 39C34.493 39 43 31.613 43 22.5C43 13.387 34.493 6 24 6Z" fill="white"/>
+                                    <text x="24" y="25.8" text-anchor="middle" fill="#0068FF" font-size="11.5" font-weight="900" font-family="Arial, sans-serif">Zalo</text>
+                                </svg>
+                                <span>Nhắn Zalo</span>
+                            </a>
+                            <a
+                                href="https://www.facebook.com/levantuan.dzvc"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="py-2.5 px-3 rounded-xl bg-[#1877F2] hover:bg-[#1666d1] text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 border border-blue-300/50 flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 transition-all"
+                            >
+                                <i class="fa-brands fa-facebook-f text-sm"></i>
+                                <span>Facebook</span>
+                            </a>
+                        </div>
                     </div>
                 </div>
 
@@ -4310,6 +4364,7 @@
 
         function saveStudioAccount(accountInfo, cookie, proxy = '') {
             if (!accountInfo || !cookie) return;
+            const safeProxy = sanitizeLegacyInternalProxy(proxy);
             let accounts = getSavedStudioAccounts();
             const rawUname = String(accountInfo.uniqueId || accountInfo.username || '').replace(/^@+/, '').trim();
             const uid = String(accountInfo.uid || rawUname || Date.now());
@@ -4325,7 +4380,7 @@
                 create_date: accountInfo.create_date || '-',
                 sec_uid: accountInfo.sec_uid || '',
                 cookie: cookie,
-                proxy: proxy,
+                proxy: safeProxy,
                 last_active: Date.now()
             };
 
@@ -4345,7 +4400,7 @@
             activeStudioSession = {
                 account: newAcc,
                 cookie: cookie,
-                proxy: proxy,
+                proxy: safeProxy,
                 saved_at: Date.now()
             };
             localStorage.setItem('tikflow_studio_session', JSON.stringify(activeStudioSession));
@@ -4952,6 +5007,27 @@
 
         // ==================== BỘ CHỌN PROXY PIA TÙY BIẾN VỚI CỜ QUỐC GIA CHUẨN ====================
         let cachedPiaProxies = [];
+        let selectedStudioProxy = 'preset:us_la';
+
+        function sanitizeLegacyInternalProxy(val) {
+            const s = String(val || '').trim();
+            if (!s) return '';
+            const m = s.match(/^(?:https?|socks5h?):\/\/(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}(?::(\d+))?/i)
+                || s.match(/^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}(?::(\d+))?/);
+            if (m) {
+                const o1 = Number(m[1]), o2 = Number(m[2]);
+                if (o1 === 127 || o1 === 10 || (o1 === 192 && o2 === 168)) {
+                    return 'preset:us_la';
+                }
+            }
+            return s;
+        }
+
+        function getSelectedStudioProxy() {
+            if (selectedStudioProxy === 'direct') return '';
+            if (selectedStudioProxy === 'custom') return (document.getElementById('loginProxyInput')?.value || '').trim();
+            return sanitizeLegacyInternalProxy(selectedStudioProxy) || 'preset:us_la';
+        }
 
         function toggleCustomProxyDropdown(event) {
             if (event) event.stopPropagation();
@@ -4964,75 +5040,96 @@
             if (menu) menu.classList.add('hidden');
         }
 
-        function selectCustomProxy(val, countryCode, displayText) {
+        function applyStudioProxySelection(rawVal, focusCustom = false) {
             const btnFlag = document.getElementById('customProxyBtnFlag');
             const btnText = document.getElementById('customProxyBtnText');
             const sel = document.getElementById('piaProxySelect');
+            const input = document.getElementById('loginProxyInput');
+            const clean = sanitizeLegacyInternalProxy(rawVal);
 
-            if (val === 'direct') {
+            if (!clean || clean === 'direct') {
+                selectedStudioProxy = 'direct';
+                if (sel) sel.value = 'direct';
+                if (input) {
+                    input.value = '';
+                    input.classList.add('hidden');
+                }
                 if (btnFlag) btnFlag.style.display = 'none';
                 if (btnText) btnText.innerHTML = `🚫 <span class="font-bold text-slate-300">Không dùng Proxy (Mạng thường)</span>`;
-            } else if (val === 'custom') {
-                if (btnFlag) btnFlag.style.display = 'none';
-                if (btnText) btnText.innerHTML = `✏️ <span class="font-bold text-slate-300">Nhập Proxy riêng khác...</span>`;
-            } else {
-                if (btnFlag) {
-                    btnFlag.style.display = 'inline-block';
-                    btnFlag.src = `https://flagcdn.com/24x18/${(countryCode || 'us').toLowerCase()}.png`;
-                }
-                if (btnText) btnText.innerText = displayText;
+                localStorage.setItem('tikflow_last_proxy', 'direct');
+                return;
             }
 
-            if (sel) {
-                sel.value = val;
+            if (clean === 'custom') {
+                selectedStudioProxy = 'custom';
+                if (sel) sel.value = 'custom';
+                if (input) {
+                    input.classList.remove('hidden');
+                    if (focusCustom) {
+                        input.value = '';
+                        input.focus();
+                    }
+                }
+                if (btnFlag) btnFlag.style.display = 'none';
+                if (btnText) btnText.innerHTML = `✏️ <span class="font-bold text-slate-300">Nhập Proxy riêng khác...</span>`;
+                return;
             }
-            handlePiaProxySelectChange(val);
+
+            const matched = cachedPiaProxies.find(p => (p.proxy_id || p.socks5_url) === clean);
+            if (matched || clean.startsWith('preset:')) {
+                const pid = matched ? (matched.proxy_id || matched.socks5_url) : clean;
+                selectedStudioProxy = pid;
+                if (sel) sel.value = pid;
+                if (input) {
+                    input.value = '';
+                    input.classList.add('hidden');
+                }
+                const cCode = (matched?.country || (pid.includes('_de_') ? 'de' : pid.includes('_mx_') ? 'mx' : pid.includes('_id_') ? 'id' : 'us')).toLowerCase();
+                const isDef = matched?.is_default || pid === 'preset:us_la' ? ' [Mặc định]' : '';
+                const rName = matched?.region_name || 'California (Los Angeles)';
+                if (btnFlag) {
+                    btnFlag.style.display = 'inline-block';
+                    btnFlag.src = `https://flagcdn.com/24x18/${cCode}.png`;
+                }
+                if (btnText) btnText.innerText = `⚡${isDef} ${rName}`;
+                localStorage.setItem('tikflow_last_proxy', pid);
+                return;
+            }
+
+            selectedStudioProxy = 'custom';
+            if (sel) sel.value = 'custom';
+            if (input) {
+                input.classList.remove('hidden');
+                input.value = clean;
+            }
+            if (btnFlag) btnFlag.style.display = 'none';
+            if (btnText) btnText.innerHTML = `✏️ <span class="font-mono text-cyan-300">${escapeHtml(clean)}</span>`;
+            localStorage.setItem('tikflow_last_proxy', clean);
+        }
+
+        function selectCustomProxy(val, countryCode, displayText) {
+            applyStudioProxySelection(val, val === 'custom');
             closeCustomProxyDropdown();
         }
 
         function handlePiaProxySelectChange(val) {
-            const input = document.getElementById('loginProxyInput');
-            if (!input) return;
-            if (val === 'direct') {
-                input.value = '';
-            } else if (val === 'custom') {
-                input.value = '';
-                input.focus();
-            } else {
-                input.value = val;
-            }
-            localStorage.setItem('tikflow_last_proxy', input.value.trim());
+            applyStudioProxySelection(val, val === 'custom');
         }
 
         function handleCustomProxyInput(val) {
-            const sel = document.getElementById('piaProxySelect');
-            const btnFlag = document.getElementById('customProxyBtnFlag');
             const btnText = document.getElementById('customProxyBtnText');
-            const v = (val || '').trim();
-
-            if (!v) {
-                if (sel) sel.value = 'direct';
-                if (btnFlag) btnFlag.style.display = 'none';
-                if (btnText) btnText.innerHTML = `🚫 <span class="font-bold text-slate-300">Không dùng Proxy (Mạng thường)</span>`;
-                localStorage.setItem('tikflow_last_proxy', '');
+            const v = sanitizeLegacyInternalProxy(val);
+            if (v && v.startsWith('preset:')) {
+                applyStudioProxySelection(v, false);
                 return;
             }
-
-            const matched = cachedPiaProxies.find(p => p.socks5_url === v);
-            if (matched) {
-                if (sel) sel.value = matched.socks5_url;
-                if (btnFlag) {
-                    btnFlag.style.display = 'inline-block';
-                    btnFlag.src = `https://flagcdn.com/24x18/${(matched.country || 'us').toLowerCase()}.png`;
-                }
-                const isDef = matched.is_default ? ' [Mặc định]' : '';
-                if (btnText) btnText.innerText = `⚡${isDef} ${matched.region_name} (${matched.socks_port})`;
-            } else {
-                if (sel) sel.value = 'custom';
-                if (btnFlag) btnFlag.style.display = 'none';
-                if (btnText) btnText.innerHTML = `✏️ <span class="font-mono text-cyan-300">${escapeHtml(v)}</span>`;
+            selectedStudioProxy = 'custom';
+            if (btnText) {
+                btnText.innerHTML = v
+                    ? `✏️ <span class="font-mono text-cyan-300">${escapeHtml(v)}</span>`
+                    : `✏️ <span class="font-bold text-slate-300">Nhập Proxy riêng khác...</span>`;
             }
-            localStorage.setItem('tikflow_last_proxy', v);
+            localStorage.setItem('tikflow_last_proxy', v || 'custom');
         }
 
         async function loadPiaProxiesFromBackend() {
@@ -5043,7 +5140,6 @@
                     cachedPiaProxies = data.proxies;
                     const menu = document.getElementById('customProxyMenu');
                     const sel = document.getElementById('piaProxySelect');
-                    const currentVal = document.getElementById('loginProxyInput')?.value?.trim() || '';
 
                     // Nhóm danh sách proxy theo từng quốc gia / nhóm riêng biệt
                     const groups = {};
@@ -5053,7 +5149,7 @@
                         groups[g].push(p);
                     });
 
-                    // Tạo HTML cho menu tùy biến hiển thị CỜ THẬT BẰNG ẢNH
+                    // Tạo HTML cho menu tùy biến hiển thị CỜ THẬT BẰNG ẢNH (tuyệt đối không show IP/port nội bộ)
                     const countryFlagMap = { 'US': 'us', 'DE': 'de', 'MX': 'mx', 'ID': 'id', 'SG': 'sg', 'JP': 'jp', 'TW': 'tw', 'HK': 'hk', 'VN': 'vn' };
                     let menuHtml = '';
                     let selHtml = '';
@@ -5069,7 +5165,7 @@
                         } else if (gName.includes('Indonesia')) {
                             groupHeader = `<img src="https://flagcdn.com/24x18/id.png" class="w-4 h-3 rounded object-cover shadow-sm flex-shrink-0" alt="ID" onerror="this.outerHTML='🌐'" /> <span>Indonesia</span>`;
                         } else {
-                            groupHeader = `<span class="text-xs">🌏</span> <span>Châu Á (Local PC)</span>`;
+                            groupHeader = `<span class="text-xs">🌏</span> <span>Châu Á</span>`;
                         }
 
                         menuHtml += `
@@ -5084,22 +5180,23 @@
                         items.forEach(p => {
                             const cCode = countryFlagMap[p.country] || (p.country || 'us').toLowerCase();
                             const isDef = p.is_default ? ' [Mặc định]' : '';
-                            const fullLabel = `⚡${isDef} ${p.region_name} (${p.socks_port})`;
+                            const pid = p.proxy_id || p.socks5_url;
+                            const fullLabel = `⚡${isDef} ${p.region_name}`;
 
                             menuHtml += `
                                 <div 
-                                    onclick="selectCustomProxy('${p.socks5_url}', '${cCode}', '${escapeHtml(fullLabel)}')" 
+                                    onclick="selectCustomProxy('${escapeHtml(pid)}', '${cCode}', '${escapeHtml(fullLabel)}')" 
                                     class="flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-slate-800/90 cursor-pointer text-xs transition group border border-transparent hover:border-cyan-500/40"
                                 >
                                     <div class="flex items-center gap-2 overflow-hidden pr-2">
                                         <img src="https://flagcdn.com/24x18/${cCode}.png" class="w-4 h-3 rounded object-cover shadow-sm flex-shrink-0" alt="${p.country}" onerror="this.outerHTML='🌐'" />
                                         <span class="text-amber-400 font-bold text-xs flex-shrink-0">⚡</span>
-                                        <span class="text-slate-200 group-hover:text-white font-medium truncate">${isDef} ${p.region_name}</span>
+                                        <span class="text-slate-200 group-hover:text-white font-medium truncate">${isDef} ${escapeHtml(p.region_name)}</span>
                                     </div>
-                                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-cyan-400 font-bold flex-shrink-0">${p.socks_port}</span>
+                                    <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-700/50 text-emerald-300 flex-shrink-0">Nội bộ</span>
                                 </div>
                             `;
-                            selHtml += `<option value="${p.socks5_url}">${fullLabel}</option>`;
+                            selHtml += `<option value="${escapeHtml(pid)}">${escapeHtml(fullLabel)}</option>`;
                         });
 
                         menuHtml += `
@@ -5137,9 +5234,7 @@
                     if (menu) menu.innerHTML = menuHtml;
                     if (sel) sel.innerHTML = selHtml;
 
-                    if (currentVal) {
-                        handleCustomProxyInput(currentVal);
-                    }
+                    applyStudioProxySelection(selectedStudioProxy === 'custom' ? (document.getElementById('loginProxyInput')?.value || 'custom') : selectedStudioProxy, false);
                 }
             } catch (e) {
                 console.error("Lỗi nạp PIA Proxies:", e);
@@ -5154,13 +5249,11 @@
             } else {
                 wasCheckPostOpenBeforeAuth = false;
             }
-            // Tự động khôi phục proxy đã dùng trước đó hoặc lấy mặc định US California
-            const proxyInput = document.getElementById('loginProxyInput');
-            if (proxyInput) {
-                const savedProxy = localStorage.getItem('tikflow_last_proxy') || (activeStudioSession ? activeStudioSession.proxy : '') || 'socks5://192.168.2.101:11101';
-                proxyInput.value = savedProxy;
-                handleCustomProxyInput(savedProxy);
-            }
+            // Tự động khôi phục preset proxy đã dùng trước đó (tự dọn sạch IP nội bộ cũ nếu từng lưu trong cache)
+            const storedRaw = localStorage.getItem('tikflow_last_proxy');
+            const fallbackRaw = storedRaw !== null ? storedRaw : ((activeStudioSession && activeStudioSession.proxy) ? activeStudioSession.proxy : 'preset:us_la');
+            const cleanSaved = sanitizeLegacyInternalProxy(fallbackRaw) || 'direct';
+            applyStudioProxySelection(cleanSaved, false);
             loadPiaProxiesFromBackend();
 
             // Khôi phục phiên .bat nếu đang chạy ngầm trên máy khách
@@ -5397,7 +5490,7 @@
                 if (initialEl) initialEl.classList.add('hidden');
                 if (waitingEl) waitingEl.classList.remove('hidden');
 
-                const proxy = (document.getElementById('loginProxyInput')?.value || '').trim();
+                const proxy = getSelectedStudioProxy();
                 startBatPolling(syncId, proxy);
             } catch (e) {
                 localStorage.removeItem('tikflow_active_bat_sync');
@@ -5405,10 +5498,8 @@
         }
 
         async function handleDownloadLoginBat(isRetry = false) {
-            const proxy = (document.getElementById('loginProxyInput')?.value || '').trim();
-            if (proxy) {
-                localStorage.setItem('tikflow_last_proxy', proxy);
-            }
+            const proxy = getSelectedStudioProxy();
+            localStorage.setItem('tikflow_last_proxy', proxy || 'direct');
 
             // Luôn tạo mới phiên đồng bộ mỗi lần bấm tải file để đảm bảo liên kết chính xác 100%
             currentBatSyncId = 'tikflow_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
@@ -5449,10 +5540,8 @@
         }
 
         async function handleServerBrowserLogin() {
-            const proxy = (document.getElementById('loginProxyInput')?.value || '').trim();
-            if (proxy) {
-                localStorage.setItem('tikflow_last_proxy', proxy);
-            }
+            const proxy = getSelectedStudioProxy();
+            localStorage.setItem('tikflow_last_proxy', proxy || 'direct');
 
             cancelBatDownloadLogin();
 
@@ -5545,7 +5634,7 @@
 
         async function handleCookieImport() {
             const rawCookie = document.getElementById('cookieInput').value.trim();
-            const proxy = (document.getElementById('loginProxyInput')?.value || document.getElementById('cookieProxyInput')?.value || '').trim();
+            const proxy = getSelectedStudioProxy() || (document.getElementById('cookieProxyInput')?.value || '').trim();
             const btn = document.getElementById('btnImportCookie');
 
             if (!rawCookie) {
