@@ -835,6 +835,9 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
         au_obj = aw.get("author") if isinstance(aw.get("author"), dict) else {}
         vid_obj = aw.get("video") if isinstance(aw.get("video"), dict) else {}
         au_uid = str(au_obj.get("uid") or "").strip()
+        au_reg = normalize_country_code(au_obj.get("region") or au_obj.get("account_region") or "")
+        if au_reg in ("NONE", "AUTO", "EU") or len(au_reg) != 2:
+            au_reg = ""
         dur_ms = int(vid_obj.get("duration") or 0)
         d_size = int(((vid_obj.get("play_addr") or {}).get("data_size")) or 0)
         qual_lbl = _extract_aweme_quality_label(vid_obj)
@@ -844,6 +847,7 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
                 cache_ref[aid] = {
                     "group_id": gid,
                     "region": reg,
+                    "author_region": au_reg,
                     "is_nff_or_nr": nff,
                     "author_uid": au_uid,
                     "dur_ms": dur_ms,
@@ -986,6 +990,9 @@ def sync_items_tikhub_groupid(
             c_reg = normalize_country_code(c_entry.get("region"))
             if len(c_reg) == 2 and c_reg not in ("EU", "XO"):
                 it["region"] = c_reg
+            c_au_reg = normalize_country_code(c_entry.get("author_region") or "")
+            if len(c_au_reg) == 2 and c_au_reg not in ("NONE", "AUTO", "EU", "XO"):
+                it["author_region"] = c_au_reg
             if c_entry.get("is_nff_or_nr") is True:
                 it["is_nff_or_nr"] = True
             if c_entry.get("quality") and not it.get("quality"):
@@ -1033,6 +1040,10 @@ def sync_items_tikhub_groupid(
         reg = normalize_country_code(aw.get("region"))
         if len(reg) == 2:
             it["region"] = reg
+        aw_au = aw.get("author") if isinstance(aw.get("author"), dict) else {}
+        au_reg = normalize_country_code(aw_au.get("region") or aw_au.get("account_region") or "")
+        if len(au_reg) == 2 and au_reg not in ("NONE", "AUTO", "EU", "XO"):
+            it["author_region"] = au_reg
         if aw.get("is_nff_or_nr") is True:
             it["is_nff_or_nr"] = True
         aw_vid = aw.get("video") if isinstance(aw.get("video"), dict) else {}
@@ -2879,14 +2890,57 @@ def fetch_channel_info_and_posts(
 
     if video_list and not is_self_account:
         from collections import Counter
-        reg_counter = Counter(v.get("region") for v in video_list if v.get("region") and v.get("region") not in ("NONE", "AUTO", "EU"))
-        if reg_counter:
-            top_reg, _ = reg_counter.most_common(1)[0]
-            if top_reg and top_reg != channel_info.get("region"):
-                channel_info["region"] = top_reg
-                reg_disp = format_full_country_display(top_reg)
-                channel_info["region_display"] = reg_disp
-                check_user_info["country"] = reg_disp
+        final_acc_reg = ""
+
+        # Ưu tiên 1: Lấy Quốc gia gốc của chính tài khoản (author.region từ TikTok Mobile API)
+        au_regs = []
+        for it in (raw_items or []):
+            if not isinstance(it, dict):
+                continue
+            it_au = it.get("author") if isinstance(it.get("author"), dict) else {}
+            r_cand = normalize_country_code(it.get("author_region") or it_au.get("region") or it_au.get("account_region") or "")
+            if len(r_cand) == 2 and r_cand not in ("NONE", "AUTO", "EU", "XO"):
+                au_regs.append(r_cand)
+        if au_regs:
+            final_acc_reg = Counter(au_regs).most_common(1)[0][0]
+
+        # Ưu tiên 2: Nếu cache cũ chưa lưu author_region, kiểm tra cụm lưu trữ Project Texas độc quyền Mỹ (tos-useast8)
+        if not final_acc_reg:
+            has_useast8 = False
+            for v_it in video_list:
+                if "tos-useast8" in str(v_it.get("cover_url") or "").lower():
+                    has_useast8 = True
+                    break
+            if not has_useast8:
+                for it in (raw_items or []):
+                    if isinstance(it, dict):
+                        v_sub = it.get("video") if isinstance(it.get("video"), dict) else {}
+                        if "tos-useast8" in f"{v_sub.get('cover', '')} {v_sub.get('playAddr', '')} {it.get('cover_url', '')}".lower():
+                            has_useast8 = True
+                            break
+            if has_useast8:
+                final_acc_reg = "US"
+                cache_dirty_reg = False
+                for v_it in video_list:
+                    aid_k = str(v_it.get("aweme_id") or "").strip()
+                    if aid_k and isinstance(p_gid_cache_ref.get(aid_k), dict) and not p_gid_cache_ref[aid_k].get("author_region"):
+                        with _GROUPID_CACHE_LOCK:
+                            p_gid_cache_ref[aid_k]["author_region"] = "US"
+                        cache_dirty_reg = True
+                if cache_dirty_reg:
+                    _save_persistent_groupid_cache()
+
+        # Ưu tiên 3: Dự phòng theo đa số Quốc gia IP của các video
+        if not final_acc_reg:
+            reg_counter = Counter(v.get("region") for v in video_list if v.get("region") and v.get("region") not in ("NONE", "AUTO", "EU"))
+            if reg_counter:
+                final_acc_reg, _ = reg_counter.most_common(1)[0]
+
+        if final_acc_reg and final_acc_reg != channel_info.get("region"):
+            channel_info["region"] = final_acc_reg
+        reg_disp = format_full_country_display(channel_info.get("region") or "US")
+        channel_info["region_display"] = reg_disp
+        check_user_info["country"] = reg_disp
 
     ch_vids = int(channel_info.get("videoCount") or 0)
     video_notice = ""
