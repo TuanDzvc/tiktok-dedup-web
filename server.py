@@ -525,6 +525,8 @@ def _record_and_check_device_unlocked(
     prev = devs.get(dev_id) if isinstance(devs.get(dev_id), dict) else {}
     uname = str(u_rec.get("username") or "").strip().lower()
     is_super_admin = str(u_rec.get("role") or "").lower() == "admin"
+    max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else _default_max_devices_for_user(uname))
+    active_ids = [k for k, v in devs.items() if isinstance(v, dict) and not v.get("blocked")]
 
     # Kiểm tra danh sách mã máy bị Admin khóa cứng hoặc bị khóa trên tài khoản này (miễn trừ blocked_map toàn cục cho Super Admin)
     if (not is_super_admin and dev_id in blocked_map) or bool(prev.get("blocked")):
@@ -539,12 +541,12 @@ def _record_and_check_device_unlocked(
         u_rec["updated_at"] = now_ts
         if dev_id in blocked_map:
             return f"⛔ Mã máy {dev_id} đã bị Quản trị viên khóa truy cập!"
+        if max_devs == 1 and active_ids:
+            return f"⛔ Tài khoản chỉ dùng 1 máy ({active_ids[0]}) để tránh share tài khoản. Nếu muốn đăng nhập ở máy khác vui lòng liên hệ Admin!"
         return f"⛔ Mã máy {dev_id} bị từ chối đăng nhập (Chống share acc)!"
 
     # Giới hạn số lượng mã máy: admin & tuandzvcc = 10 máy, tất cả tài khoản khác mặc định = 1 mã máy cố định (đổi IP trên cùng mã máy vẫn hợp lệ)
-    max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else _default_max_devices_for_user(uname))
     if dev_id not in devs and max_devs > 0:
-        active_ids = [k for k, v in devs.items() if isinstance(v, dict) and not v.get("blocked")]
         if len(active_ids) >= max_devs:
             devs[dev_id] = {
                 "id": dev_id,
@@ -556,8 +558,8 @@ def _record_and_check_device_unlocked(
             }
             u_rec["updated_at"] = now_ts
             if max_devs == 1:
-                return f"⛔ Tài khoản chỉ dùng 1 máy ({active_ids[0]}), chặn máy {dev_id}!"
-            return f"⛔ Đã đủ {max_devs} máy tối đa, chặn máy mới ({dev_id})!"
+                return f"⛔ Tài khoản chỉ dùng 1 máy ({active_ids[0]}) để tránh share tài khoản. Nếu muốn đăng nhập ở máy khác vui lòng liên hệ Admin!"
+            return f"⛔ Đã đủ {max_devs} máy tối đa để tránh share tài khoản. Nếu muốn đăng nhập ở máy khác vui lòng liên hệ Admin!"
 
     devs[dev_id] = {
         "id": dev_id,
