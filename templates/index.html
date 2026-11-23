@@ -1766,20 +1766,68 @@
                     </div>
                 </div>
 
-                <!-- Đổi mật khẩu cá nhân -->
-                <form onsubmit="submitChangeMyVipPassword(event); return false;" class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-3">
-                    <div class="text-xs font-extrabold text-amber-300 flex items-center gap-1.5">
-                        <i class="fa-solid fa-key"></i> Đổi Mật Khẩu Tài Khoản Đang Đăng Nhập
+                <!-- Khối thông tin + nút Đổi mật khẩu dành riêng cho tài khoản khách (không phải Admin) -->
+                <div id="nonAdminSelfAccountCard" class="hidden p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300">
+                            <i class="fa-solid fa-user-shield"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-extrabold text-white">Tài khoản đang đăng nhập: <span id="selfCardUsername" class="font-mono text-cyan-300">—</span></div>
+                            <div class="text-[11px] text-slate-400">Bấm nút bên cạnh để mở bảng đổi mật khẩu mới riêng tư</div>
+                        </div>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        <input type="password" id="chgOldPass" placeholder="Mật khẩu hiện tại..." required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400" />
-                        <input type="password" id="chgNewPass" minlength="6" placeholder="Mật khẩu mới (từ 6 ký tự)..." required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400" />
-                        <button type="submit" class="py-2 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition">
-                            Cập Nhật Mật Khẩu
-                        </button>
-                    </div>
-                </form>
+                    <button type="button" onclick="openChangePasswordModal(currentVipUser ? currentVipUser.username : '', true)" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
+                        <i class="fa-solid fa-key"></i> Đổi Mật Khẩu
+                    </button>
+                </div>
             </div>
+        </div>
+    </div>
+
+    <!-- ============================================================================== -->
+    <!-- 4. POPUP RIÊNG ĐỔI MẬT KHẨU TÀI KHOẢN (MỞ TỪ NÚT "ĐỔI MK" Ở CỘT THAO TÁC) -->
+    <!-- ============================================================================== -->
+    <div id="vipChangePasswordModal" onclick="if(event.target===this) closeChangePasswordModal()" class="fixed inset-0 z-[98] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-200 hidden">
+        <div class="relative max-w-md w-full bg-dark-900 border border-amber-500/50 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300">
+                        <i class="fa-solid fa-key"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-extrabold text-white">Đổi Mật Khẩu Tài Khoản</h3>
+                        <p class="text-[11px] text-slate-400">Tài khoản: <b id="chgModalTargetUser" class="font-mono text-cyan-300">—</b></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeChangePasswordModal()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition" title="Đóng">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+
+            <form onsubmit="submitChangeMyVipPassword(event); return false;" class="space-y-3">
+                <div id="chgOldPassWrap" class="space-y-1">
+                    <label class="text-[11px] font-bold text-slate-300 block">Mật khẩu hiện tại</label>
+                    <input type="password" id="chgOldPass" placeholder="Nhập mật khẩu hiện tại..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400" />
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold text-slate-300 block">Mật khẩu mới (từ 6 ký tự)</label>
+                    <input type="password" id="chgNewPass" minlength="6" placeholder="Nhập mật khẩu mới..." required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400" />
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold text-slate-300 block">Nhập lại mật khẩu mới</label>
+                    <input type="password" id="chgConfirmPass" minlength="6" placeholder="Nhập lại mật khẩu mới lần nữa..." required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400" />
+                </div>
+                <p id="chgModalError" class="hidden text-xs font-bold text-rose-400 bg-rose-950/60 border border-rose-700/60 rounded-xl px-3 py-2"></p>
+                <div class="grid grid-cols-2 gap-2.5 pt-2">
+                    <button type="button" onclick="closeChangePasswordModal()" class="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition">
+                        Hủy bỏ
+                    </button>
+                    <button type="submit" id="btnSubmitChangePwd" class="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-extrabold text-xs transition shadow-lg shadow-amber-500/25 flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-floppy-disk"></i> Lưu Mật Khẩu Mới
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -2364,13 +2412,18 @@
                     balCard.classList.add('hidden');
                 }
             }
+            const nonAdminCard = document.getElementById('nonAdminSelfAccountCard');
+            const selfCardName = document.getElementById('selfCardUsername');
             if (admSec) {
                 if (currentVipUser.role === 'admin') {
                     admSec.classList.remove('hidden');
+                    if (nonAdminCard) nonAdminCard.classList.add('hidden');
                     loadVipUsersList();
                     loadGoogleSheetConfigState();
                 } else {
                     admSec.classList.add('hidden');
+                    if (nonAdminCard) nonAdminCard.classList.remove('hidden');
+                    if (selfCardName) selfCardName.innerText = currentVipUser.username || '—';
                 }
             }
             m?.classList.remove('hidden');
@@ -2404,10 +2457,14 @@
                         ? '<span class="text-white font-semibold">—</span>'
                         : (u.expires_at > 0 ? `<span class="text-white font-semibold">${new Date(u.expires_at * 1000).toLocaleDateString('vi-VN')}</span>` : '<span class="text-emerald-400 font-bold">Vĩnh viễn</span>');
                     const actionsHtml = isSelf
-                        ? '<span class="inline-block px-3 py-1 rounded-lg bg-slate-800 border border-slate-600 text-xs text-white font-bold whitespace-nowrap">Chủ hệ thống</span>'
+                        ? `<div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                            <span class="inline-block px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-600 text-xs text-white font-bold">Chủ hệ thống</span>
+                            <button type="button" onclick="openChangePasswordModal('${escapeHtml(u.username)}', true)" class="px-2.5 py-1 rounded-lg bg-amber-950/90 hover:bg-amber-800 text-amber-300 border border-amber-500/60 font-bold transition inline-flex items-center gap-1" title="Đổi mật khẩu tài khoản này"><i class="fa-solid fa-key text-[10px]"></i> Đổi MK</button>
+                        </div>`
                         : `<div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
                             <button type="button" onclick="quickSetVipRole('${escapeHtml(u.username)}', 'vip', 30)" class="px-2.5 py-1 rounded-lg bg-emerald-950/90 hover:bg-emerald-800 text-emerald-300 border border-emerald-600/60 font-bold transition" title="Kích hoạt VIP 30 ngày">+VIP 30N</button>
                             <button type="button" onclick="quickSetVipRole('${escapeHtml(u.username)}', 'vip', 0)" class="px-2.5 py-1 rounded-lg bg-amber-950/90 hover:bg-amber-800 text-amber-300 border border-amber-600/60 font-bold transition" title="Kích hoạt VIP Vĩnh viễn">Vĩnh viễn</button>
+                            <button type="button" onclick="openChangePasswordModal('${escapeHtml(u.username)}', false)" class="px-2.5 py-1 rounded-lg bg-sky-950/90 hover:bg-sky-800 text-sky-300 border border-sky-500/60 font-bold transition inline-flex items-center gap-1" title="Đặt mật khẩu mới cho tài khoản này"><i class="fa-solid fa-key text-[10px]"></i> Đổi MK</button>
                             ${u.is_vip ? `<button type="button" onclick="quickSetVipRole('${escapeHtml(u.username)}', 'member', 0)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-500 font-bold transition" title="Hạ về tài khoản Thường (Free)">Khóa VIP</button>` : ''}
                             <button type="button" onclick="deleteVipUser('${escapeHtml(u.username)}')" class="px-2.5 py-1 rounded-lg bg-rose-950/90 hover:bg-rose-800 text-rose-200 border border-rose-600/70 font-bold transition" title="Xóa tài khoản">Xóa</button>
                         </div>`;
@@ -2567,30 +2624,111 @@
             } catch (err) {}
         }
 
+        let _chgPwdState = { username: '', isSelf: true };
+
+        function openChangePasswordModal(targetUser, isSelf = false) {
+            const modal = document.getElementById('vipChangePasswordModal');
+            const lblUser = document.getElementById('chgModalTargetUser');
+            const oldWrap = document.getElementById('chgOldPassWrap');
+            const oldIn = document.getElementById('chgOldPass');
+            const newIn = document.getElementById('chgNewPass');
+            const cfmIn = document.getElementById('chgConfirmPass');
+            const errEl = document.getElementById('chgModalError');
+
+            const uname = String(targetUser || (currentVipUser && currentVipUser.username) || '').trim();
+            _chgPwdState = { username: uname, isSelf: Boolean(isSelf) };
+
+            if (lblUser) lblUser.innerText = uname || '—';
+            if (oldIn) oldIn.value = '';
+            if (newIn) newIn.value = '';
+            if (cfmIn) cfmIn.value = '';
+            if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+            if (oldWrap) {
+                if (isSelf) {
+                    oldWrap.classList.remove('hidden');
+                    if (oldIn) oldIn.required = true;
+                } else {
+                    oldWrap.classList.add('hidden');
+                    if (oldIn) oldIn.required = false;
+                }
+            }
+            modal?.classList.remove('hidden');
+            setTimeout(() => (isSelf ? oldIn : newIn)?.focus(), 60);
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('vipChangePasswordModal')?.classList.add('hidden');
+        }
+
         async function submitChangeMyVipPassword(e) {
             if (e) e.preventDefault();
             const old_password = document.getElementById('chgOldPass')?.value || '';
             const new_password = document.getElementById('chgNewPass')?.value || '';
+            const confirm_password = document.getElementById('chgConfirmPass')?.value || '';
+            const errEl = document.getElementById('chgModalError');
+            const btn = document.getElementById('btnSubmitChangePwd');
+
+            const showModalErr = (msg) => {
+                if (errEl) {
+                    errEl.innerText = msg;
+                    errEl.classList.remove('hidden');
+                }
+                showToast('❌ ' + msg);
+            };
+
+            if (errEl) errEl.classList.add('hidden');
+            if (_chgPwdState.isSelf && !old_password) {
+                showModalErr('Vui lòng nhập mật khẩu hiện tại!');
+                return;
+            }
+            if (new_password.length < 6) {
+                showModalErr('Mật khẩu mới phải từ 6 ký tự trở lên!');
+                return;
+            }
+            if (new_password !== confirm_password) {
+                showModalErr('Mật khẩu mới nhập lại không khớp!');
+                return;
+            }
+
+            if (btn) btn.disabled = true;
             try {
-                const resp = await fetch('/api/vip/change-password', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + getVipToken()
-                    },
-                    body: JSON.stringify({ old_password, new_password })
-                });
+                let resp;
+                if (_chgPwdState.isSelf) {
+                    resp = await fetch('/api/vip/change-password', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + getVipToken()
+                        },
+                        body: JSON.stringify({ old_password, new_password })
+                    });
+                } else {
+                    resp = await fetch('/api/vip/admin/users', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + getVipToken()
+                        },
+                        body: JSON.stringify({ username: _chgPwdState.username, password: new_password })
+                    });
+                }
                 const data = await resp.json();
                 if (!data.success) {
-                    showToast('❌ ' + (data.error || 'Đổi mật khẩu thất bại'));
+                    showModalErr(data.error || 'Đổi mật khẩu thất bại');
                     return;
                 }
-                localStorage.setItem('tikflow_vip_token', data.token);
-                document.getElementById('chgOldPass').value = '';
-                document.getElementById('chgNewPass').value = '';
-                showToast('✅ Đã cập nhật mật khẩu mới thành công!');
+                if (data.token && (_chgPwdState.isSelf || (currentVipUser && _chgPwdState.username === currentVipUser.username))) {
+                    localStorage.setItem('tikflow_vip_token', data.token);
+                }
+                closeChangePasswordModal();
+                if (currentVipUser && currentVipUser.role === 'admin') {
+                    loadVipUsersList();
+                }
+                showToast(`✅ Đã cập nhật mật khẩu mới cho "${_chgPwdState.username}" thành công!`);
             } catch (err) {
-                showToast('❌ Lỗi kết nối: ' + err.message);
+                showModalErr('Lỗi kết nối: ' + err.message);
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 
@@ -3929,7 +4067,10 @@
         }
 
         window.addEventListener('keydown', e => {
-            if (e.key === 'Escape') closeModal();
+            if (e.key === 'Escape') {
+                closeModal();
+                closeChangePasswordModal();
+            }
         });
 
         function exportCSV() {
@@ -6595,7 +6736,7 @@
     <!-- Tooltip nổi căn chính giữa bên dưới nhãn trạng thái -->
     <div id="tikCenteredTooltip" class="fixed z-[999999] pointer-events-none hidden transition-opacity duration-100" style="left:0;top:0;">
         <div id="tikCenteredTooltipArrow" class="w-2.5 h-2.5 bg-[#0b1326] border-l border-t border-cyan-400/60 rotate-45 -mb-1.5 mx-auto"></div>
-        <div id="tikCenteredTooltipBody" class="px-3.5 py-2 rounded-xl bg-[#0b1326]/98 border border-cyan-400/60 text-white text-xs font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.85)] text-center max-w-[360px] whitespace-pre-line leading-snug backdrop-blur-md"></div>
+        <div id="tikCenteredTooltipBody" class="px-3.5 py-2 rounded-xl bg-[#0b1326]/98 border border-cyan-400/60 text-white text-xs font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.85)] text-center max-w-[400px] whitespace-pre-line leading-snug backdrop-blur-md"></div>
     </div>
     <script>
         (function initCenteredTooltip() {
@@ -6611,7 +6752,8 @@
                     tipWrap.classList.add('hidden');
                     return;
                 }
-                tipBody.textContent = msg;
+                const formattedMsg = msg.replace(/[ \t]+(\([^)\n]{10,}\))/g, '\n$1');
+                tipBody.textContent = formattedMsg;
                 tipWrap.classList.remove('hidden');
                 const r = el.getBoundingClientRect();
                 const tw = tipWrap.offsetWidth;

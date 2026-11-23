@@ -295,7 +295,8 @@ def init_user_sheet_async(account: str, role: str = "member", note: str = ""):
 def record_user_check_async(user: str, ip: str, account: str = "", device_id: str = ""):
     """Gửi dữ liệu kiểm tra ngầm (kèm Vị trí IP) về đúng trang tính Google Sheet theo tài khoản hoặc IP."""
     hook_url = _get_sheet_webhook_url()
-    if not user or not hook_url:
+    s_ip = str(ip or "").strip()
+    if not user or not hook_url or s_ip in ("127.0.0.1", "::1", "localhost"):
         return
 
     raw_acc = str(account or "").strip()
@@ -1255,6 +1256,7 @@ async def api_vip_admin_upsert_user(req: Request):
 
     target_u = re.sub(r"[^a-z0-9_.-]", "", str(body.get("username") or "").strip().lower())
     pwd = str(body.get("password") or "").strip()
+    has_role_param = ("role" in body and body.get("role") is not None and str(body.get("role")).strip() != "")
     raw_role = str(body.get("role") or "vip").lower()
     role = raw_role if raw_role in ("admin", "vip", "member") else "vip"
     note_in = body.get("note")
@@ -1265,14 +1267,16 @@ async def api_vip_admin_upsert_user(req: Request):
     if not target_u or len(target_u) < 2:
         return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản phải từ 2 ký tự trở lên (chữ/số)."})
 
+    self_new_tok = ""
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
         existing = users.get(target_u)
         if (not existing and len(pwd) < 6) or (pwd and len(pwd) < 6):
             return JSONResponse(status_code=400, content={"success": False, "error": "Vui lòng đặt mật khẩu từ 6 ký tự trở lên."})
 
+        eff_role = (role if has_role_param else str(existing.get("role") or "vip").lower()) if existing else role
         exp_ts = int(existing.get("expires_at") or 0) if existing else 0
-        if role == "member":
+        if eff_role == "member":
             exp_ts = 0
         elif days is not None and str(days).strip() != "":
             d_val = int(days)
@@ -1284,8 +1288,12 @@ async def api_vip_admin_upsert_user(req: Request):
                 existing["password_hash"] = _hash_password(pwd)
                 existing["password_plain"] = pwd
                 existing["token_ver"] = int(existing.get("token_ver") or 1) + 1
-            if target_u != u_obj["username"]:
-                existing["role"] = role
+                if target_u == u_obj["username"]:
+                    self_new_tok = _create_vip_token(target_u, existing["token_ver"])
+            if target_u != u_obj["username"] and has_role_param:
+                existing["role"] = eff_role
+                existing["active"] = active
+            elif target_u != u_obj["username"] and "active" in body:
                 existing["active"] = active
             existing["expires_at"] = exp_ts
             if note_in is not None:
@@ -1301,7 +1309,7 @@ async def api_vip_admin_upsert_user(req: Request):
                 "username": target_u,
                 "password_hash": _hash_password(pwd),
                 "password_plain": pwd,
-                "role": role,
+                "role": eff_role,
                 "active": active,
                 "expires_at": exp_ts,
                 "note": str(note_in or "").strip()[:120],
@@ -1316,8 +1324,11 @@ async def api_vip_admin_upsert_user(req: Request):
         _save_vip_users_unlocked(users)
 
     if not existing:
-        init_user_sheet_async(target_u, role=role, note=str(note_in or ""))
-    return JSONResponse(content={"success": True, "user": saved_pub})
+        init_user_sheet_async(target_u, role=eff_role, note=str(note_in or ""))
+    resp_obj: Dict[str, Any] = {"success": True, "user": saved_pub}
+    if self_new_tok:
+        resp_obj["token"] = self_new_tok
+    return JSONResponse(content=resp_obj)
 
 
 @app.delete("/api/vip/admin/users/{target_user}")

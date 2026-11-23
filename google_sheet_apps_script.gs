@@ -55,12 +55,8 @@ function styleHeaderAndAlignSheet(sheet, migratedFrom7) {
   }
 
   var existingFilter = sheet.getFilter();
-  if (existingFilter && migratedFrom7) {
+  if (existingFilter) {
     existingFilter.remove();
-    existingFilter = null;
-  }
-  if (!existingFilter) {
-    sheet.getRange(1, 1, Math.max(1, lastRow), SHEET_HEADERS.length).createFilter();
   }
 }
 
