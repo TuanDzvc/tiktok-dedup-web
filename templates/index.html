@@ -1712,15 +1712,15 @@
     <!-- 3. MODAL QUẢN TRỊ ADMIN (TẠO / XÓA NICK VIP CHO KHÁCH & ĐỔI MẬT KHẨU) -->
     <!-- ============================================================================== -->
     <div id="vipAdminModal" onclick="if(event.target===this) closeVipAdminModal()" class="fixed inset-0 z-[96] bg-black/60 backdrop-blur-lg flex items-center justify-center p-2 sm:p-4 transition-all duration-200 hidden">
-        <div class="relative max-w-[1460px] w-[96vw] max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden">
+        <div id="vipAdminModalCard" class="relative max-w-[1460px] w-[96vw] max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-3.5 bg-dark-950/90 flex-shrink-0">
                 <div class="flex items-center gap-2.5">
                     <div class="w-9 h-9 rounded-xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
                         <i class="fa-solid fa-users-gear"></i>
                     </div>
                     <div>
-                        <h3 class="text-sm sm:text-base font-extrabold text-white">Quản Lý Tài Khoản Khách VIP & Mật Khẩu</h3>
-                        <p class="text-[11px] text-slate-400">Cấp tài khoản cho khách dùng API Check Trùng hoặc thu hồi bất cứ lúc nào</p>
+                        <h3 id="vipAdminModalTitle" class="text-sm sm:text-base font-extrabold text-white">Quản Lý Tài Khoản Khách VIP & Mật Khẩu</h3>
+                        <p id="vipAdminModalSubtitle" class="text-[11px] text-slate-400">Cấp tài khoản cho khách dùng API Check Trùng hoặc thu hồi bất cứ lúc nào</p>
                     </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2.5 ml-auto">
@@ -1889,21 +1889,21 @@
                 </div>
 
                 <!-- Khối thông tin + nút Kích Hoạt QR VIP & Đổi mật khẩu dành riêng cho tài khoản khách -->
-                <div id="nonAdminSelfAccountCard" class="hidden p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div id="nonAdminSelfAccountCard" class="hidden p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-3.5">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300 flex-shrink-0">
                             <i class="fa-solid fa-user-shield"></i>
                         </div>
-                        <div>
-                            <div class="text-xs font-extrabold text-white">Tài khoản đang đăng nhập: <span id="selfCardUsername" class="font-mono text-cyan-300">—</span></div>
-                            <div id="selfCardVipStatus" class="text-[11px] text-slate-400">Quét mã QR VietQR để kích hoạt VIP tự động ngay lập tức</div>
+                        <div class="min-w-0">
+                            <div class="text-xs sm:text-sm font-extrabold text-white">Tài khoản: <span id="selfCardUsername" class="font-mono text-cyan-300">—</span></div>
+                            <div id="selfCardVipStatus" class="text-[11px] text-slate-300 mt-0.5">Quét mã QR VietQR để kích hoạt VIP tự động</div>
                         </div>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button type="button" id="btnSelfActivateVipQr" onclick="closeVipAdminModal(); openVipQrModal();" class="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow-lg shadow-emerald-500/25">
+                    <div class="flex flex-wrap items-center gap-2 pt-2.5 border-t border-slate-800/80">
+                        <button type="button" id="btnSelfActivateVipQr" onclick="closeVipAdminModal(); openVipQrModal();" class="flex-1 py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/25 whitespace-nowrap">
                             <i class="fa-solid fa-qrcode"></i> <span id="lblSelfActivateVipQr">Kích Hoạt VIP (Quét QR)</span>
                         </button>
-                        <button type="button" onclick="openChangePasswordModal(currentVipUser ? currentVipUser.username : '', true)" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
+                        <button type="button" onclick="openChangePasswordModal(currentVipUser ? currentVipUser.username : '', true)" class="flex-1 py-2.5 px-3.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow whitespace-nowrap">
                             <i class="fa-solid fa-key"></i> Đổi Mật Khẩu
                         </button>
                     </div>
@@ -2252,7 +2252,7 @@
             let badgeCls = 'bg-slate-900/95 border-slate-600 hover:bg-slate-800';
             let iconCls = 'fa-user text-slate-300 text-sm';
             let roleHtml = `
-                <div class="flex flex-col items-start leading-tight">
+                <div class="flex flex-col items-center text-center leading-tight">
                     <span class="text-[11px] font-extrabold text-slate-300">Tài khoản Thường</span>
                     <span class="text-[11px] font-mono font-bold text-cyan-300">${escapeHtml(currentVipUser.username)}</span>
                 </div>
@@ -2261,7 +2261,7 @@
                 badgeCls = 'bg-slate-900/95 border-amber-400/70 hover:bg-slate-800/95 shadow-md shadow-amber-500/15';
                 iconCls = 'fa-users-gear text-amber-300 text-sm';
                 roleHtml = `
-                    <div class="flex flex-col items-start leading-tight">
+                    <div class="flex flex-col items-center text-center leading-tight">
                         <span class="text-xs font-extrabold text-amber-300">Quản Lý Acc</span>
                         <span class="text-[11px] font-mono font-bold text-cyan-300">${escapeHtml(currentVipUser.username)}</span>
                     </div>
@@ -2270,7 +2270,7 @@
                 badgeCls = 'bg-emerald-950/90 border-emerald-500/60 hover:bg-emerald-900/80';
                 iconCls = 'fa-crown text-yellow-300 text-sm';
                 roleHtml = `
-                    <div class="flex flex-col items-start leading-tight">
+                    <div class="flex flex-col items-center text-center leading-tight">
                         <span class="text-xs font-extrabold text-emerald-300">Tài Khoản VIP</span>
                         <span class="text-[11px] font-mono font-bold text-white">${escapeHtml(currentVipUser.username)}</span>
                     </div>
@@ -2298,10 +2298,11 @@
                     <span class="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 border border-emerald-400/40 flex items-center justify-center flex-shrink-0">
                         <i class="fa-solid fa-wallet text-emerald-400 text-[11px]"></i>
                     </span>
-                    <div class="flex items-center gap-2 leading-none">
+                    <div class="flex items-center gap-1.5 sm:gap-2 leading-none">
                         <span id="adminNavBalanceUsd" class="text-xs font-black tracking-tight text-white tabular-nums">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd || 0).toFixed(4)) : 'Ví API'}</span>
                         <span class="hidden sm:inline-block w-px h-3.5 bg-slate-700/90"></span>
                         <span id="adminNavBalanceVnd" class="hidden sm:inline-block px-1.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/30 text-[11px] font-extrabold text-cyan-300 tabular-nums">${window._lastAdminBal ? (Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : '...'}</span>
+                        <span id="adminNavEstScans" class="hidden sm:inline-block px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-[11px] font-extrabold text-emerald-300 tabular-nums whitespace-nowrap">${window._lastAdminBal ? ('~' + Number(window._lastAdminBal.est_scans_left || 0).toLocaleString('vi-VN') + ' lượt') : '~... lượt'}</span>
                     </div>
                     <i class="fa-solid fa-arrows-rotate text-[10px] text-slate-500 group-hover:text-cyan-300 group-hover:rotate-180 transition-all duration-300 hidden md:inline-block"></i>
                 </button>
@@ -2353,8 +2354,10 @@
 
             const navUsd = document.getElementById('adminNavBalanceUsd');
             const navVnd = document.getElementById('adminNavBalanceVnd');
+            const navEst = document.getElementById('adminNavEstScans');
             if (navUsd) navUsd.innerText = `$${balUsd.toFixed(4)}`;
             if (navVnd) navVnd.innerText = `${balVnd.toLocaleString('vi-VN')}đ`;
+            if (navEst) navEst.innerText = `~${estLeft.toLocaleString('vi-VN')} lượt`;
 
             const modUsd = document.getElementById('adminModalBalanceUsd');
             const modVnd = document.getElementById('adminModalBalanceVnd');
@@ -2701,10 +2704,27 @@
                 return;
             }
             const m = document.getElementById('vipAdminModal');
+            const mCard = document.getElementById('vipAdminModalCard');
+            const mTitle = document.getElementById('vipAdminModalTitle');
+            const mSub = document.getElementById('vipAdminModalSubtitle');
             const admSec = document.getElementById('adminUserManagerSection');
             const balCard = document.getElementById('vipApiBalanceCard');
+            const isAdmin = currentVipUser.role === 'admin';
+            if (mCard) {
+                mCard.className = isAdmin
+                    ? 'relative max-w-[1460px] w-[96vw] max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden'
+                    : 'relative max-w-md w-[94vw] max-h-[92vh] flex flex-col bg-dark-900 border border-cyan-500/40 rounded-3xl shadow-2xl overflow-hidden';
+            }
+            if (mTitle) {
+                mTitle.innerText = isAdmin ? 'Quản Lý Tài Khoản Khách VIP & Mật Khẩu' : 'Thông Tin Tài Khoản';
+            }
+            if (mSub) {
+                mSub.innerText = isAdmin
+                    ? 'Cấp tài khoản cho khách dùng API Check Trùng hoặc thu hồi bất cứ lúc nào'
+                    : 'Xem trạng thái VIP & đổi mật khẩu cá nhân';
+            }
             if (balCard) {
-                if (canCurrentUserSeeBilling()) {
+                if (isAdmin) {
                     balCard.classList.remove('hidden');
                     refreshAdminApiBalance(false);
                 } else {
