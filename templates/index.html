@@ -164,11 +164,11 @@
                     <button
                         type="button"
                         onclick="openVipModal(true)"
-                        class="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-amber-500/25 border border-amber-300/40 hover:scale-105 active:scale-95 transition-all duration-200"
-                        title="Đăng nhập tài khoản VIP hoặc Admin để mở khóa Check Trùng & Tìm Video Gốc"
+                        class="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-amber-500/25 border border-amber-300/40 hover:scale-105 active:scale-95 transition-all duration-200 whitespace-nowrap"
+                        title="Đăng ký hoặc đăng nhập tài khoản VIP / Admin để quét không giới hạn"
                     >
                         <i class="fa-solid fa-crown text-yellow-200"></i>
-                        <span>Đăng Nhập VIP</span>
+                        <span>Đăng Ký/Đăng Nhập VIP</span>
                     </button>
                 </div>
                 <div id="authNavContainer" class="flex items-center">
@@ -599,7 +599,7 @@
                         </div>
                         <button type="button" onclick="openVipModal(true)" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs whitespace-nowrap shadow-md transition active:scale-95 flex items-center gap-1.5 flex-shrink-0">
                             <i class="fa-solid fa-crown text-yellow-200"></i>
-                            <span>Đăng Nhập VIP</span>
+                            <span>Đăng Ký/Đăng Nhập VIP</span>
                         </button>
                     </div>
 
@@ -1515,10 +1515,10 @@
                 </div>
 
                 <p class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center sm:whitespace-nowrap">
-                    💡 Khách có tài khoản bấm nút <b class="text-amber-300">👑 Đăng Nhập VIP</b> ở góc phải trên màn hình để quét Không giới hạn mỗi ngày.
+                    💡 Khách có tài khoản bấm nút <b class="text-amber-300">👑 Đăng Ký/Đăng Nhập VIP</b> ở góc phải trên màn hình để quét Không giới hạn mỗi ngày.
                 </p>
 
-                <!-- Hàng nút dưới cùng: Tắt thông báo + Zalo + Facebook + Đã Hiểu trên cùng 1 hàng -->
+                <!-- Hàng nút dưới cùng: Tắt thông báo + Zalo + Facebook + Đăng Ký trên cùng 1 hàng -->
                 <div class="flex flex-col sm:flex-row items-stretch gap-2.5 pt-0.5 w-full">
                     <button
                         type="button"
@@ -1538,7 +1538,7 @@
                             <path d="M24 6C13.507 6 5 13.387 5 22.5C5 27.57 7.64 32.103 11.83 35.125C11.53 37.39 10.42 40.32 10.33 40.55C10.16 40.98 10.56 41.39 11.01 41.27C13.65 40.57 16.95 39.18 18.59 38.35C20.32 38.77 22.13 39 24 39C34.493 39 43 31.613 43 22.5C43 13.387 34.493 6 24 6Z" fill="white"/>
                             <text x="24" y="25.8" text-anchor="middle" fill="#0068FF" font-size="11.5" font-weight="900" font-family="Arial, sans-serif">Zalo</text>
                         </svg>
-                        <span>Nhắn Zalo</span>
+                        <span>Zalo</span>
                     </a>
                     <a
                         href="https://www.facebook.com/levantuan.dzvc"
@@ -1551,10 +1551,11 @@
                     </a>
                     <button
                         type="button"
-                        onclick="closeNoticeModal()"
-                        class="w-full sm:w-36 py-3 px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 transition active:scale-[0.99] flex items-center justify-center whitespace-nowrap"
+                        onclick="openVipModal(true, 'register')"
+                        class="w-full sm:w-auto py-3 px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 transition active:scale-[0.99] flex items-center justify-center gap-1.5 whitespace-nowrap"
                     >
-                        Đã Hiểu
+                        <i class="fa-solid fa-user-plus text-xs"></i>
+                        <span>Đăng Ký</span>
                     </button>
                 </div>
             </div>
@@ -2047,11 +2048,11 @@
                     <button
                         type="button"
                         onclick="openVipModal(true)"
-                        class="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-amber-500/25 border border-amber-300/40 hover:scale-105 active:scale-95 transition-all duration-200"
-                        title="Đăng nhập tài khoản VIP hoặc Admin để mở khóa Check Trùng & Tìm Video Gốc"
+                        class="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-amber-500/25 border border-amber-300/40 hover:scale-105 active:scale-95 transition-all duration-200 whitespace-nowrap"
+                        title="Đăng ký hoặc đăng nhập tài khoản VIP / Admin để quét không giới hạn"
                     >
                         <i class="fa-solid fa-crown text-yellow-200"></i>
-                        <span>Đăng Nhập VIP</span>
+                        <span>Đăng Ký/Đăng Nhập VIP</span>
                     </button>
                 `;
                 return;
