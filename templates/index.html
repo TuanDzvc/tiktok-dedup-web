@@ -6784,12 +6784,17 @@
                                         <i class="fa-solid fa-copyright text-rose-400 text-[8px]"></i>
                                         <span>Khiếu nại bản quyền</span>
                                     </div>
-                                ` : (item.is_dup ? `
+                                ` : (item.is_crp_punished ? `
+                                    <div class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-rose-950/90 border border-rose-700/80 text-rose-300 font-bold shadow-sm" title="${escapeHtml(item.penalty_details || 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT')}">
+                                        <i class="fa-solid fa-triangle-exclamation text-rose-400 text-[8px]"></i>
+                                        <span>Không nguyên bản${(item.group_id && item.group_id !== item.item_id) ? ` · Trùng #${item.group_id}` : ''}</span>
+                                    </div>
+                                ` : ((item.is_dup && item.group_id && item.group_id !== item.item_id) ? `
                                     <div class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800 text-rose-300 font-bold">
                                         <i class="fa-solid fa-triangle-exclamation text-[8px]"></i>
                                         <span>Trùng (#${item.group_id})</span>
                                     </div>
-                                ` : '')}
+                                ` : ''))}
                             </div>
                         </td>
 
@@ -6837,8 +6842,8 @@
                                 <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1 shadow-sm">
                                     <i class="fa-solid fa-ban text-[8px] text-rose-400"></i> Mất FYP
                                 </span>
-                            ` : ((item.has_penalty && !item.is_dup) ? `
-                                <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1">
+                            ` : ((item.is_fyp_restricted || (item.has_penalty && !item.is_dup && !item.is_crp_punished)) ? `
+                                <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1 cursor-help" title="${escapeHtml(item.penalty_details || 'Bị hạn chế đề xuất Xu hướng (FYP)')}">
                                     <i class="fa-solid fa-ban text-[8px]"></i> Có
                                 </span>
                             ` : `
@@ -6854,15 +6859,19 @@
                                 <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1 shadow-sm">
                                     <i class="fa-solid fa-copyright text-[8px] text-rose-400"></i> Bản quyền
                                 </span>
+                            ` : (item.is_crp_punished ? `
+                                <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-700 text-[10px] font-bold inline-flex items-center gap-1 cursor-help whitespace-nowrap shadow-sm" title="${escapeHtml(item.penalty_details || 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT')}">
+                                    <i class="fa-solid fa-triangle-exclamation text-[8px] text-amber-300"></i> Không nguyên bản
+                                </span>
                             ` : (item.has_penalty ? `
-                                <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1">
+                                <span class="px-2 py-0.5 rounded bg-rose-950/90 text-rose-300 border border-rose-800 text-[10px] font-bold inline-flex items-center gap-1 cursor-help whitespace-nowrap" title="${escapeHtml(item.penalty_details || 'Đang dính án phạt kiểm duyệt TikTok')}">
                                     <i class="fa-solid fa-triangle-exclamation text-[8px]"></i> Mất FYP
                                 </span>
                             ` : `
                                 <span class="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800 text-[10px] font-bold inline-flex items-center gap-1">
                                     <i class="fa-solid fa-check text-[8px]"></i> Không
                                 </span>
-                            `)}
+                            `))}
                         </td>
 
                         <!-- Trạng thái: Thêm icon Khóa cho Riêng tư, căn giữa rõ nét -->

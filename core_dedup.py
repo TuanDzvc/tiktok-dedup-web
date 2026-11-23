@@ -99,16 +99,26 @@ def _normalize_penalty_id(raw_id) -> str:
     s = str(raw_id).strip()
     return "" if s in ("", "0", "None", "null") else s
 
+def _build_requests_proxies(proxy: str = "") -> Optional[Dict[str, str]]:
+    """Chuẩn hóa chuỗi proxy sang socks5h/http cho thư viện requests và bỏ qua proxy đã chết."""
+    if not proxy:
+        return None
+    p_c = proxy.strip()
+    if not p_c or p_c in _DEAD_PROXIES:
+        return None
+    if p_c.startswith("socks5://"):
+        p_c = "socks5h://" + p_c[len("socks5://"):]
+    elif not p_c.startswith(("http://", "https://", "socks5h://")):
+        p_c = f"http://{p_c}"
+    return {"http": p_c, "https": p_c}
+
+
 def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "", vid: str = "", create_time: int = 0, region: str = "") -> dict:
     """Lấy chi tiết biên bản xử phạt kiểm duyệt video (getPenaltyDetails) từ TikTok Moderation API."""
     if not vid:
         return {"success": False}
     session = requests.Session()
-    if proxy:
-        p_c = proxy.strip()
-        if not p_c.startswith(("http://", "https://", "socks5://")):
-            p_c = f"http://{p_c}"
-        session.proxies.update({"http": p_c, "https": p_c})
+    proxies = _build_requests_proxies(proxy)
 
     hosts = [
         "https://www.tiktok.com",
@@ -138,7 +148,13 @@ def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "
     for host in hosts:
         url = f"{host}/mod/v1/getPenaltyDetails/"
         try:
-            res = session.get(url, headers=headers, params=params, timeout=8)
+            try:
+                res = session.get(url, headers=headers, params=params, proxies=proxies, timeout=6 if proxies else 8)
+            except Exception:
+                if proxies:
+                    res = session.get(url, headers=headers, params=params, proxies=None, timeout=8)
+                else:
+                    raise
             if res.status_code == 200 and res.content:
                 d = res.json()
                 sc = d.get("status_code", d.get("statusCode", 0))
@@ -194,7 +210,7 @@ def sync_items_penalty_data_native(pen_items: list, cookie_str: str, ua: str = "
     if not cookie_str or not pen_items:
         return
     def _sync_one(p):
-        vid = str(p.get("aweme_id") or p.get("vid") or p.get("id") or "").strip()
+        vid = str(p.get("aweme_id") or p.get("item_id") or p.get("vid") or p.get("id") or "").strip()
         if not vid:
             return
         try:
@@ -209,10 +225,13 @@ def sync_items_penalty_data_native(pen_items: list, cookie_str: str, ua: str = "
                     p["penalty_flag"] = True
                     p["is_fyp_restricted"] = True
                     p["shadow"] = True
+                    p["shadowban"] = True
                     top_d = p_res.get("top_penalty_details")
                     if top_d:
                         p["penalty_details"] = top_d
                         p["shadowReason"] = top_d
+                        if "trùng lặp" in top_d.lower() or "không nguyên bản" in top_d.lower():
+                            p["is_dup"] = True
         except Exception:
             pass
 
@@ -254,12 +273,7 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
     start_ts = str(now_ts - 86400 * 365)
     end_ts = str(now_ts)
 
-    proxies = None
-    if proxy and proxy.strip() not in _DEAD_PROXIES:
-        p_c = proxy.strip()
-        if not p_c.startswith(("http://", "https://", "socks5://")):
-            p_c = f"http://{p_c}"
-        proxies = {"http": p_c, "https": p_c}
+    proxies = _build_requests_proxies(proxy)
 
     import threading
     _tls = threading.local()
@@ -275,30 +289,44 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
         vid = str(p.get("aweme_id") or p.get("item_id") or p.get("vid") or p.get("id") or "").strip()
         if not vid:
             return
+        req_params = {
+            "aid": "1988",
+            "app_name": "tiktok_creator_center",
+            "device_platform": "web_pc",
+            "channel": "tiktok_web",
+            "scene": "156",
+            "locale": "en",
+            "region": reg_val,
+            "start_date": start_ts,
+            "end_date": end_ts,
+            "video_id": vid,
+        }
+        req_hdrs = {
+            "User-Agent": ua_val,
+            "Cookie": ck_header,
+            "Referer": f"https://www.tiktok.com/tiktokstudio/monetization/item/{vid}/",
+            "Accept": "application/json, text/plain, */*",
+        }
         try:
-            r = _get_crp_sess().get(
-                "https://www.tiktok.com/tiktok/v1/creator/m10n_center/video_reward_analytics",
-                params={
-                    "aid": "1988",
-                    "app_name": "tiktok_creator_center",
-                    "device_platform": "web_pc",
-                    "channel": "tiktok_web",
-                    "scene": "156",
-                    "locale": "en",
-                    "region": reg_val,
-                    "start_date": start_ts,
-                    "end_date": end_ts,
-                    "video_id": vid,
-                },
-                headers={
-                    "User-Agent": ua_val,
-                    "Cookie": ck_header,
-                    "Referer": f"https://www.tiktok.com/tiktokstudio/monetization/item/{vid}/",
-                    "Accept": "application/json, text/plain, */*",
-                },
-                proxies=proxies,
-                timeout=5,
-            )
+            try:
+                r = _get_crp_sess().get(
+                    "https://www.tiktok.com/tiktok/v1/creator/m10n_center/video_reward_analytics",
+                    params=req_params,
+                    headers=req_hdrs,
+                    proxies=proxies,
+                    timeout=5,
+                )
+            except Exception:
+                if proxies:
+                    r = _get_crp_sess().get(
+                        "https://www.tiktok.com/tiktok/v1/creator/m10n_center/video_reward_analytics",
+                        params=req_params,
+                        headers=req_hdrs,
+                        proxies=None,
+                        timeout=6,
+                    )
+                else:
+                    raise
             if r.status_code == 200 and r.content:
                 j = r.json()
                 crp_d = j.get("crp_analytics_data") or {}
@@ -342,11 +370,7 @@ def sync_items_crp_punishment_data(pen_items: list, cookie_str: str, ua: str = "
 def api_get_post_list_native(cookie_str: str, ua: str, proxy: str = "", sec_uid: str = "", max_cursor: int = 0, count: int = 50) -> dict:
     """Lấy danh sách video đã đăng từ TikTok Studio API (hoạt động độc lập 100% không cần GUI)."""
     session = requests.Session()
-    if proxy:
-        p_c = proxy.strip()
-        if not p_c.startswith(("http://", "https://", "socks5://")):
-            p_c = f"http://{p_c}"
-        session.proxies.update({"http": p_c, "https": p_c})
+    proxies = _build_requests_proxies(proxy)
 
     cookie_dict = _parse_cookie_dict(cookie_str)
     csrf_token = cookie_dict.get("tt_csrf_token", "")
@@ -396,7 +420,13 @@ def api_get_post_list_native(cookie_str: str, ua: str, proxy: str = "", sec_uid:
     for attempt in range(3):
         cur_url = studio_urls[attempt % len(studio_urls)]
         try:
-            res = session.post(cur_url, headers=headers, json=payload, timeout=10)
+            try:
+                res = session.post(cur_url, headers=headers, json=payload, proxies=proxies, timeout=10)
+            except Exception:
+                if proxies:
+                    res = session.post(cur_url, headers=headers, json=payload, proxies=None, timeout=10)
+                else:
+                    raise
             if res.status_code == 200 and res.content:
                 data = res.json()
                 sc = data.get("status_code", data.get("statusCode", -1))
@@ -1683,7 +1713,7 @@ def fetch_channel_info_and_posts(
     }
 
     matched_acc_cookie = cookie_str
-    matched_acc_proxy = ""
+    matched_acc_proxy = str(proxy_str or "").strip()
     matched_acc_ua = ua_str or DEFAULT_UA
     is_self_account = bool(matched_acc_cookie)
 
@@ -2037,6 +2067,48 @@ def fetch_channel_info_and_posts(
 
     # 4. LẤY VIDEO & QUÉT ÁN PHẠT:
     # Trường hợp A: Tài khoản có trong hệ thống Tool hoặc gắn Cookie Studio (quét 100% án phạt, Quỹ BKT & FYP cả trên PC lẫn Cloud)
+    did_self_penalty_sync = False
+
+    def _run_self_penalty_and_crp_sync(target_items: list):
+        nonlocal did_self_penalty_sync
+        if not target_items or not allow_paid_groupid or not effective_cookie:
+            return
+        did_self_penalty_sync = True
+        for _it in target_items:
+            if isinstance(_it, dict) and not _it.get("aweme_id"):
+                _cand = str(_it.get("item_id") or _it.get("id") or "").strip()
+                if _cand:
+                    _it["aweme_id"] = _cand
+
+        def _run_fyp_sync():
+            if sync_items_penalty_data:
+                try:
+                    sync_items_penalty_data(target_items, effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
+                except Exception as pen_err:
+                    print(f"[CheckDupWeb] Lỗi sync_items_penalty_data: {pen_err}")
+
+        def _run_crp_sync():
+            try:
+                sync_items_crp_punishment_data(target_items, effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
+            except Exception as crp_err:
+                print(f"[CheckDupWeb] Lỗi sync_items_crp_punishment_data: {crp_err}")
+
+        with ThreadPoolExecutor(max_workers=2) as sync_pool:
+            f1 = sync_pool.submit(_run_fyp_sync)
+            f2 = sync_pool.submit(_run_crp_sync)
+            f1.result()
+            f2.result()
+        for _p in target_items:
+            if _p.get("is_crp_punished"):
+                _p["is_restored"] = False
+                _p["isRestored"] = False
+                _app_st = int(_p.get("appeal_status") or 0)
+                if _app_st in (2, 3, 4):
+                    _msg = "Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Kháng xịt / Đã kháng)"
+                    _p["crp_penalty_details"] = _msg
+                    if not _p.get("has_penalty"):
+                        _p["penalty_details"] = _msg
+
     if is_self_account and effective_cookie:
         try:
             posts_res = (
@@ -2072,34 +2144,7 @@ def fetch_channel_info_and_posts(
                     channel_info["avatar"] = posts_res["author_avatar"]
 
                 if raw_items and allow_paid_groupid:
-                    def _run_fyp_sync():
-                        if sync_items_penalty_data:
-                            try:
-                                sync_items_penalty_data(raw_items, effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
-                            except Exception as pen_err:
-                                print(f"[CheckDupWeb] Lỗi sync_items_penalty_data: {pen_err}")
-
-                    def _run_crp_sync():
-                        try:
-                            sync_items_crp_punishment_data(raw_items, effective_cookie, matched_acc_ua, matched_acc_proxy, channel_info["region"])
-                        except Exception as crp_err:
-                            print(f"[CheckDupWeb] Lỗi sync_items_crp_punishment_data: {crp_err}")
-
-                    with ThreadPoolExecutor(max_workers=2) as sync_pool:
-                        f1 = sync_pool.submit(_run_fyp_sync)
-                        f2 = sync_pool.submit(_run_crp_sync)
-                        f1.result()
-                        f2.result()
-                    for _p in raw_items:
-                        if _p.get("is_crp_punished"):
-                            _p["is_restored"] = False
-                            _p["isRestored"] = False
-                            _app_st = int(_p.get("appeal_status") or 0)
-                            if _app_st in (2, 3, 4):
-                                _msg = "Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT (Kháng xịt / Đã kháng)"
-                                _p["crp_penalty_details"] = _msg
-                                if not _p.get("has_penalty"):
-                                    _p["penalty_details"] = _msg
+                    _run_self_penalty_and_crp_sync(raw_items)
         except Exception as e_studio:
             print(f"[CheckDupWeb] Lỗi api_get_post_list: {e_studio}")
 
@@ -2369,6 +2414,10 @@ def fetch_channel_info_and_posts(
                 check_user_info["create_date"] = dt_str
 
     # 5. Định dạng và kiểm tra trùng lặp cho từng video
+    # Nếu là nick chính chủ nhưng Branch A rỗng (rơi xuống Creator API / TikHub) thì vẫn phải đồng bộ gậy BKT & FYP
+    if is_self_account and effective_cookie and raw_items and allow_paid_groupid and not did_self_penalty_sync:
+        _run_self_penalty_and_crp_sync(raw_items)
+
     # Chỉ tài khoản đã đăng nhập (VIP / Admin) mới kích hoạt quét trùng lặp Group ID & API trả phí
     video_list = []
     if allow_paid_groupid:

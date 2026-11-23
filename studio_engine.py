@@ -858,6 +858,42 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 except Exception:
                     pass
 
+        # Quét song song án phạt kiểm duyệt (FYP / Shadowban) & gậy Không nguyên bản Quỹ BKT (Creator Rewards >= 60s)
+        if raw_items:
+            try:
+                import core_dedup as _cd
+                from concurrent.futures import ThreadPoolExecutor as _TPE
+                sync_targets = [it for it in raw_items[:50] if isinstance(it, dict)]
+                for _it in sync_targets:
+                    if not _it.get("aweme_id"):
+                        _cand = str(_it.get("item_id") or _it.get("id") or "").strip()
+                        if _cand:
+                            _it["aweme_id"] = _cand
+                if sync_targets:
+                    def _sync_pen_fn():
+                        fn = getattr(_cd, "sync_items_penalty_data", None)
+                        if fn:
+                            try:
+                                fn(sync_targets, cookie_str, DEFAULT_UA, proxy, c_code)
+                            except Exception:
+                                pass
+
+                    def _sync_crp_fn():
+                        fn = getattr(_cd, "sync_items_crp_punishment_data", None)
+                        if fn:
+                            try:
+                                fn(sync_targets, cookie_str, DEFAULT_UA, proxy, c_code)
+                            except Exception:
+                                pass
+
+                    with _TPE(max_workers=2) as _pool:
+                        _f1 = _pool.submit(_sync_pen_fn)
+                        _f2 = _pool.submit(_sync_crp_fn)
+                        _f1.result()
+                        _f2.result()
+            except Exception:
+                pass
+
         # Parse chuẩn hóa toàn bộ dữ liệu video & trích xuất Avatar kênh từ item
         parsed_list = []
         author_avatar = ""
@@ -968,12 +1004,24 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
 
             # Trùng lặp & Án phạt
             group_id = str(it.get("group_id") or it.get("groupId") or "")
-            is_dup = bool(group_id and group_id != aid and group_id not in ("0", "None", "null"))
+            is_group_dup = bool(group_id and group_id != aid and group_id not in ("0", "None", "null"))
+            is_crp_punished = bool(it.get("is_crp_punished", False))
+            is_fyp_restricted = bool(it.get("is_fyp_restricted", False) or it.get("shadow", False) or it.get("shadowban", False))
+            raw_pen_det = str(it.get("penalty_details") or "").strip()
+            crp_pen_det = str(it.get("crp_penalty_details") or "").strip()
+            if crp_pen_det and raw_pen_det and crp_pen_det != raw_pen_det:
+                pen_details = f"{crp_pen_det} · {raw_pen_det}"
+            else:
+                pen_details = crp_pen_det or raw_pen_det
+            is_dup = bool(is_group_dup or is_crp_punished)
             in_rev = bool(it.get("in_review"))
             penalty_ctx = it.get("penaltyContext") if isinstance(it.get("penaltyContext"), dict) else {}
             has_penalty = bool(
                 is_copyright
                 or is_takedown
+                or is_crp_punished
+                or is_fyp_restricted
+                or bool(it.get("has_penalty", False))
                 or int(penalty_ctx.get("display_penalty_type") or 0) != 0
                 or int(penalty_ctx.get("display_policy") or 0) != 0
                 or bool(it.get("isProhibited"))
@@ -997,11 +1045,14 @@ def get_studio_post_list(cookie_str: str, proxy: str = "", count: int = 50, max_
                 "visibility_label": visibility_label,
                 "visibility_badge": visibility_badge,
                 "is_dup": is_dup,
+                "is_crp_punished": is_crp_punished,
+                "is_fyp_restricted": is_fyp_restricted,
+                "penalty_details": pen_details,
                 "is_copyright": is_copyright,
                 "is_takedown": is_takedown,
                 "status_code": st_code,
                 "group_id": group_id,
-                "origin_url": f"https://www.tiktok.com/@tiktok/video/{group_id}" if is_dup else "",
+                "origin_url": f"https://www.tiktok.com/@tiktok/video/{group_id}" if is_group_dup else "",
                 "has_penalty": has_penalty,
                 "share_url": f"https://www.tiktok.com/@{item_author}/video/{aid}" if item_author else f"https://www.tiktok.com/video/{aid}"
             })
