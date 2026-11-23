@@ -566,8 +566,8 @@
 
                         <!-- 4 Summary Stat Cards -->
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-800/80">
-                            <div class="glass-card rounded-2xl p-3.5 text-center min-w-[95px]">
-                                <span class="text-slate-400 text-xs font-medium block">Tổng Video</span>
+                            <div id="statTotalCard" onclick="setFilter('all')" class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-cyan-900/40 bg-cyan-950/15 cursor-pointer hover:border-cyan-500/60 transition">
+                                <span class="text-slate-300 text-xs font-medium block">Tổng Video</span>
                                 <span id="statTotal" class="text-2xl font-black text-white font-mono">0</span>
                                 <span id="statTotalSub" class="text-[10px] text-slate-400 font-semibold block mt-0.5">đã tải</span>
                             </div>
@@ -576,7 +576,7 @@
                                 <span id="statDup" class="text-2xl font-black text-rose-400 font-mono">0</span>
                                 <span id="statDupPercent" class="text-[10px] text-rose-300 block mt-0.5">0%</span>
                             </div>
-                            <div onclick="setFilter('penalty')" class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-amber-900/40 bg-amber-950/20 cursor-pointer hover:border-amber-600/60 transition">
+                            <div id="statPenaltyCard" onclick="setFilter('penalty')" class="glass-card rounded-2xl p-3.5 text-center min-w-[95px] border-amber-900/40 bg-amber-950/20 cursor-pointer hover:border-amber-600/60 transition">
                                 <span class="text-amber-300 text-xs font-medium block">Mất FYP / Kẹt View</span>
                                 <span id="statPenalty" class="text-2xl font-black text-amber-400 font-mono">0</span>
                                 <span id="statPenaltySub" class="text-[10px] text-amber-300 block mt-0.5">hạn chế</span>
@@ -4307,6 +4307,26 @@
             for (const key in tabs) {
                 tabs[key].className = "px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition whitespace-nowrap";
             }
+
+            const statCards = {
+                all: document.getElementById('statTotalCard'),
+                dup: document.getElementById('statDupCard'),
+                penalty: document.getElementById('statPenaltyCard'),
+                clean: document.getElementById('statCleanCard')
+            };
+            const ringMap = {
+                all: 'ring-2 ring-cyan-400/75 border-cyan-500/80',
+                dup: 'ring-2 ring-rose-500/75 border-rose-500/80',
+                penalty: 'ring-2 ring-amber-400/75 border-amber-500/80',
+                clean: 'ring-2 ring-emerald-400/75 border-emerald-500/80'
+            };
+            Object.entries(statCards).forEach(([k, el]) => {
+                if (!el) return;
+                el.classList.remove('ring-2', 'ring-cyan-400/75', 'border-cyan-500/80', 'ring-rose-500/75', 'border-rose-500/80', 'ring-amber-400/75', 'border-amber-500/80', 'ring-emerald-400/75', 'border-emerald-500/80');
+                if (k === filterType && ringMap[k]) {
+                    el.classList.add(...ringMap[k].split(' '));
+                }
+            });
 
             if (filterType === 'all') {
                 tabs.all.className = "px-3.5 py-2 rounded-xl bg-cyan-600 text-white font-bold transition whitespace-nowrap shadow";

@@ -2476,20 +2476,7 @@ def fetch_channel_info_and_posts(
         c_time = int(it.get("createTime") or it.get("create_time") or it.get("post_time") or 0)
 
         device_plat = str(it.get("device_platform") or "").lower()
-
-
         source_raw = str(it.get("source") or "").lower()
-
-
-        c2pa = it.get("c2pa_info") if isinstance(it.get("c2pa_info"), dict) else {}
-
-
-        anchors = str(it.get("anchors") or "").lower()
-
-
-        is_capcut = bool(it.get("is_capcut") or c2pa.get("is_capcut") or "capcut" in anchors)
-
-
         shoot_tab = it.get("shoot_tab")
         vid_sub_obj = it.get("video") if isinstance(it.get("video"), dict) else {}
         vid_hash_id = str(vid_sub_obj.get("videoID") or vid_sub_obj.get("vid") or it.get("video_id") or "").strip().lower()
@@ -2507,52 +2494,18 @@ def fetch_channel_info_and_posts(
             or "web_upload" in str(it).lower()
         )
 
-
-        if is_capcut:
-
-
-            source_lbl = "CapCut"
-
-
-            source_icon = "fa-scissors"
-
-
-            device = "phone"
-
-
-        elif is_explicit_web:
-
-
+        # Phân loại đúng thiết bị tải lên (không để thẻ anchor quảng cáo CapCut của TikTok ghi đè nguồn Phone/Web)
+        if is_explicit_web:
             source_lbl = "Web (PC)"
-
-
             source_icon = "fa-desktop"
-
-
             device = "web"
-
-
+        elif shoot_tab and str(shoot_tab) not in ("0", "None"):
+            source_lbl = "Mobile (Camera)"
+            source_icon = "fa-camera"
+            device = "phone"
         else:
-
-
-            if shoot_tab and str(shoot_tab) not in ("0", "None"):
-
-
-                source_lbl = "Mobile (Camera)"
-
-
-                source_icon = "fa-camera"
-
-
-            else:
-
-
-                source_lbl = "Phone (Gallery)"
-
-
-                source_icon = "fa-mobile-screen"
-
-
+            source_lbl = "Phone (Gallery)"
+            source_icon = "fa-mobile-screen"
             device = "phone"
 
 
