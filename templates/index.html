@@ -1826,6 +1826,7 @@
                                 <i class="fa-solid fa-cloud-arrow-up"></i> Đồng Bộ Server Dự Phòng 24/7 (Render — Khi Tắt Máy Tính)
                             </div>
                             <div class="flex items-center gap-2.5">
+                                <span id="admPeerSyncBadge" class="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-emerald-950 border border-emerald-500/50 text-emerald-300">🟢 Tự đồng bộ 2 chiều PC ⇄ Render</span>
                                 <span id="admRenderHookBadge" class="hidden px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-emerald-950 border border-emerald-500/50 text-emerald-300">🟢 Đã gắn sẵn Deploy Hook 24/7</span>
                                 <a href="https://dashboard.render.com" target="_blank" rel="noopener noreferrer" class="text-[11px] font-bold text-cyan-300 hover:text-white underline flex items-center gap-1">
                                     <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Mở Render Dashboard
@@ -1833,9 +1834,12 @@
                             </div>
                         </div>
                         <p class="text-[11px] text-slate-300 leading-relaxed">
-                            Khi tắt PC, <code class="px-1 py-0.5 rounded bg-slate-800 text-cyan-300">checktiktok.site</code> tự chuyển sang máy chủ Render 24/7. Copy trọn bộ cấu hình <b class="text-white">.env + danh sách tài khoản VIP</b> dán vào Render (<i class="text-sky-200">Environment → Add from .env → Save Changes</i>), sau đó dán <b class="text-amber-300">Deploy Hook</b> từ Render (<i class="text-sky-200">Settings → Deploy Hook</i>) vào ô bên dưới để tự động cập nhật mỗi lần đẩy code mới.
+                            Khi tắt PC, <code class="px-1 py-0.5 rounded bg-slate-800 text-cyan-300">checktiktok.site</code> tự chuyển sang máy chủ Render 24/7. Mọi tài khoản, mã máy &amp; đơn VIP QR mới tự động đồng bộ 2 chiều giữa <b class="text-emerald-300">PC ⇄ Render</b> ngay lập tức — kể cả tắt máy khách vẫn đăng nhập bình thường.
                         </p>
                         <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 pt-0.5">
+                            <button type="button" id="btnSyncRenderNow" onclick="syncAccountsToRenderNow()" class="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow whitespace-nowrap">
+                                <i class="fa-solid fa-arrows-rotate"></i> Đồng Bộ Tài Khoản Sang Render Ngay
+                            </button>
                             <button type="button" onclick="copyRenderEnvConfig()" class="px-3.5 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow whitespace-nowrap">
                                 <i class="fa-regular fa-copy"></i> Copy Cấu Hình .env Cho Render
                             </button>
@@ -3200,8 +3204,20 @@
                 const data = await resp.json();
                 if (!data || !data.success) return;
                 const badge = document.getElementById('admRenderHookBadge');
+                const syncBadge = document.getElementById('admPeerSyncBadge');
                 const hookInput = document.getElementById('admRenderDeployHook');
                 const btnDeploy = document.getElementById('btnTriggerRenderDeploy');
+                if (syncBadge && data.peer_sync) {
+                    const ps = data.peer_sync;
+                    if (ps.last_ok_at) {
+                        const tStr = new Date(Number(ps.last_ok_at) * 1000).toLocaleTimeString('vi-VN');
+                        syncBadge.className = 'px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-emerald-950 border border-emerald-500/50 text-emerald-300';
+                        syncBadge.innerText = `🟢 Đã đồng bộ ${ps.user_count || data.user_count || 0} acc lúc ${tStr}`;
+                    } else if (ps.last_error) {
+                        syncBadge.className = 'px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-amber-950 border border-amber-500/50 text-amber-300';
+                        syncBadge.innerText = `⚠️ Đang chờ Render: ${ps.last_error}`;
+                    }
+                }
                 if (data.has_deploy_hook) {
                     badge?.classList.remove('hidden');
                     if (hookInput) {
@@ -3214,6 +3230,41 @@
                     badge?.classList.add('hidden');
                 }
             } catch (e) {}
+        }
+
+        async function syncAccountsToRenderNow() {
+            const btn = document.getElementById('btnSyncRenderNow');
+            const msgBox = document.getElementById('renderSyncStatusMsg');
+            if (btn) btn.disabled = true;
+            try {
+                const resp = await fetch('/api/vip/admin/sync-render-now', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + getVipToken() }
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    const errTxt = data.error || 'Đồng bộ sang Render thất bại.';
+                    showToast('❌ ' + errTxt);
+                    if (msgBox) {
+                        msgBox.className = 'text-[11px] font-semibold px-3 py-2 rounded-xl border bg-rose-950/60 border-rose-500/50 text-rose-200';
+                        msgBox.innerText = '❌ ' + errTxt;
+                        msgBox.classList.remove('hidden');
+                    }
+                    return;
+                }
+                const okTxt = data.message || '✅ Đã đồng bộ xong sang Render!';
+                showToast(okTxt);
+                if (msgBox) {
+                    msgBox.className = 'text-[11px] font-semibold px-3 py-2 rounded-xl border bg-emerald-950/60 border-emerald-500/50 text-emerald-200';
+                    msgBox.innerText = okTxt;
+                    msgBox.classList.remove('hidden');
+                }
+                loadAdminRenderSyncState();
+            } catch (err) {
+                showToast('❌ Lỗi đồng bộ Render: ' + err.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
 
         async function copyRenderEnvConfig() {

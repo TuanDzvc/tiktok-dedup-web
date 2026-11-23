@@ -351,8 +351,21 @@ VIP_USERS_FILE = BASE_DIR / "vip_users.json"
 VIP_BLOCKED_DEVICES_FILE = BASE_DIR / "vip_blocked_devices.json"
 VIP_ORDERS_FILE = BASE_DIR / "vip_orders.json"
 PAYOS_CONFIG_FILE = BASE_DIR / "payos_config.json"
+VIP_SYNC_META_FILE = BASE_DIR / "vip_sync_meta.json"
 ENV_FILE = BASE_DIR / ".env"
 _VIP_LOCK = threading.Lock()
+_PEER_SYNC_TIMER_LOCK = threading.Lock()
+_PEER_SYNC_TIMER: Optional[threading.Timer] = None
+_PEER_SYNC_RUN_LOCK = threading.Lock()
+_APPLYING_REMOTE_SYNC = False
+RENDER_SYNC_BASE = (os.environ.get("RENDER_SYNC_BASE") or "https://tiktok-dedup-web.onrender.com").rstrip("/")
+PRIMARY_SYNC_BASE = (os.environ.get("PRIMARY_SYNC_BASE") or "https://checktiktok.site").rstrip("/")
+_PEER_SYNC_STATUS: Dict[str, Any] = {
+    "last_ok_at": 0,
+    "last_error": "",
+    "last_direction": "",
+    "user_count": 0,
+}
 PAYOS_API_BASE = "https://api-merchant.payos.vn"
 PAYOS_BANK_NAMES = {
     "970422": "MB Bank",
@@ -389,6 +402,7 @@ def _save_blocked_devices_unlocked(bmap: Dict[str, Dict[str, Any]]) -> None:
         tmp_f = VIP_BLOCKED_DEVICES_FILE.with_suffix(".json.tmp")
         tmp_f.write_text(json.dumps(bmap, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp_f, VIP_BLOCKED_DEVICES_FILE)
+        _schedule_peer_sync_push()
     except Exception as e:
         logger.error(f"[VIPAuth] Lỗi lưu vip_blocked_devices.json: {e}")
 
@@ -419,6 +433,7 @@ def _save_free_quota_unlocked(qmap: Dict[str, Dict[str, int]], keep_day: str) ->
         tmp_f = FREE_QUOTA_FILE.with_suffix(".json.tmp")
         tmp_f.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp_f, FREE_QUOTA_FILE)
+        _schedule_peer_sync_push(1.0)
     except Exception as e:
         logger.error(f"[FreeQuota] Lỗi lưu free_daily_quota.json: {e}")
 
@@ -516,6 +531,7 @@ def _record_and_check_device_unlocked(
             "blocked": True,
             "auto_limit": bool(prev.get("auto_limit", False)) and (dev_id not in blocked_map),
         }
+        u_rec["updated_at"] = now_ts
         if dev_id in blocked_map:
             return f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên khóa truy cập!"
         return f"⛔ Thiết bị {dev_id} đã bị từ chối đăng nhập trên tài khoản này (Chống chia sẻ tài khoản)!"
@@ -533,6 +549,7 @@ def _record_and_check_device_unlocked(
                 "blocked": True,
                 "auto_limit": True,
             }
+            u_rec["updated_at"] = now_ts
             if max_devs == 1:
                 return f"⛔ Tài khoản này chỉ cho phép đăng nhập cố định trên 1 mã máy duy nhất ({active_ids[0]})! Thiết bị lạ ({dev_id}) bị chặn để chống share tài khoản."
             return f"⛔ Tài khoản chỉ cho phép tối đa {max_devs} thiết bị! Mã máy mới ({dev_id}) bị chặn để chống share acc."
@@ -544,6 +561,7 @@ def _record_and_check_device_unlocked(
         "last_seen": now_ts,
         "blocked": False,
     }
+    u_rec["updated_at"] = now_ts
     return None
 
 
@@ -597,6 +615,7 @@ def _save_payos_file_config_unlocked(cfg: Dict[str, Any]) -> None:
         tmp_f = PAYOS_CONFIG_FILE.with_suffix(".json.tmp")
         tmp_f.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp_f, PAYOS_CONFIG_FILE)
+        _schedule_peer_sync_push()
     except Exception as e:
         logger.error(f"[PayOS] Lỗi lưu payos_config.json: {e}")
 
@@ -699,6 +718,7 @@ def _save_vip_orders_unlocked(orders: Dict[str, Dict[str, Any]]) -> None:
         tmp_f = VIP_ORDERS_FILE.with_suffix(".json.tmp")
         tmp_f.write_text(json.dumps(orders, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp_f, VIP_ORDERS_FILE)
+        _schedule_peer_sync_push()
     except Exception as e:
         logger.error(f"[PayOS] Lỗi lưu vip_orders.json: {e}")
 
@@ -799,6 +819,7 @@ def _fulfill_vip_order_unlocked(
         old_note = str(u_rec.get("note") or "").strip()
         if not old_note or old_note == "Tự đăng ký trên web":
             u_rec["note"] = f"VIP QR PayOS ({req_amount:,}đ/{days}N)"
+        u_rec["updated_at"] = now_ts
 
     ord_rec["status"] = "PAID"
     ord_rec["amount_paid"] = int(amount_paid)
@@ -863,14 +884,20 @@ def _load_vip_users_unlocked() -> Dict[str, Dict[str, Any]]:
 
     env_map = _read_local_env()
     seed_b64 = (os.environ.get("VIP_USERS_SEED_B64") or env_map.get("VIP_USERS_SEED_B64") or "").strip()
+    meta_deleted = (_load_sync_meta_unlocked().get("deleted_users") or {}) if seed_b64 else {}
     if seed_b64:
         try:
             seeded = json.loads(base64.b64decode(seed_b64).decode("utf-8"))
             if isinstance(seeded, dict):
                 for k, v in seeded.items():
-                    if k and k not in users and isinstance(v, dict):
-                        users[k] = v
-                        changed = True
+                    if not k or k in users or not isinstance(v, dict):
+                        continue
+                    del_ts = int(meta_deleted.get(k) or 0)
+                    rec_ts = int(v.get("updated_at") or v.get("created_at") or 0)
+                    if del_ts > 0 and del_ts >= rec_ts:
+                        continue
+                    users[k] = v
+                    changed = True
         except Exception as e:
             logger.error(f"[VIPAuth] Lỗi giải mã VIP_USERS_SEED_B64: {e}")
 
@@ -887,6 +914,7 @@ def _load_vip_users_unlocked() -> Dict[str, Dict[str, Any]]:
             "note": "Quản trị viên hệ thống",
             "scan_count": 0,
             "created_at": int(time.time()),
+            "updated_at": int(time.time()),
             "token_ver": 1,
         }
         changed = True
@@ -901,8 +929,342 @@ def _save_vip_users_unlocked(users: Dict[str, Dict[str, Any]]) -> None:
         tmp_f = VIP_USERS_FILE.with_suffix(".json.tmp")
         tmp_f.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp_f, VIP_USERS_FILE)
+        _schedule_peer_sync_push()
     except Exception as e:
         logger.error(f"[VIPAuth] Lỗi lưu vip_users.json: {e}")
+
+
+def _is_cloud_runtime() -> bool:
+    return bool(os.getenv("IS_CLOUD") or os.getenv("RENDER"))
+
+
+def _get_sync_token() -> str:
+    return hmac.new(_get_vip_secret(), b"tikflow-pc-render-sync-v1", hashlib.sha256).hexdigest()
+
+
+def _load_sync_meta_unlocked() -> Dict[str, Dict[str, int]]:
+    out: Dict[str, Dict[str, int]] = {"deleted_users": {}, "unblocked_devices": {}}
+    if VIP_SYNC_META_FILE.exists():
+        try:
+            raw = json.loads(VIP_SYNC_META_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                if isinstance(raw.get("deleted_users"), dict):
+                    out["deleted_users"] = {str(k).lower(): int(v or 0) for k, v in raw["deleted_users"].items() if k}
+                if isinstance(raw.get("unblocked_devices"), dict):
+                    out["unblocked_devices"] = {str(k).upper(): int(v or 0) for k, v in raw["unblocked_devices"].items() if k}
+        except Exception:
+            pass
+    return out
+
+
+def _save_sync_meta_unlocked(meta: Dict[str, Any]) -> None:
+    try:
+        cleaned = {
+            "deleted_users": dict(sorted((meta.get("deleted_users") or {}).items(), key=lambda kv: -int(kv[1] or 0))[:500]),
+            "unblocked_devices": dict(sorted((meta.get("unblocked_devices") or {}).items(), key=lambda kv: -int(kv[1] or 0))[:500]),
+        }
+        tmp_f = VIP_SYNC_META_FILE.with_suffix(".json.tmp")
+        tmp_f.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp_f, VIP_SYNC_META_FILE)
+    except Exception as e:
+        logger.error(f"[PeerSync] Lỗi lưu vip_sync_meta.json: {e}")
+
+
+def _user_record_timestamp(u_rec: Dict[str, Any]) -> int:
+    if not isinstance(u_rec, dict):
+        return 0
+    ts = int(u_rec.get("updated_at") or u_rec.get("created_at") or 0)
+    devs = u_rec.get("devices") if isinstance(u_rec.get("devices"), dict) else {}
+    for d in devs.values():
+        if isinstance(d, dict):
+            ts = max(ts, int(d.get("status_ts") or 0), int(d.get("last_seen") or 0))
+    return ts
+
+
+def _export_sync_snapshot_unlocked() -> Dict[str, Any]:
+    users = _load_vip_users_unlocked()
+    bmap = _load_blocked_devices_unlocked()
+    orders = _load_vip_orders_unlocked()
+    payos_cfg = _load_payos_file_config_unlocked()
+    meta = _load_sync_meta_unlocked()
+    with _QUOTA_LOCK:
+        qmap = _load_free_quota_unlocked()
+    return {
+        "users": users,
+        "blocked_devices": bmap,
+        "orders": orders,
+        "payos_config": payos_cfg,
+        "free_quota": qmap,
+        "sync_meta": meta,
+        "exported_at": int(time.time()),
+    }
+
+
+def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
+    """Trộn 2 chiều không mất dữ liệu giữa Local và Peer, có chống vòng lặp push."""
+    global _APPLYING_REMOTE_SYNC
+    if not isinstance(remote, dict):
+        return {"changed": False, "user_count": 0}
+
+    l_users = _load_vip_users_unlocked()
+    l_bmap = _load_blocked_devices_unlocked()
+    l_orders = _load_vip_orders_unlocked()
+    l_pcfg = _load_payos_file_config_unlocked()
+    l_meta = _load_sync_meta_unlocked()
+    with _QUOTA_LOCK:
+        l_qmap = _load_free_quota_unlocked()
+
+    r_users = remote.get("users") if isinstance(remote.get("users"), dict) else {}
+    r_bmap = remote.get("blocked_devices") if isinstance(remote.get("blocked_devices"), dict) else {}
+    r_orders = remote.get("orders") if isinstance(remote.get("orders"), dict) else {}
+    r_pcfg = remote.get("payos_config") if isinstance(remote.get("payos_config"), dict) else {}
+    r_qmap = remote.get("free_quota") if isinstance(remote.get("free_quota"), dict) else {}
+    r_meta = remote.get("sync_meta") if isinstance(remote.get("sync_meta"), dict) else {}
+
+    # 1. Trộn sync_meta
+    m_del: Dict[str, int] = dict(l_meta.get("deleted_users") or {})
+    for uk, ts in (r_meta.get("deleted_users") or {}).items():
+        uk_c = str(uk or "").strip().lower()
+        if uk_c:
+            m_del[uk_c] = max(m_del.get(uk_c, 0), int(ts or 0))
+
+    m_unblk: Dict[str, int] = dict(l_meta.get("unblocked_devices") or {})
+    for dk, ts in (r_meta.get("unblocked_devices") or {}).items():
+        dk_c = str(dk or "").strip().upper()
+        if dk_c:
+            m_unblk[dk_c] = max(m_unblk.get(dk_c, 0), int(ts or 0))
+
+    # 2. Trộn users theo updated_at + devices_reset_at + deleted_users
+    m_users: Dict[str, Dict[str, Any]] = {}
+    all_unames = set(l_users.keys()) | set(r_users.keys())
+    for raw_u in all_unames:
+        uname = str(raw_u or "").strip().lower()
+        if not uname:
+            continue
+        lu = l_users.get(raw_u) if isinstance(l_users.get(raw_u), dict) else None
+        ru = r_users.get(raw_u) if isinstance(r_users.get(raw_u), dict) else None
+        if not lu and not ru:
+            continue
+
+        lu_upd = int((lu or {}).get("updated_at") or 0)
+        ru_upd = int((ru or {}).get("updated_at") or 0)
+        newest_ts = max(_user_record_timestamp(lu or {}), _user_record_timestamp(ru or {}))
+
+        del_ts = int(m_del.get(uname) or 0)
+        if del_ts > 0 and del_ts >= newest_ts:
+            continue
+        if del_ts > 0 and newest_ts > del_ts:
+            m_del.pop(uname, None)
+
+        if lu and not ru:
+            m_users[uname] = json.loads(json.dumps(lu))
+            continue
+        if ru and not lu:
+            m_users[uname] = json.loads(json.dumps(ru))
+            continue
+
+        # Cả 2 bên đều có: ưu tiên bản có updated_at cao hơn; nếu chỉ 1 bên có explicit updated_at thì ưu tiên bên đó
+        if lu_upd != ru_upd:
+            primary = lu if lu_upd > ru_upd else ru
+        else:
+            primary = lu if _user_record_timestamp(lu) >= _user_record_timestamp(ru) else ru
+        chosen = json.loads(json.dumps(primary))
+        chosen["scan_count"] = max(int(lu.get("scan_count") or 0), int(ru.get("scan_count") or 0))
+        reset_at = max(int(lu.get("devices_reset_at") or 0), int(ru.get("devices_reset_at") or 0))
+        if reset_at > 0:
+            chosen["devices_reset_at"] = reset_at
+
+        l_devs = lu.get("devices") if isinstance(lu.get("devices"), dict) else {}
+        r_devs = ru.get("devices") if isinstance(ru.get("devices"), dict) else {}
+        m_devs: Dict[str, Dict[str, Any]] = {}
+        for did in set(l_devs.keys()) | set(r_devs.keys()):
+            ld = l_devs.get(did) if isinstance(l_devs.get(did), dict) else None
+            rd = r_devs.get(did) if isinstance(r_devs.get(did), dict) else None
+            if not ld and not rd:
+                continue
+            l_dt = max(int((ld or {}).get("status_ts") or 0), int((ld or {}).get("last_seen") or 0))
+            r_dt = max(int((rd or {}).get("status_ts") or 0), int((rd or {}).get("last_seen") or 0))
+            d_pick = json.loads(json.dumps(ld if l_dt >= r_dt else rd))
+            if reset_at > 0 and max(int(d_pick.get("last_seen") or 0), int(d_pick.get("status_ts") or 0)) <= reset_at:
+                continue
+            m_devs[did] = d_pick
+        chosen["devices"] = m_devs
+        if not chosen.get("updated_at"):
+            chosen["updated_at"] = newest_ts or int(time.time())
+        m_users[uname] = chosen
+
+    # 3. Trộn blocked_devices
+    m_bmap: Dict[str, Dict[str, Any]] = {}
+    for did in set(l_bmap.keys()) | set(r_bmap.keys()):
+        lb = l_bmap.get(did) if isinstance(l_bmap.get(did), dict) else None
+        rb = r_bmap.get(did) if isinstance(r_bmap.get(did), dict) else None
+        if not lb and not rb:
+            continue
+        lb_ts = int((lb or {}).get("blocked_at") or 0)
+        rb_ts = int((rb or {}).get("blocked_at") or 0)
+        pick_b = json.loads(json.dumps(lb if lb_ts >= rb_ts else rb))
+        blk_ts = int(pick_b.get("blocked_at") or 0)
+        unblk_ts = int(m_unblk.get(str(did).upper()) or 0)
+        if unblk_ts > 0 and unblk_ts >= blk_ts:
+            continue
+        m_bmap[did] = pick_b
+
+    # 4. Trộn orders (ưu tiên trạng thái PAID)
+    m_orders: Dict[str, Dict[str, Any]] = {}
+    for ok_key in set(l_orders.keys()) | set(r_orders.keys()):
+        lo = l_orders.get(ok_key) if isinstance(l_orders.get(ok_key), dict) else None
+        ro = r_orders.get(ok_key) if isinstance(r_orders.get(ok_key), dict) else None
+        if not lo and not ro:
+            continue
+        if lo and not ro:
+            m_orders[ok_key] = json.loads(json.dumps(lo))
+        elif ro and not lo:
+            m_orders[ok_key] = json.loads(json.dumps(ro))
+        else:
+            l_paid = str(lo.get("status") or "").upper() == "PAID"
+            r_paid = str(ro.get("status") or "").upper() == "PAID"
+            if l_paid != r_paid:
+                pick_o = lo if l_paid else ro
+            else:
+                pick_o = lo if int(lo.get("paid_at") or lo.get("created_at") or 0) >= int(ro.get("paid_at") or ro.get("created_at") or 0) else ro
+            m_orders[ok_key] = json.loads(json.dumps(pick_o))
+
+    # 5. Trộn payos_config
+    m_pcfg = json.loads(json.dumps(l_pcfg if int(l_pcfg.get("updated_at") or 0) >= int(r_pcfg.get("updated_at") or 0) else r_pcfg))
+
+    # 6. Trộn free_daily_quota của ngày hôm nay
+    day_k = _vn_date_key()
+    l_day = l_qmap.get(day_k) if isinstance(l_qmap.get(day_k), dict) else {}
+    r_day = r_qmap.get(day_k) if isinstance(r_qmap.get(day_k), dict) else {}
+    m_day: Dict[str, int] = dict(l_day)
+    for kq, vq in r_day.items():
+        m_day[kq] = max(int(m_day.get(kq) or 0), int(vq or 0))
+    m_qmap = {day_k: m_day} if m_day else {}
+
+    m_meta = {"deleted_users": m_del, "unblocked_devices": m_unblk}
+
+    def _canon(obj: Any) -> str:
+        return json.dumps(obj, sort_keys=True, ensure_ascii=False)
+
+    any_changed = False
+    _APPLYING_REMOTE_SYNC = True
+    try:
+        if _canon(m_users) != _canon(l_users):
+            _save_vip_users_unlocked(m_users)
+            any_changed = True
+        if _canon(m_bmap) != _canon(l_bmap):
+            _save_blocked_devices_unlocked(m_bmap)
+            any_changed = True
+        if _canon(m_orders) != _canon(l_orders):
+            _save_vip_orders_unlocked(m_orders)
+            any_changed = True
+        if m_pcfg and _canon(m_pcfg) != _canon(l_pcfg):
+            _save_payos_file_config_unlocked(m_pcfg)
+            any_changed = True
+        if _canon(m_meta) != _canon(l_meta):
+            _save_sync_meta_unlocked(m_meta)
+            any_changed = True
+        with _QUOTA_LOCK:
+            cur_q = _load_free_quota_unlocked()
+            if _canon(m_qmap) != _canon(cur_q):
+                _save_free_quota_unlocked(m_qmap, day_k)
+                any_changed = True
+    finally:
+        _APPLYING_REMOTE_SYNC = False
+
+    _PEER_SYNC_STATUS["user_count"] = len(m_users)
+    return {"changed": any_changed, "user_count": len(m_users)}
+
+
+def _sync_two_way_with_peer_sync(push_after_pull: bool = True) -> Dict[str, Any]:
+    """Đồng bộ 2 chiều qua HTTP với máy chủ đối diện (chạy ngoài _VIP_LOCK để không nghẽn API)."""
+    if not _PEER_SYNC_RUN_LOCK.acquire(blocking=False):
+        return {"ok": True, "skipped": "busy"}
+    try:
+        is_cloud = _is_cloud_runtime()
+        peer_base = PRIMARY_SYNC_BASE if is_cloud else RENDER_SYNC_BASE
+        if not peer_base:
+            return {"ok": False, "error": "missing_peer_base"}
+        url = f"{peer_base}/api/internal/sync-state"
+        hdrs = {
+            "X-Sync-Token": _get_sync_token(),
+            "X-Sync-Origin": "render" if is_cloud else "pc",
+        }
+
+        pulled_remote: Optional[Dict[str, Any]] = None
+        pull_err = ""
+        try:
+            r_get = requests.get(url, headers=hdrs, timeout=25)
+            if r_get.status_code == 200:
+                j_get = r_get.json()
+                if j_get.get("self_echo"):
+                    return {"ok": True, "skipped": "self_echo"}
+                if j_get.get("success") and isinstance(j_get.get("snapshot"), dict):
+                    pulled_remote = j_get["snapshot"]
+            else:
+                pull_err = f"GET HTTP {r_get.status_code}"
+        except Exception as e_get:
+            pull_err = f"GET {e_get}"
+
+        if pulled_remote is not None:
+            with _VIP_LOCK:
+                _merge_sync_state_unlocked(pulled_remote)
+
+        if push_after_pull:
+            with _VIP_LOCK:
+                snap = _export_sync_snapshot_unlocked()
+            r_post = requests.post(url, headers=hdrs, json={"snapshot": snap}, timeout=35)
+            if r_post.status_code != 200:
+                err_s = f"POST HTTP {r_post.status_code}"
+                _PEER_SYNC_STATUS["last_error"] = err_s
+                return {"ok": False, "error": err_s}
+            j_post = r_post.json()
+            if j_post.get("self_echo"):
+                return {"ok": True, "skipped": "self_echo"}
+            _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
+            _PEER_SYNC_STATUS["last_error"] = ""
+            _PEER_SYNC_STATUS["last_direction"] = "render->pc" if is_cloud else "pc<->render"
+            _PEER_SYNC_STATUS["user_count"] = len(snap.get("users") or {})
+            return {
+                "ok": True,
+                "user_count": _PEER_SYNC_STATUS["user_count"],
+                "pulled": pulled_remote is not None,
+                "peer_changed": bool(j_post.get("changed")),
+            }
+
+        if pull_err:
+            _PEER_SYNC_STATUS["last_error"] = pull_err
+            return {"ok": False, "error": pull_err}
+        _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
+        _PEER_SYNC_STATUS["last_error"] = ""
+        _PEER_SYNC_STATUS["last_direction"] = "pc->render(pull)"
+        return {"ok": True, "user_count": _PEER_SYNC_STATUS.get("user_count", 0)}
+    except Exception as exc:
+        _PEER_SYNC_STATUS["last_error"] = str(exc)
+        return {"ok": False, "error": str(exc)}
+    finally:
+        _PEER_SYNC_RUN_LOCK.release()
+
+
+def _schedule_peer_sync_push(delay_sec: float = 0.4) -> None:
+    """Đẩy ngay thay đổi tài khoản sang server đối diện sau 0.4s debounce."""
+    global _PEER_SYNC_TIMER
+    if _APPLYING_REMOTE_SYNC or os.getenv("PYTEST_CURRENT_TEST"):
+        return
+
+    def _run_bg():
+        _sync_two_way_with_peer_sync(push_after_pull=True)
+
+    with _PEER_SYNC_TIMER_LOCK:
+        if _PEER_SYNC_TIMER is not None:
+            try:
+                _PEER_SYNC_TIMER.cancel()
+            except Exception:
+                pass
+        t = threading.Timer(max(0.1, float(delay_sec)), _run_bg)
+        t.daemon = True
+        t.start()
+        _PEER_SYNC_TIMER = t
 
 
 def _create_vip_token(username: str, token_ver: int = 1, ttl_days: int = 30) -> str:
@@ -1143,9 +1505,21 @@ def start_cloudflare_tunnel(port: int = 8000):
 @app.on_event("startup")
 def on_startup():
     # Chỉ bật cloudflare tunnel trên máy tính local, không bật khi chạy trên cloud (Render/VPS)
-    if not os.getenv("RENDER") and not os.getenv("IS_CLOUD"):
+    if not _is_cloud_runtime():
         t = threading.Thread(target=start_cloudflare_tunnel, args=(int(os.getenv("PORT", 8000)),), daemon=True)
         t.start()
+
+    def _peer_sync_loop():
+        if _is_cloud_runtime():
+            time.sleep(2.0)
+            _sync_two_way_with_peer_sync(push_after_pull=False)
+            return
+        time.sleep(3.0)
+        while True:
+            _sync_two_way_with_peer_sync(push_after_pull=True)
+            time.sleep(60)
+
+    threading.Thread(target=_peer_sync_loop, daemon=True).start()
 
 @app.get("/favicon.ico", include_in_schema=False)
 def serve_favicon():
@@ -1250,6 +1624,7 @@ async def api_vip_register(req: Request):
             "note": note or "Tự đăng ký trên web",
             "scan_count": 0,
             "created_at": now_ts,
+            "updated_at": now_ts,
             "token_ver": 1,
             "max_devices": _default_max_devices_for_user(uname),
             "devices": {
@@ -1263,6 +1638,10 @@ async def api_vip_register(req: Request):
             },
         }
         users[uname] = new_rec
+        meta = _load_sync_meta_unlocked()
+        if uname in meta["deleted_users"]:
+            meta["deleted_users"].pop(uname, None)
+            _save_sync_meta_unlocked(meta)
         _save_vip_users_unlocked(users)
         tok = _create_vip_token(uname, 1)
         pub = _public_vip_user(new_rec, bmap)
@@ -1362,6 +1741,7 @@ async def api_vip_change_password(req: Request):
         cur["password_hash"] = _hash_password(new_pwd)
         cur["password_plain"] = new_pwd
         cur["token_ver"] = int(cur.get("token_ver") or 1) + 1
+        cur["updated_at"] = int(time.time())
         _save_vip_users_unlocked(users)
         new_tok = _create_vip_token(cur["username"], cur["token_ver"])
     return JSONResponse(content={"success": True, "token": new_tok, "message": "Đã đổi mật khẩu thành công!"})
@@ -1721,6 +2101,7 @@ async def api_vip_admin_save_payos_config(req: Request):
             val = str(body.get(k_name) or "").strip()
             if val:
                 cur[k_name] = val
+        cur["updated_at"] = int(time.time())
         _save_payos_file_config_unlocked(cur)
 
     if cur.get("price_vnd"):
@@ -1926,6 +2307,59 @@ async def api_vip_admin_render_env(req: Request):
         "env_text": "\n".join(lines),
         "has_deploy_hook": bool(hook_val),
         "user_count": user_count,
+        "peer_sync": dict(_PEER_SYNC_STATUS),
+    })
+
+
+@app.get("/api/internal/sync-state")
+async def api_internal_get_sync_state(req: Request):
+    x_tok = (req.headers.get("x-sync-token") or "").strip()
+    expected = _get_sync_token()
+    if not x_tok or not hmac.compare_digest(x_tok, expected):
+        return JSONResponse(status_code=403, content={"success": False, "error": "forbidden"})
+    x_origin = (req.headers.get("x-sync-origin") or "").strip().lower()
+    if _is_cloud_runtime() and x_origin == "render":
+        return JSONResponse(content={"success": True, "self_echo": True})
+    with _VIP_LOCK:
+        snap = _export_sync_snapshot_unlocked()
+    return JSONResponse(content={"success": True, "role": "cloud" if _is_cloud_runtime() else "pc", "snapshot": snap})
+
+
+@app.post("/api/internal/sync-state")
+async def api_internal_post_sync_state(req: Request):
+    x_tok = (req.headers.get("x-sync-token") or "").strip()
+    expected = _get_sync_token()
+    if not x_tok or not hmac.compare_digest(x_tok, expected):
+        return JSONResponse(status_code=403, content={"success": False, "error": "forbidden"})
+    x_origin = (req.headers.get("x-sync-origin") or "").strip().lower()
+    if _is_cloud_runtime() and x_origin == "render":
+        return JSONResponse(content={"success": True, "self_echo": True})
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "invalid_json"})
+    snap = body.get("snapshot") if isinstance(body, dict) and isinstance(body.get("snapshot"), dict) else body
+    with _VIP_LOCK:
+        res = _merge_sync_state_unlocked(snap if isinstance(snap, dict) else {})
+    _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
+    _PEER_SYNC_STATUS["last_error"] = ""
+    _PEER_SYNC_STATUS["last_direction"] = "incoming"
+    return JSONResponse(content={"success": True, "changed": res["changed"], "user_count": res["user_count"]})
+
+
+@app.post("/api/vip/admin/sync-render-now")
+async def api_vip_admin_sync_render_now(req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền đồng bộ Render."})
+    res = await asyncio.to_thread(_sync_two_way_with_peer_sync, True)
+    if not res.get("ok"):
+        return JSONResponse(status_code=502, content={"success": False, "error": f"Không đồng bộ được sang Render: {res.get('error')}", "peer_sync": dict(_PEER_SYNC_STATUS)})
+    return JSONResponse(content={
+        "success": True,
+        "user_count": res.get("user_count", 0),
+        "peer_sync": dict(_PEER_SYNC_STATUS),
+        "message": f"✅ Đã đồng bộ tự động 2 chiều xong {res.get('user_count', 0)} tài khoản giữa PC & Render!",
     })
 
 
@@ -2093,29 +2527,41 @@ async def api_vip_admin_device_action(req: Request):
             return JSONResponse(status_code=400, content={"success": False, "error": "Không thể khóa thiết bị của Chủ hệ thống!"})
 
         devs = rec.setdefault("devices", {})
+        now_ts = int(time.time())
         if action == "reset_all":
             rec["devices"] = {}
+            rec["devices_reset_at"] = now_ts
+            rec["updated_at"] = now_ts
             _save_vip_users_unlocked(users)
             return JSONResponse(content={"success": True, "message": f"Đã reset toàn bộ thiết bị cho {target_u}."})
 
         if not dev_id:
             return JSONResponse(status_code=400, content={"success": False, "error": "Thiếu mã máy (device_id)."})
 
-        d_entry = devs.get(dev_id) if isinstance(devs.get(dev_id), dict) else {"id": dev_id, "last_seen": int(time.time())}
+        d_entry = devs.get(dev_id) if isinstance(devs.get(dev_id), dict) else {"id": dev_id, "last_seen": now_ts}
+        meta = _load_sync_meta_unlocked()
         if action == "block":
             d_entry["blocked"] = True
+            d_entry["status_ts"] = now_ts
             devs[dev_id] = d_entry
+            rec["updated_at"] = now_ts
+            meta["unblocked_devices"].pop(dev_id, None)
+            _save_sync_meta_unlocked(meta)
             bmap[dev_id] = {
                 "device_id": dev_id,
-                "blocked_at": int(time.time()),
+                "blocked_at": now_ts,
                 "username": target_u,
                 "ip": d_entry.get("ip", ""),
             }
         elif action == "unblock":
             d_entry["blocked"] = False
+            d_entry["status_ts"] = now_ts
             d_entry.pop("auto_limit", None)
             devs[dev_id] = d_entry
+            rec["updated_at"] = now_ts
             bmap.pop(dev_id, None)
+            meta["unblocked_devices"][dev_id] = now_ts
+            _save_sync_meta_unlocked(meta)
         else:
             return JSONResponse(status_code=400, content={"success": False, "error": "Hành động không hợp lệ."})
 
@@ -2164,6 +2610,7 @@ async def api_vip_admin_upsert_user(req: Request):
             exp_ts = 0 if d_val <= 0 else int(time.time()) + d_val * 86400
 
         bmap = _load_blocked_devices_unlocked()
+        now_ts = int(time.time())
         if existing:
             if pwd:
                 existing["password_hash"] = _hash_password(pwd)
@@ -2181,6 +2628,7 @@ async def api_vip_admin_upsert_user(req: Request):
                 existing["note"] = str(note_in).strip()[:120]
             if max_devs_in is not None and str(max_devs_in).strip() != "":
                 existing["max_devices"] = max(1, int(max_devs_in))
+            existing["updated_at"] = now_ts
             saved_pub = _public_vip_user(existing, bmap, include_password=True)
         else:
             m_dev = _default_max_devices_for_user(target_u)
@@ -2195,13 +2643,18 @@ async def api_vip_admin_upsert_user(req: Request):
                 "expires_at": exp_ts,
                 "note": str(note_in or "").strip()[:120],
                 "scan_count": 0,
-                "created_at": int(time.time()),
+                "created_at": now_ts,
+                "updated_at": now_ts,
                 "token_ver": 1,
                 "max_devices": m_dev,
                 "devices": {},
             }
             users[target_u] = new_rec
             saved_pub = _public_vip_user(new_rec, bmap)
+        meta = _load_sync_meta_unlocked()
+        if target_u in meta["deleted_users"]:
+            meta["deleted_users"].pop(target_u, None)
+            _save_sync_meta_unlocked(meta)
         _save_vip_users_unlocked(users)
 
     if not existing:
@@ -2225,6 +2678,9 @@ async def api_vip_admin_delete_user(target_user: str, req: Request):
         if t_clean not in users:
             return JSONResponse(status_code=404, content={"success": False, "error": "Không tìm thấy tài khoản này."})
         users.pop(t_clean, None)
+        meta = _load_sync_meta_unlocked()
+        meta["deleted_users"][t_clean] = int(time.time())
+        _save_sync_meta_unlocked(meta)
         _save_vip_users_unlocked(users)
     return JSONResponse(content={"success": True})
 

@@ -13,5 +13,6 @@ free_daily_quota.json
 sheet_config.json
 vip_orders.json
 payos_config.json
+vip_sync_meta.json
 server.log
 PUBLIC_DOMAIN.txt
