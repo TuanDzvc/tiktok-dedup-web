@@ -2071,7 +2071,7 @@ def fetch_channel_info_and_posts(
                 if posts_res.get("author_avatar") and not channel_info.get("avatar"):
                     channel_info["avatar"] = posts_res["author_avatar"]
 
-                if raw_items:
+                if raw_items and allow_paid_groupid:
                     def _run_fyp_sync():
                         if sync_items_penalty_data:
                             try:

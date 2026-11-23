@@ -1616,6 +1616,10 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                 content={"success": False, "device_blocked": True, "error": f"⛔ Thiết bị này (Mã máy: {dev_id}) đã bị Quản trị viên khóa truy cập!"},
             )
 
+    allow_paid_dedup = True
+    dedup_locked = False
+    q_stat = None
+
     if not has_vip_access:
         if not re.match(r"^DEV-[0-9A-Z]{6,12}$", raw_explicit_dev):
             return JSONResponse(
@@ -1624,18 +1628,8 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
             )
         q_stat = _get_free_quota_status(dev_id, checked_username)
         if q_stat["used"] >= FREE_DAILY_LIMIT:
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "success": False,
-                    "quota_exceeded": True,
-                    "free_quota": q_stat,
-                    "error": (
-                        f"⛔ Thiết bị của bạn (Mã máy: {dev_id}) đã dùng hết {FREE_DAILY_LIMIT}/{FREE_DAILY_LIMIT} lượt kiểm tra Miễn Phí trọn vẹn hôm nay! "
-                        f"Vui lòng đăng nhập Tài khoản VIP để quét KHÔNG GIỚI HẠN số lượt mỗi ngày."
-                    ),
-                },
-            )
+            allow_paid_dedup = False
+            dedup_locked = True
 
     force_ext = query.startswith("!")
     if force_ext:
@@ -1658,8 +1652,9 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         if clean_user:
             record_user_check_async(clean_user, client_ip, account=checked_username, device_id=dev_id)
 
-    # Chạy phân tích trong thread riêng tránh xung đột Playwright sync với asyncio loop
-    # Free được trải nghiệm trọn vẹn 100% tính năng (bao gồm cả Check Trùng & xem link Video Gốc) trong 10 lượt/ngày theo Mã máy
+    # Chạy phân tích trong thread riêng:
+    # - 10 lượt đầu Free/ngày theo Mã máy: mở khóa 100% tính năng (kể cả Check Trùng & Video Gốc).
+    # - Sau khi hết 10 lượt: vẫn cho check bình thường (0đ) thông tin User, Video, Shadowban; khóa cột Trùng lặp & Án phạt bằng nút VIP.
     import asyncio
     res = await asyncio.to_thread(
         fetch_channel_info_and_posts,
@@ -1669,13 +1664,14 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         cookie_str=cookie,
         proxy_str="",
         max_videos=max_videos,
-        allow_paid_groupid=True,
+        allow_paid_groupid=allow_paid_dedup,
     )
 
     internal_cost = res.pop("_internal_cost", None) if isinstance(res, dict) else None
     if isinstance(res, dict) and res.get("success"):
         if has_vip_access:
             res["vip_mode"] = True
+            res["dedup_locked"] = False
             cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
             c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
             c_calls = int(cost_obj.get("api_calls") or 0)
@@ -1692,9 +1688,30 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                 "est_scans_left": bal_info["est_scans_left"],
                 "usd_rate": _TIKHUB_USD_TO_VND,
             }
+        elif not dedup_locked:
+            res["vip_mode"] = False
+            res["dedup_locked"] = False
+            res["free_quota"] = _consume_free_quota(dev_id, checked_username)
         else:
             res["vip_mode"] = False
-            res["free_quota"] = _consume_free_quota(dev_id, checked_username)
+            res["dedup_locked"] = True
+            res["free_quota"] = q_stat
+            for v_item in (res.get("list") or []):
+                if isinstance(v_item, dict):
+                    v_item["_dedup_locked"] = True
+                    v_item["is_dup"] = False
+                    v_item["group_id"] = ""
+                    v_item["groupId"] = ""
+                    v_item["origin_url"] = ""
+                    v_item["has_origin_link"] = False
+                    v_item["is_crp_punished"] = False
+                    v_item["has_penalty"] = False
+                    v_item["is_fyp_restricted"] = False
+                    v_item["penalty_details"] = ""
+                    v_item["dup_reason"] = ""
+            if isinstance(res.get("stats_summary"), dict):
+                res["stats_summary"]["dup_count"] = 0
+                res["stats_summary"]["clean_count"] = 0
 
     # Kích hoạt tải trước ảnh bìa vào RAM cache song song trong nền (0.001s khi trình duyệt yêu cầu)
     v_list = res.get("list", [])
