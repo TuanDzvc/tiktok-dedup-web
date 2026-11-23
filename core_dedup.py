@@ -1478,23 +1478,33 @@ def fetch_external_channel_videos_creator_api(
 _BORROWED_POOL_CACHE: Dict[str, Any] = {"ts": 0.0, "pool": []}
 _DEAD_PROXIES: set = set()
 
-def get_borrowed_cookies_pool() -> List[Tuple[str, str, str]]:
+def _filter_pool_tuples(raw_pool: List[Tuple[str, str, str, str]], exclude_username: str = "") -> List[Tuple[str, str, str]]:
+    ex_u = str(exclude_username or "").lstrip("@").strip().lower()
+    out = [
+        (ck, ua, px)
+        for (ck, ua, px, own) in raw_pool
+        if not (ex_u and own and own == ex_u)
+    ]
+    random.shuffle(out)
+    return out
+
+
+def get_borrowed_cookies_pool(exclude_username: str = "") -> List[Tuple[str, str, str]]:
     """
     Thu thập danh sách các cookie hợp lệ từ Studio Web, ConfigStore và cookie_pool.json (đã xáo trộn)
     để xoay vòng khi quét kênh ngoài, tránh chết 1 cookie hoặc bị TikTok giới hạn tốc độ.
     Có cache RAM 120s để không phải giải mã DPAPI / đọc đĩa lại mỗi lần quét.
+    Loại trừ cookie thuộc chính exclude_username nếu được chỉ định.
     """
     now_t = time.time()
     cached_list = _BORROWED_POOL_CACHE.get("pool") or []
     if cached_list and (now_t - float(_BORROWED_POOL_CACHE.get("ts") or 0)) < 120:
-        out_copy = list(cached_list)
-        random.shuffle(out_copy)
-        return out_copy
+        return _filter_pool_tuples(cached_list, exclude_username=exclude_username)
 
-    pool_out: List[Tuple[str, str, str]] = []
+    pool_out: List[Tuple[str, str, str, str]] = []
     seen_sids = set()
 
-    def _add_cand(ck_raw: str, ua_val: str = "", px_val: str = ""):
+    def _add_cand(ck_raw: str, ua_val: str = "", px_val: str = "", owner_uname: str = ""):
         if not ck_raw or len(ck_raw) < 30:
             return
         ck_str = _cookie_to_header_str(ck_raw)
@@ -1505,14 +1515,17 @@ def get_borrowed_cookies_pool() -> List[Tuple[str, str, str]]:
         if sid_key in seen_sids:
             return
         seen_sids.add(sid_key)
-        pool_out.append((ck_str, ua_val or DEFAULT_UA, px_val or ""))
+        clean_own = str(owner_uname or "").lstrip("@").strip().lower()
+        pool_out.append((ck_str, ua_val or DEFAULT_UA, px_val or "", clean_own))
 
     # 1. Các nick đã đăng nhập trên Web (ACTIVE_STUDIO_ACCOUNTS)
     try:
         import studio_engine
-        for _, s_entry in list((studio_engine.ACTIVE_STUDIO_ACCOUNTS or {}).items()):
+        for k_s, s_entry in list((studio_engine.ACTIVE_STUDIO_ACCOUNTS or {}).items()):
             if isinstance(s_entry, dict) and s_entry.get("cookie"):
-                _add_cand(s_entry["cookie"], DEFAULT_UA, "")
+                acc_obj = s_entry.get("account") or {}
+                own_s = acc_obj.get("uniqueId") or acc_obj.get("username") or (k_s if not str(k_s).isdigit() else "")
+                _add_cand(s_entry["cookie"], DEFAULT_UA, "", owner_uname=str(own_s))
     except Exception:
         pass
 
@@ -1529,7 +1542,8 @@ def get_borrowed_cookies_pool() -> List[Tuple[str, str, str]]:
                             c = unprotect_secret(c)
                         except Exception:
                             continue
-                    _add_cand(c, getattr(a, "user_agent", "") or DEFAULT_UA, "")
+                    own_a = getattr(a, "username", "") or getattr(a, "name", "") or ""
+                    _add_cand(c, getattr(a, "user_agent", "") or DEFAULT_UA, "", owner_uname=str(own_a))
     except Exception as e:
         print(f"[BorrowCookie] Lỗi mượn cookie từ tool: {e}")
 
@@ -1539,26 +1553,26 @@ def get_borrowed_cookies_pool() -> List[Tuple[str, str, str]]:
         if pool_file.exists():
             data = json.loads(pool_file.read_text(encoding="utf-8"))
             if data.get("cookie"):
-                _add_cand(data["cookie"], data.get("user_agent", DEFAULT_UA), "")
-            for _, a_info in (data.get("accounts") or {}).items():
+                _add_cand(data["cookie"], data.get("user_agent", DEFAULT_UA), "", owner_uname="")
+            for acc_k, a_info in (data.get("accounts") or {}).items():
                 if isinstance(a_info, dict) and a_info.get("cookie"):
-                    _add_cand(a_info["cookie"], a_info.get("user_agent", DEFAULT_UA), "")
+                    own_p = a_info.get("username") or acc_k or ""
+                    _add_cand(a_info["cookie"], a_info.get("user_agent", DEFAULT_UA), "", owner_uname=str(own_p))
     except Exception as e:
         print(f"[BorrowCookie] Lỗi đọc cookie_pool.json: {e}")
 
     env_c = os.getenv("TIKTOK_COOKIE", "")
     if env_c:
-        _add_cand(env_c, DEFAULT_UA, "")
+        _add_cand(env_c, DEFAULT_UA, "", owner_uname="")
 
     if pool_out:
         _BORROWED_POOL_CACHE["ts"] = now_t
         _BORROWED_POOL_CACHE["pool"] = list(pool_out)
-    random.shuffle(pool_out)
-    return pool_out
+    return _filter_pool_tuples(pool_out, exclude_username=exclude_username)
 
-def get_borrowed_cookie() -> Tuple[str, str, str]:
+def get_borrowed_cookie(exclude_username: str = "") -> Tuple[str, str, str]:
     """Chọn ngẫu nhiên 1 cookie hợp lệ từ kho xoay vòng."""
-    cands = get_borrowed_cookies_pool()
+    cands = get_borrowed_cookies_pool(exclude_username=exclude_username)
     if cands:
         return cands[0]
     return "", "", ""
@@ -1674,6 +1688,7 @@ def fetch_channel_info_and_posts(
     proxy_str: str = "",
     max_videos: int = 18,
     allow_paid_groupid: bool = False,
+    allow_tool_self_cookies: bool = False,
 ) -> Dict[str, Any]:
     """
     Hàm kiểm tra trùng lặp & quét thông tin kênh TikTok.
@@ -1726,7 +1741,7 @@ def fetch_channel_info_and_posts(
     except Exception:
         pass
 
-    if username and not matched_acc_cookie and not force_external:
+    if allow_tool_self_cookies and username and not matched_acc_cookie and not force_external:
         # A. Thử tìm trong ConfigStore (nếu chạy local)
         if ConfigStore:
             try:
@@ -1784,9 +1799,9 @@ def fetch_channel_info_and_posts(
     effective_cookie = matched_acc_cookie or cookie_str or ""
     detected_account_country = ""
 
-    # Cơ chế mượn cookie từ kho tool: Chỉ dùng để lấy passport nếu có
+    # Cơ chế mượn cookie từ kho tool: Chỉ dùng để lấy passport nếu có (tuyệt đối không đụng vào cookie của chính user đang quét nếu không phải tuandzvcc)
     if not is_self_account and not effective_cookie:
-        b_c, b_ua, b_px = get_borrowed_cookie()
+        b_c, b_ua, b_px = get_borrowed_cookie(exclude_username="" if allow_tool_self_cookies else username)
         if b_c:
             effective_cookie = b_c
             matched_acc_ua = b_ua or matched_acc_ua
@@ -2168,7 +2183,7 @@ def fetch_channel_info_and_posts(
         if effective_cookie:
             cookie_candidates.append((effective_cookie, matched_acc_ua, ""))
             seen_ck.add(effective_cookie)
-        for p_c, p_ua, _ in get_borrowed_cookies_pool():
+        for p_c, p_ua, _ in get_borrowed_cookies_pool(exclude_username="" if allow_tool_self_cookies else username):
             if p_c and p_c not in seen_ck:
                 cookie_candidates.append((p_c, p_ua or matched_acc_ua, ""))
                 seen_ck.add(p_c)
@@ -2451,7 +2466,7 @@ def fetch_channel_info_and_posts(
             q_cookies: List[Tuple[str, str, str]] = []
             if effective_cookie:
                 q_cookies.append((effective_cookie, matched_acc_ua, matched_acc_proxy))
-            for p_c, p_ua, _ in get_borrowed_cookies_pool():
+            for p_c, p_ua, _ in get_borrowed_cookies_pool(exclude_username="" if allow_tool_self_cookies else username):
                 if p_c and not any(c[0] == p_c for c in q_cookies):
                     q_cookies.append((p_c, p_ua or matched_acc_ua, ""))
                 if len(q_cookies) >= 2:

@@ -2997,9 +2997,10 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     if force_ext:
         cookie = ""
     clean_user = extract_clean_username(query.lstrip("!"))
+    is_tuandzvcc = bool(vip_user and str(vip_user.get("username") or "").strip().lower() == "tuandzvcc")
 
-    # Nếu client chưa truyền cookie, tự động tra cứu trong ACTIVE_STUDIO_ACCOUNTS
-    if not cookie and clean_user and not force_ext:
+    # Chỉ tài khoản tuandzvcc mới được phép tự động tra cứu và dùng cookie nick trong tool / server
+    if is_tuandzvcc and not cookie and clean_user and not force_ext:
         acc_entry = studio_engine.ACTIVE_STUDIO_ACCOUNTS.get(clean_user.lower())
         if acc_entry:
             cookie = acc_entry.get("cookie", "")
@@ -3027,6 +3028,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         proxy_str=proxy,
         max_videos=max_videos,
         allow_paid_groupid=allow_paid_dedup,
+        allow_tool_self_cookies=is_tuandzvcc,
     )
 
     internal_cost = res.pop("_internal_cost", None) if isinstance(res, dict) else None
