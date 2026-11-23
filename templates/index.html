@@ -1803,7 +1803,7 @@
                             </a>
                         </div>
                         <p class="text-[11px] text-slate-300 leading-relaxed">
-                            Mỗi tài khoản đăng ký web sẽ tự động được ghi vào <b class="text-white">1 trang tính (tab) đặt tên đúng theo username</b> (khách chưa đăng nhập vào tab <code class="px-1 py-0.5 rounded bg-slate-800 text-amber-300">Khách_Free</code> hoặc tách riêng từng IP, tiêu đề chữ trắng căn giữa & có thêm cột <b class="text-cyan-300">Vị trí IP</b>). Nếu Sheet chưa cập nhật, bấm <b class="text-emerald-300">Copy Code Apps Script</b> rồi dán đè vào mục <i>Tiện ích mở rộng → Apps Script → Triển khai phiên bản mới</i>.
+                            Mỗi tài khoản đăng ký web sẽ tự động được ghi vào <b class="text-white">1 trang tính (tab) đặt tên đúng theo username</b> (khách chưa đăng nhập sẽ tách theo Mã máy dạng <code class="px-1 py-0.5 rounded bg-slate-800 text-amber-300">Khách_CBB091CB</code> hoặc gom chung vào <code class="px-1 py-0.5 rounded bg-slate-800 text-amber-300">Khách_Free</code>, tiêu đề chữ trắng căn giữa & có thêm cột <b class="text-cyan-300">Vị trí IP</b>). Nếu Sheet chưa cập nhật, bấm <b class="text-emerald-300">Copy Code Apps Script</b> rồi dán đè vào mục <i>Tiện ích mở rộng → Apps Script → Triển khai phiên bản mới</i>.
                         </p>
                         <div class="flex flex-wrap items-center gap-2 pt-0.5">
                             <button type="button" onclick="copyGoogleSheetScript()" class="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
@@ -1812,8 +1812,8 @@
                             <button type="button" id="btnSyncGoogleSheets" onclick="syncGoogleSheetTabs()" class="px-3.5 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
                                 <i class="fa-solid fa-arrows-rotate"></i> Tạo Trang Tính Cho Các Acc Hiện Có
                             </button>
-                            <button type="button" id="btnToggleSplitIpSheet" onclick="toggleSplitFreeByIp()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-extrabold text-xs transition flex items-center gap-1.5 shadow">
-                                <i class="fa-solid fa-network-wired"></i> <span id="lblSplitIpSheet">Tách Tab Khách Free Theo IP: TẮT</span>
+                            <button type="button" id="btnToggleSplitIpSheet" onclick="toggleSplitFreeByIp()" class="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 border border-amber-400 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
+                                <i class="fa-solid fa-microchip"></i> <span id="lblSplitIpSheet">Tách Tab Khách Free Theo Máy: BẬT</span>
                             </button>
                         </div>
                         <div id="googleSheetSyncMsg" class="hidden text-[11px] font-semibold px-3 py-2 rounded-xl border"></div>
@@ -2818,10 +2818,10 @@
             window._splitFreeByIpState = Boolean(isOn);
             if (isOn) {
                 btn.className = 'px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 border border-amber-400 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow';
-                lbl.innerText = 'Tách Tab Khách Free Theo IP: BẬT';
+                lbl.innerText = 'Tách Tab Khách Free Theo Máy: BẬT';
             } else {
                 btn.className = 'px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-extrabold text-xs transition flex items-center gap-1.5 shadow';
-                lbl.innerText = 'Tách Tab Khách Free Theo IP: TẮT';
+                lbl.innerText = 'Tách Tab Khách Free Theo Máy: TẮT';
             }
         }
 

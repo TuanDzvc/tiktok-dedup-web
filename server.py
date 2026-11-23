@@ -183,14 +183,14 @@ def _load_sheet_config() -> Dict[str, Any]:
             try:
                 raw = json.loads(SHEET_CONFIG_FILE.read_text(encoding="utf-8"))
                 if isinstance(raw, dict):
-                    return {"split_free_by_ip": bool(raw.get("split_free_by_ip", False))}
+                    return {"split_free_by_ip": bool(raw.get("split_free_by_ip", True))}
             except Exception:
                 pass
-    return {"split_free_by_ip": False}
+    return {"split_free_by_ip": True}
 
 
 def _save_sheet_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    clean = {"split_free_by_ip": bool(cfg.get("split_free_by_ip", False))}
+    clean = {"split_free_by_ip": bool(cfg.get("split_free_by_ip", True))}
     with _SHEET_CFG_LOCK:
         try:
             tmp_f = SHEET_CONFIG_FILE.with_suffix(".json.tmp")
@@ -302,8 +302,14 @@ def record_user_check_async(user: str, ip: str, account: str = "", device_id: st
     raw_acc = str(account or "").strip()
     if raw_acc:
         acc_sheet = _sanitize_sheet_tab(raw_acc)
-    elif _load_sheet_config().get("split_free_by_ip") and ip and ip != "Unknown":
-        acc_sheet = re.sub(r'[\\/?*\[\]:]', '_', f"Khách_{ip}")[:95]
+    elif _load_sheet_config().get("split_free_by_ip"):
+        short_dev = re.sub(r"[^A-Z0-9]", "", re.sub(r"^DEV-", "", str(device_id or "").strip().upper()))[:12]
+        if short_dev:
+            acc_sheet = f"Khách_{short_dev}"
+        elif s_ip and s_ip != "Unknown":
+            acc_sheet = f"Khách_{hashlib.sha256(s_ip.encode('utf-8')).hexdigest()[:8].upper()}"
+        else:
+            acc_sheet = "Khách_Free"
     else:
         acc_sheet = "Khách_Free"
 
@@ -1113,7 +1119,7 @@ async def api_vip_admin_sheet_script(req: Request):
         "success": True,
         "script": gs_file.read_text(encoding="utf-8"),
         "sheet_id": "1HRGpokdDkzyHFCvJBDishlkR7HaVp6BgyBJPxNCW2A0",
-        "split_free_by_ip": _load_sheet_config().get("split_free_by_ip", False),
+        "split_free_by_ip": _load_sheet_config().get("split_free_by_ip", True),
     })
 
 
@@ -1276,13 +1282,13 @@ async def api_vip_admin_sheet_config(req: Request):
     if "split_free_by_ip" in body:
         new_val = bool(body.get("split_free_by_ip"))
     else:
-        new_val = not bool(cur.get("split_free_by_ip", False))
+        new_val = not bool(cur.get("split_free_by_ip", True))
     saved = _save_sheet_config({"split_free_by_ip": new_val})
     return JSONResponse(content={
         "success": True,
         "split_free_by_ip": saved["split_free_by_ip"],
         "message": (
-            "✅ Đã BẬT tách riêng mỗi IP khách chưa đăng nhập thành 1 Trang tính (Khách_<IP>)!"
+            "✅ Đã BẬT tách riêng mỗi khách chưa đăng nhập thành 1 Trang tính theo Mã máy (Khách_<MãMáy>)!"
             if saved["split_free_by_ip"]
             else "✅ Đã chuyển về gom chung khách chưa đăng nhập vào 1 tab Khách_Free (vẫn tách dòng theo từng IP & Vị trí IP)."
         ),
