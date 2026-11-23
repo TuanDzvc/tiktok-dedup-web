@@ -43,8 +43,10 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 
 import uvicorn
+import asyncio
+from io import BytesIO
 from fastapi import FastAPI, Request, Query, HTTPException, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import requests
@@ -347,8 +349,28 @@ CLOUDFLARED_PATH = Path("E:/Tool/cloudflared.exe")
 DOMAIN_FILE = BASE_DIR / "PUBLIC_DOMAIN.txt"
 VIP_USERS_FILE = BASE_DIR / "vip_users.json"
 VIP_BLOCKED_DEVICES_FILE = BASE_DIR / "vip_blocked_devices.json"
+VIP_ORDERS_FILE = BASE_DIR / "vip_orders.json"
+PAYOS_CONFIG_FILE = BASE_DIR / "payos_config.json"
 ENV_FILE = BASE_DIR / ".env"
 _VIP_LOCK = threading.Lock()
+PAYOS_API_BASE = "https://api-merchant.payos.vn"
+PAYOS_BANK_NAMES = {
+    "970422": "MB Bank",
+    "970436": "Vietcombank",
+    "970415": "VietinBank",
+    "970418": "BIDV",
+    "970416": "ACB",
+    "970407": "Techcombank",
+    "970423": "TPBank",
+    "970432": "VPBank",
+    "970448": "OCB",
+    "970426": "MSB",
+    "970452": "KienlongBank",
+    "970403": "Sacombank",
+    "970441": "VIB",
+    "970437": "HDBank",
+    "970405": "Agribank",
+}
 
 
 def _load_blocked_devices_unlocked() -> Dict[str, Dict[str, Any]]:
@@ -538,6 +560,273 @@ def _read_local_env() -> Dict[str, str]:
     except Exception:
         pass
     return out
+
+
+def _read_external_shop_payos_env() -> Dict[str, str]:
+    """Đọc khóa PayOS dự phòng từ telegram_shop_bot/.env trên cùng PC nếu chưa khai báo ở .env riêng."""
+    out: Dict[str, str] = {}
+    try:
+        ext_env = BASE_DIR.parent / "telegram_shop_bot" / ".env"
+        if ext_env.exists():
+            for line in ext_env.read_text(encoding="utf-8", errors="ignore").splitlines():
+                s = line.strip()
+                if not s or s.startswith("#") or "=" not in s:
+                    continue
+                k, v = s.split("=", 1)
+                kk = k.strip()
+                if kk.startswith("PAYOS_"):
+                    out[kk] = v.strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return out
+
+
+def _load_payos_file_config_unlocked() -> Dict[str, Any]:
+    if PAYOS_CONFIG_FILE.exists():
+        try:
+            raw = json.loads(PAYOS_CONFIG_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return raw
+        except Exception:
+            pass
+    return {}
+
+
+def _save_payos_file_config_unlocked(cfg: Dict[str, Any]) -> None:
+    try:
+        tmp_f = PAYOS_CONFIG_FILE.with_suffix(".json.tmp")
+        tmp_f.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp_f, PAYOS_CONFIG_FILE)
+    except Exception as e:
+        logger.error(f"[PayOS] Lỗi lưu payos_config.json: {e}")
+
+
+def _get_payos_config() -> Dict[str, Any]:
+    env_map = _read_local_env()
+    ext_map = _read_external_shop_payos_env()
+    f_cfg = _load_payos_file_config_unlocked()
+    client_id = str(f_cfg.get("client_id") or os.environ.get("PAYOS_CLIENT_ID") or env_map.get("PAYOS_CLIENT_ID") or ext_map.get("PAYOS_CLIENT_ID") or "").strip()
+    api_key = str(f_cfg.get("api_key") or os.environ.get("PAYOS_API_KEY") or env_map.get("PAYOS_API_KEY") or ext_map.get("PAYOS_API_KEY") or "").strip()
+    checksum_key = str(f_cfg.get("checksum_key") or os.environ.get("PAYOS_CHECKSUM_KEY") or env_map.get("PAYOS_CHECKSUM_KEY") or ext_map.get("PAYOS_CHECKSUM_KEY") or "").strip()
+    try:
+        price_vnd = int(f_cfg.get("price_vnd") or os.environ.get("VIP_PRICE_VND") or env_map.get("VIP_PRICE_VND") or 50000)
+    except Exception:
+        price_vnd = 50000
+    try:
+        duration_days = int(f_cfg.get("duration_days") or os.environ.get("VIP_DURATION_DAYS") or env_map.get("VIP_DURATION_DAYS") or 30)
+    except Exception:
+        duration_days = 30
+    return {
+        "client_id": client_id,
+        "api_key": api_key,
+        "checksum_key": checksum_key,
+        "price_vnd": max(2000, price_vnd),
+        "duration_days": max(1, duration_days),
+        "configured": bool(client_id and api_key and checksum_key),
+    }
+
+
+def _payos_sign_data(data: Dict[str, Any], checksum_key: str) -> str:
+    parts = []
+    for k in sorted(data.keys()):
+        v = data[k]
+        if v is None:
+            v = ""
+        elif isinstance(v, (dict, list)):
+            v = json.dumps(v, separators=(",", ":"), ensure_ascii=False)
+        parts.append(f"{k}={v}")
+    raw = "&".join(parts)
+    return hmac.new(checksum_key.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _payos_verify_webhook(data: Dict[str, Any], signature: str, checksum_key: str) -> bool:
+    if not signature or not checksum_key or not isinstance(data, dict):
+        return False
+    expected = _payos_sign_data(data, checksum_key)
+    return hmac.compare_digest(expected, str(signature).strip())
+
+
+def _build_qr_data_uri(qr_payload: str) -> str:
+    payload = str(qr_payload or "").strip()
+    if not payload:
+        return ""
+    try:
+        import qrcode
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=3,
+        )
+        qr.add_data(payload)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="#0f172a", back_color="white")
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{b64}"
+    except Exception:
+        try:
+            import qrcode
+            import qrcode.image.svg
+            factory = qrcode.image.svg.SvgPathImage
+            img = qrcode.make(payload, image_factory=factory, border=3)
+            buf = BytesIO()
+            img.save(buf)
+            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            return f"data:image/svg+xml;base64,{b64}"
+        except Exception as e:
+            logger.error(f"[PayOS] Không tạo được ảnh QR: {e}")
+            return ""
+
+
+def _load_vip_orders_unlocked() -> Dict[str, Dict[str, Any]]:
+    if VIP_ORDERS_FILE.exists():
+        try:
+            raw = json.loads(VIP_ORDERS_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return raw
+        except Exception:
+            pass
+    return {}
+
+
+def _save_vip_orders_unlocked(orders: Dict[str, Dict[str, Any]]) -> None:
+    try:
+        if len(orders) > 1000:
+            items_sorted = sorted(orders.items(), key=lambda kv: int((kv[1] or {}).get("created_at") or 0), reverse=True)
+            orders = dict(items_sorted[:1000])
+        tmp_f = VIP_ORDERS_FILE.with_suffix(".json.tmp")
+        tmp_f.write_text(json.dumps(orders, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp_f, VIP_ORDERS_FILE)
+    except Exception as e:
+        logger.error(f"[PayOS] Lỗi lưu vip_orders.json: {e}")
+
+
+def _query_payos_order_sync(order_code: int, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not cfg.get("configured"):
+        return None
+    try:
+        r = requests.get(
+            f"{PAYOS_API_BASE}/v2/payment-requests/{int(order_code)}",
+            headers={
+                "x-client-id": cfg["client_id"],
+                "x-api-key": cfg["api_key"],
+            },
+            timeout=12,
+        )
+        if r.status_code != 200:
+            return None
+        body = r.json()
+        if str(body.get("code")) not in ("00", "0"):
+            return None
+        data = body.get("data")
+        return data if isinstance(data, dict) else None
+    except Exception as e:
+        logger.warning(f"[PayOS] Lỗi kiểm tra đơn {order_code}: {e}")
+        return None
+
+
+def _create_payos_payment_sync(payload: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    r = requests.post(
+        f"{PAYOS_API_BASE}/v2/payment-requests",
+        json=payload,
+        headers={
+            "x-client-id": cfg["client_id"],
+            "x-api-key": cfg["api_key"],
+            "Content-Type": "application/json",
+        },
+        timeout=15,
+    )
+    body = r.json()
+    if str(body.get("code")) not in ("00", "0"):
+        raise RuntimeError(str(body.get("desc") or body.get("message") or f"PayOS code {body.get('code')}"))
+    data = body.get("data")
+    if not isinstance(data, dict):
+        raise RuntimeError("PayOS không trả về dữ liệu thanh toán.")
+    return data
+
+
+def _public_base_url_from_request(req: Request) -> str:
+    xf_host = (req.headers.get("x-forwarded-host") or req.headers.get("host") or "").split(",")[0].strip()
+    xf_proto = (req.headers.get("x-forwarded-proto") or req.url.scheme or "https").split(",")[0].strip().lower()
+    if not xf_host:
+        return "https://checktiktok.site"
+    if "127.0.0.1" in xf_host or "localhost" in xf_host:
+        return f"http://{xf_host}"
+    return f"https://{xf_host}" if xf_proto not in ("http", "https") else f"{xf_proto}://{xf_host}"
+
+
+def _fulfill_vip_order_unlocked(
+    orders: Dict[str, Dict[str, Any]],
+    users: Dict[str, Dict[str, Any]],
+    order_code: int,
+    amount_paid: int,
+) -> Dict[str, Any]:
+    """Xác nhận thanh toán & nâng cấp tài khoản lên VIP idempotent dưới _VIP_LOCK."""
+    key = str(int(order_code))
+    ord_rec = orders.get(key)
+    if not isinstance(ord_rec, dict):
+        return {"ok": False, "reason": "order_not_found"}
+
+    uname = str(ord_rec.get("username") or "").strip().lower()
+    u_rec = users.get(uname)
+    if not isinstance(u_rec, dict):
+        return {"ok": False, "reason": "user_not_found"}
+
+    if str(ord_rec.get("status") or "").upper() == "PAID":
+        return {"ok": True, "already_paid": True, "newly_paid": False, "order": ord_rec, "user": u_rec}
+
+    req_amount = int(ord_rec.get("amount") or 0)
+    if int(amount_paid) < req_amount:
+        return {"ok": False, "reason": "insufficient_amount"}
+
+    now_ts = int(time.time())
+    days = max(1, int(ord_rec.get("duration_days") or 30))
+    old_role = str(u_rec.get("role") or "member").lower()
+    old_exp = int(u_rec.get("expires_at") or 0)
+
+    if old_role != "admin":
+        u_rec["role"] = "vip"
+        u_rec["active"] = True
+        if u_rec.get("max_devices") is None:
+            u_rec["max_devices"] = 10
+        if old_role == "vip" and old_exp <= 0:
+            u_rec["expires_at"] = 0
+        else:
+            base_ts = max(now_ts, old_exp) if (old_role == "vip" and old_exp > now_ts) else now_ts
+            u_rec["expires_at"] = base_ts + days * 86400
+        old_note = str(u_rec.get("note") or "").strip()
+        if not old_note or old_note == "Tự đăng ký trên web":
+            u_rec["note"] = f"VIP QR PayOS ({req_amount:,}đ/{days}N)"
+
+    ord_rec["status"] = "PAID"
+    ord_rec["amount_paid"] = int(amount_paid)
+    ord_rec["paid_at"] = now_ts
+    _save_vip_orders_unlocked(orders)
+    _save_vip_users_unlocked(users)
+    return {"ok": True, "already_paid": False, "newly_paid": True, "order": ord_rec, "user": u_rec}
+
+
+def _public_order_view(ord_rec: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "order_code": int(ord_rec.get("order_code") or 0),
+        "username": str(ord_rec.get("username") or ""),
+        "amount": int(ord_rec.get("amount") or 0),
+        "duration_days": int(ord_rec.get("duration_days") or 30),
+        "description": str(ord_rec.get("description") or ""),
+        "status": str(ord_rec.get("status") or "PENDING"),
+        "qr_code": str(ord_rec.get("qr_code") or ""),
+        "qr_data_uri": str(ord_rec.get("qr_data_uri") or "") or _build_qr_data_uri(str(ord_rec.get("qr_code") or "")),
+        "checkout_url": str(ord_rec.get("checkout_url") or ""),
+        "bank_bin": str(ord_rec.get("bank_bin") or ""),
+        "bank_name": str(ord_rec.get("bank_name") or ""),
+        "account_number": str(ord_rec.get("account_number") or ""),
+        "account_name": str(ord_rec.get("account_name") or ""),
+        "created_at": int(ord_rec.get("created_at") or 0),
+        "expired_at": int(ord_rec.get("expired_at") or 0),
+        "paid_at": int(ord_rec.get("paid_at") or 0),
+    }
 
 
 def _get_vip_secret() -> bytes:
@@ -993,6 +1282,8 @@ async def api_vip_me(req: Request):
             "user": None,
             "free_quota": _get_free_quota_status(dev_id),
         })
+
+    pending_code = 0
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
         bmap = _load_blocked_devices_unlocked()
@@ -1010,6 +1301,40 @@ async def api_vip_me(req: Request):
             return JSONResponse(content={"success": True, "authenticated": False, "device_blocked": True, "error": dev_err, "user": None})
         pub = _public_vip_user(cur, bmap)
         has_vip = _has_vip_privilege(cur)
+        if not has_vip:
+            now_ts = int(time.time())
+            orders = _load_vip_orders_unlocked()
+            cands = [
+                o for o in orders.values()
+                if isinstance(o, dict)
+                and str(o.get("username") or "").lower() == cur["username"]
+                and str(o.get("status") or "").upper() == "PENDING"
+                and (now_ts - int(o.get("created_at") or 0)) < 86400
+            ]
+            if cands:
+                cands.sort(key=lambda x: -int(x.get("created_at") or 0))
+                pending_code = int(cands[0].get("order_code") or 0)
+
+    if pending_code:
+        cfg = _get_payos_config()
+        pay_data = await asyncio.to_thread(_query_payos_order_sync, pending_code, cfg)
+        if pay_data and str(pay_data.get("status") or "").upper() == "PAID":
+            amt_paid = int(pay_data.get("amountPaid") or pay_data.get("amount") or 0)
+            newly_paid = False
+            sheet_note = ""
+            with _VIP_LOCK:
+                orders = _load_vip_orders_unlocked()
+                users = _load_vip_users_unlocked()
+                res_ful = _fulfill_vip_order_unlocked(orders, users, pending_code, amt_paid)
+                if res_ful.get("ok") and res_ful.get("user"):
+                    newly_paid = bool(res_ful.get("newly_paid"))
+                    cur_u = res_ful["user"]
+                    sheet_note = str(cur_u.get("note") or "")
+                    pub = _public_vip_user(cur_u, _load_blocked_devices_unlocked())
+                    has_vip = _has_vip_privilege(cur_u)
+            if newly_paid:
+                init_user_sheet_async(pub["username"], role=pub["role"], note=sheet_note)
+
     resp_payload: Dict[str, Any] = {"success": True, "authenticated": True, "user": pub}
     if not has_vip:
         resp_payload["free_quota"] = _get_free_quota_status(dev_id, pub.get("username") or "")
@@ -1040,6 +1365,383 @@ async def api_vip_change_password(req: Request):
         _save_vip_users_unlocked(users)
         new_tok = _create_vip_token(cur["username"], cur["token_ver"])
     return JSONResponse(content={"success": True, "token": new_tok, "message": "Đã đổi mật khẩu thành công!"})
+
+
+@app.post("/api/vip/payos/create-order")
+async def api_vip_payos_create_order(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    u_obj = _extract_vip_user(req, body)
+    if not u_obj:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng ký hoặc đăng nhập tài khoản trước khi lấy mã QR kích hoạt VIP."})
+
+    cfg = _get_payos_config()
+    if not cfg.get("configured"):
+        return JSONResponse(status_code=503, content={"success": False, "error": "Hệ thống thanh toán PayOS chưa được cấu hình. Vui lòng liên hệ Admin qua Zalo/Facebook!"})
+
+    uname = str(u_obj["username"]).strip().lower()
+    if str(u_obj.get("role") or "").lower() == "admin" or (str(u_obj.get("role") or "").lower() == "vip" and int(u_obj.get("expires_at") or 0) <= 0):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Tài khoản của bạn đã có quyền VIP Vĩnh Viễn rồi!"})
+
+    force_new = bool(body.get("force_new", False))
+    amount = int(cfg["price_vnd"])
+    days = int(cfg["duration_days"])
+    now_ts = int(time.time())
+
+    # Tái sử dụng đơn PENDING còn hạn (< 10 phút) để tránh tạo nhiều link dư thừa trên PayOS
+    reuse_ord: Optional[Dict[str, Any]] = None
+    if not force_new:
+        with _VIP_LOCK:
+            orders = _load_vip_orders_unlocked()
+            cands = [
+                o for o in orders.values()
+                if isinstance(o, dict)
+                and str(o.get("username") or "").lower() == uname
+                and str(o.get("status") or "").upper() == "PENDING"
+                and int(o.get("amount") or 0) == amount
+                and int(o.get("duration_days") or 0) == days
+                and int(o.get("expired_at") or 0) > now_ts + 90
+                and str(o.get("qr_code") or "").strip()
+            ]
+            if cands:
+                cands.sort(key=lambda x: -int(x.get("created_at") or 0))
+                reuse_ord = dict(cands[0])
+
+    if reuse_ord:
+        ocode = int(reuse_ord["order_code"])
+        pay_data = await asyncio.to_thread(_query_payos_order_sync, ocode, cfg)
+        if pay_data:
+            p_status = str(pay_data.get("status") or "").upper()
+            if p_status == "PAID":
+                amt_paid = int(pay_data.get("amountPaid") or pay_data.get("amount") or amount)
+                newly_paid = False
+                pub_user = None
+                sheet_note = ""
+                with _VIP_LOCK:
+                    orders = _load_vip_orders_unlocked()
+                    users = _load_vip_users_unlocked()
+                    bmap = _load_blocked_devices_unlocked()
+                    res_f = _fulfill_vip_order_unlocked(orders, users, ocode, amt_paid)
+                    if res_f.get("ok") and res_f.get("user"):
+                        newly_paid = bool(res_f.get("newly_paid"))
+                        sheet_note = str(res_f["user"].get("note") or "")
+                        pub_user = _public_vip_user(res_f["user"], bmap)
+                        reuse_ord = dict(res_f["order"])
+                if newly_paid and pub_user:
+                    init_user_sheet_async(pub_user["username"], role=pub_user["role"], note=sheet_note)
+                return JSONResponse(content={
+                    "success": True,
+                    "paid": True,
+                    "order": _public_order_view(reuse_ord),
+                    "user": pub_user,
+                    "message": "🎉 Đơn trước đó đã thanh toán xong! Tài khoản VIP đã được kích hoạt.",
+                })
+            if p_status == "PENDING":
+                return JSONResponse(content={"success": True, "paid": False, "reused": True, "order": _public_order_view(reuse_ord)})
+            # Nếu đã bị hủy / hết hạn trên PayOS thì đánh dấu và tạo đơn mới
+            with _VIP_LOCK:
+                orders = _load_vip_orders_unlocked()
+                if str(ocode) in orders:
+                    orders[str(ocode)]["status"] = p_status
+                    _save_vip_orders_unlocked(orders)
+
+    with _VIP_LOCK:
+        orders = _load_vip_orders_unlocked()
+        while True:
+            cand_code = int(f"88{int(time.time()) % 100000000:08d}{secrets.randbelow(100):02d}")
+            if str(cand_code) not in orders:
+                order_code = cand_code
+                break
+
+    base_url = _public_base_url_from_request(req)
+    return_url = f"{base_url}/payos/return?orderCode={order_code}"
+    cancel_url = f"{base_url}/payos/cancel?orderCode={order_code}"
+    desc = f"VIP{order_code}"
+    exp_ts = now_ts + 900
+    sign_payload = {
+        "amount": amount,
+        "cancelUrl": cancel_url,
+        "description": desc,
+        "orderCode": order_code,
+        "returnUrl": return_url,
+    }
+    payload = {
+        "orderCode": order_code,
+        "amount": amount,
+        "description": desc,
+        "returnUrl": return_url,
+        "cancelUrl": cancel_url,
+        "expiredAt": exp_ts,
+        "items": [{"name": f"Goi VIP {days} ngay ({uname})"[:75], "quantity": 1, "price": amount}],
+        "signature": _payos_sign_data(sign_payload, cfg["checksum_key"]),
+    }
+
+    try:
+        pay_res = await asyncio.to_thread(_create_payos_payment_sync, payload, cfg)
+    except Exception as exc:
+        logger.error(f"[PayOS] Lỗi tạo đơn QR cho {uname}: {exc}")
+        return JSONResponse(status_code=502, content={"success": False, "error": f"Không tạo được mã QR PayOS: {exc}"})
+
+    qr_str = str(pay_res.get("qrCode") or "").strip()
+    bank_bin = str(pay_res.get("bin") or "").strip()
+    qr_uri = _build_qr_data_uri(qr_str)
+    ord_rec = {
+        "order_code": order_code,
+        "username": uname,
+        "amount": amount,
+        "duration_days": days,
+        "description": str(pay_res.get("description") or desc),
+        "status": "PENDING",
+        "qr_code": qr_str,
+        "qr_data_uri": qr_uri,
+        "checkout_url": str(pay_res.get("checkoutUrl") or ""),
+        "bank_bin": bank_bin,
+        "bank_name": PAYOS_BANK_NAMES.get(bank_bin, f"Ngân hàng ({bank_bin})" if bank_bin else "Ngân hàng"),
+        "account_number": str(pay_res.get("accountNumber") or ""),
+        "account_name": str(pay_res.get("accountName") or ""),
+        "created_at": now_ts,
+        "expired_at": int(pay_res.get("expiredAt") or exp_ts),
+        "paid_at": 0,
+    }
+    with _VIP_LOCK:
+        orders = _load_vip_orders_unlocked()
+        orders[str(order_code)] = ord_rec
+        _save_vip_orders_unlocked(orders)
+
+    return JSONResponse(content={"success": True, "paid": False, "order": _public_order_view(ord_rec)})
+
+
+@app.post("/api/vip/payos/check-order")
+async def api_vip_payos_check_order(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    u_obj = _extract_vip_user(req, body)
+    if not u_obj:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Phiên đăng nhập không hợp lệ."})
+
+    uname = str(u_obj["username"]).strip().lower()
+    raw_code = body.get("order_code")
+
+    with _VIP_LOCK:
+        orders = _load_vip_orders_unlocked()
+        users = _load_vip_users_unlocked()
+        bmap = _load_blocked_devices_unlocked()
+        ord_rec = None
+        if raw_code:
+            cand = orders.get(str(int(raw_code)))
+            if isinstance(cand, dict) and (str(cand.get("username") or "").lower() == uname or u_obj.get("role") == "admin"):
+                ord_rec = dict(cand)
+        else:
+            cands = [o for o in orders.values() if isinstance(o, dict) and str(o.get("username") or "").lower() == uname]
+            if cands:
+                cands.sort(key=lambda x: -int(x.get("created_at") or 0))
+                ord_rec = dict(cands[0])
+
+        if not ord_rec:
+            return JSONResponse(status_code=404, content={"success": False, "error": "Không tìm thấy đơn thanh toán VIP nào."})
+
+        cur_user = users.get(str(ord_rec.get("username") or uname))
+        if str(ord_rec.get("status") or "").upper() == "PAID":
+            pub_u = _public_vip_user(cur_user, bmap) if isinstance(cur_user, dict) else None
+            return JSONResponse(content={
+                "success": True,
+                "paid": True,
+                "status": "PAID",
+                "order": _public_order_view(ord_rec),
+                "user": pub_u,
+            })
+
+    cfg = _get_payos_config()
+    if not cfg.get("configured"):
+        return JSONResponse(status_code=503, content={"success": False, "error": "PayOS chưa được cấu hình."})
+
+    ocode = int(ord_rec["order_code"])
+    pay_data = await asyncio.to_thread(_query_payos_order_sync, ocode, cfg)
+    if not pay_data:
+        return JSONResponse(content={"success": True, "paid": False, "status": str(ord_rec.get("status") or "PENDING"), "order": _public_order_view(ord_rec)})
+
+    p_status = str(pay_data.get("status") or "PENDING").upper()
+    amt_paid = int(pay_data.get("amountPaid") or 0)
+    req_amt = int(ord_rec.get("amount") or 0)
+
+    if p_status == "PAID" and amt_paid >= req_amt:
+        newly_paid = False
+        pub_u = None
+        sheet_note = ""
+        updated_ord = ord_rec
+        with _VIP_LOCK:
+            orders = _load_vip_orders_unlocked()
+            users = _load_vip_users_unlocked()
+            bmap = _load_blocked_devices_unlocked()
+            res_f = _fulfill_vip_order_unlocked(orders, users, ocode, amt_paid)
+            if res_f.get("ok") and res_f.get("user"):
+                newly_paid = bool(res_f.get("newly_paid"))
+                sheet_note = str(res_f["user"].get("note") or "")
+                pub_u = _public_vip_user(res_f["user"], bmap)
+                updated_ord = dict(res_f["order"])
+        if newly_paid and pub_u:
+            init_user_sheet_async(pub_u["username"], role=pub_u["role"], note=sheet_note)
+        return JSONResponse(content={
+            "success": True,
+            "paid": True,
+            "status": "PAID",
+            "order": _public_order_view(updated_ord),
+            "user": pub_u,
+        })
+
+    if p_status in ("CANCELLED", "EXPIRED") and str(ord_rec.get("status") or "").upper() != p_status:
+        with _VIP_LOCK:
+            orders = _load_vip_orders_unlocked()
+            if str(ocode) in orders:
+                orders[str(ocode)]["status"] = p_status
+                _save_vip_orders_unlocked(orders)
+                ord_rec = dict(orders[str(ocode)])
+
+    return JSONResponse(content={
+        "success": True,
+        "paid": False,
+        "status": p_status,
+        "order": _public_order_view(ord_rec),
+    })
+
+
+@app.post("/api/vip/payos/webhook")
+async def api_vip_payos_webhook(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "invalid_json"})
+
+    cfg = _get_payos_config()
+    if not cfg.get("configured"):
+        return JSONResponse(status_code=503, content={"success": False, "error": "payos_not_configured"})
+
+    data = body.get("data") if isinstance(body, dict) else None
+    signature = str(body.get("signature") or "") if isinstance(body, dict) else ""
+    if not isinstance(data, dict) or not _payos_verify_webhook(data, signature, cfg["checksum_key"]):
+        return JSONResponse(status_code=400, content={"success": False, "error": "invalid_signature"})
+
+    raw_code = data.get("orderCode") or data.get("order_code") or 0
+    if not raw_code:
+        desc = str(data.get("description") or data.get("desc") or "")
+        digits = "".join(ch for ch in desc if ch.isdigit())
+        raw_code = int(digits) if digits else 0
+
+    try:
+        order_code = int(raw_code)
+    except Exception:
+        order_code = 0
+
+    if not order_code:
+        return JSONResponse(content={"success": True, "verified": True})
+
+    amt_paid = 0
+    for k_amt in ("amount", "transferAmount", "creditAmount"):
+        if data.get(k_amt) is not None:
+            try:
+                amt_paid = int(float(data.get(k_amt)))
+                break
+            except Exception:
+                pass
+
+    newly_paid = False
+    act_user = None
+    sheet_note = ""
+    with _VIP_LOCK:
+        orders = _load_vip_orders_unlocked()
+        if str(order_code) not in orders:
+            return JSONResponse(content={"success": True, "verified": True, "note": "order_not_web_vip"})
+        users = _load_vip_users_unlocked()
+        res_f = _fulfill_vip_order_unlocked(orders, users, order_code, amt_paid)
+        if res_f.get("ok") and res_f.get("user"):
+            newly_paid = bool(res_f.get("newly_paid"))
+            sheet_note = str(res_f["user"].get("note") or "")
+            act_user = res_f["user"].get("username")
+            act_role = res_f["user"].get("role", "vip")
+        elif res_f.get("reason") == "insufficient_amount":
+            return JSONResponse(status_code=400, content={"success": False, "error": "insufficient_amount"})
+
+    if newly_paid and act_user:
+        init_user_sheet_async(act_user, role=act_role, note=sheet_note)
+    return JSONResponse(content={"success": True, "activated": bool(newly_paid), "order_code": order_code})
+
+
+@app.get("/payos/return")
+async def payos_return_redirect(orderCode: str = "", cancel: str = ""):
+    code_clean = re.sub(r"[^0-9]", "", str(orderCode or ""))[:20]
+    st = "cancel" if str(cancel).lower() == "true" else "return"
+    return RedirectResponse(url=f"/?payos_order={code_clean}&payos_status={st}" if code_clean else "/")
+
+
+@app.get("/payos/cancel")
+async def payos_cancel_redirect(orderCode: str = ""):
+    code_clean = re.sub(r"[^0-9]", "", str(orderCode or ""))[:20]
+    return RedirectResponse(url=f"/?payos_order={code_clean}&payos_status=cancel" if code_clean else "/")
+
+
+@app.get("/api/vip/admin/payos-config")
+async def api_vip_admin_get_payos_config(req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền xem cấu hình PayOS."})
+    cfg = _get_payos_config()
+    cid = cfg["client_id"]
+    cid_masked = (cid[:4] + "..." + cid[-4:]) if len(cid) > 8 else ("Đã đặt" if cid else "")
+    return JSONResponse(content={
+        "success": True,
+        "configured": cfg["configured"],
+        "client_id_masked": cid_masked,
+        "price_vnd": cfg["price_vnd"],
+        "duration_days": cfg["duration_days"],
+        "webhook_url": f"{_public_base_url_from_request(req)}/api/vip/payos/webhook",
+    })
+
+
+@app.post("/api/vip/admin/payos-config")
+async def api_vip_admin_save_payos_config(req: Request):
+    u_obj = _extract_vip_user(req)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền lưu cấu hình PayOS."})
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+
+    with _VIP_LOCK:
+        cur = _load_payos_file_config_unlocked()
+        if body.get("price_vnd") is not None and str(body.get("price_vnd")).strip() != "":
+            cur["price_vnd"] = max(2000, int(body.get("price_vnd")))
+        if body.get("duration_days") is not None and str(body.get("duration_days")).strip() != "":
+            cur["duration_days"] = max(1, int(body.get("duration_days")))
+        for k_name in ("client_id", "api_key", "checksum_key"):
+            val = str(body.get(k_name) or "").strip()
+            if val:
+                cur[k_name] = val
+        _save_payos_file_config_unlocked(cur)
+
+    if cur.get("price_vnd"):
+        _upsert_local_env_key("VIP_PRICE_VND", str(cur["price_vnd"]))
+    if cur.get("duration_days"):
+        _upsert_local_env_key("VIP_DURATION_DAYS", str(cur["duration_days"]))
+    if str(body.get("client_id") or "").strip():
+        _upsert_local_env_key("PAYOS_CLIENT_ID", str(body.get("client_id")).strip())
+    if str(body.get("api_key") or "").strip():
+        _upsert_local_env_key("PAYOS_API_KEY", str(body.get("api_key")).strip())
+    if str(body.get("checksum_key") or "").strip():
+        _upsert_local_env_key("PAYOS_CHECKSUM_KEY", str(body.get("checksum_key")).strip())
+
+    cfg = _get_payos_config()
+    return JSONResponse(content={
+        "success": True,
+        "configured": cfg["configured"],
+        "price_vnd": cfg["price_vnd"],
+        "duration_days": cfg["duration_days"],
+        "message": f"✅ Đã lưu cấu hình PayOS ({cfg['price_vnd']:,}đ / {cfg['duration_days']} ngày)!",
+    })
 
 
 _TIKHUB_USD_TO_VND = 25500
@@ -1200,6 +1902,7 @@ async def api_vip_admin_render_env(req: Request):
     vip_sec = _get_vip_secret().decode("utf-8", errors="ignore")
     sheet_url = _get_sheet_webhook_url()
     hook_val = (os.environ.get("RENDER_DEPLOY_HOOK") or env_map.get("RENDER_DEPLOY_HOOK") or "").strip()
+    payos_cfg = _get_payos_config()
 
     lines = [
         "IS_CLOUD=true",
@@ -1209,7 +1912,15 @@ async def api_vip_admin_render_env(req: Request):
         f"VIP_AUTH_SECRET={vip_sec}",
         f"SHEET_WEBHOOK_URL={sheet_url}",
         f"VIP_USERS_SEED_B64={seed_b64}",
+        f"VIP_PRICE_VND={payos_cfg['price_vnd']}",
+        f"VIP_DURATION_DAYS={payos_cfg['duration_days']}",
     ]
+    if payos_cfg.get("configured"):
+        lines.extend([
+            f"PAYOS_CLIENT_ID={payos_cfg['client_id']}",
+            f"PAYOS_API_KEY={payos_cfg['api_key']}",
+            f"PAYOS_CHECKSUM_KEY={payos_cfg['checksum_key']}",
+        ])
     return JSONResponse(content={
         "success": True,
         "env_text": "\n".join(lines),

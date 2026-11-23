@@ -597,9 +597,9 @@
                                 Chế độ <b class="text-emerald-300">Miễn Phí (10 lượt full/ngày theo Mã máy)</b> — Bấm <b class="text-amber-300">Đăng Ký/Đăng Nhập VIP</b> để quét <b>Không giới hạn</b>!
                             </span>
                         </div>
-                        <button type="button" onclick="openVipModal(true)" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs whitespace-nowrap shadow-md transition active:scale-95 flex items-center gap-1.5 flex-shrink-0">
+                        <button type="button" id="freeModeBannerBtn" onclick="openVipModal(true)" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white font-extrabold text-xs whitespace-nowrap shadow-md transition active:scale-95 flex items-center gap-1.5 flex-shrink-0">
                             <i class="fa-solid fa-crown text-yellow-200"></i>
-                            <span>Đăng Ký/Đăng Nhập VIP</span>
+                            <span id="freeModeBannerBtnLabel">Đăng Ký/Đăng Nhập VIP</span>
                         </button>
                     </div>
 
@@ -1670,7 +1670,7 @@
                 </div>
                 <div class="bg-slate-950/90 border border-slate-800 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3">
                     <span class="text-[11px] text-slate-300 leading-snug">
-                        ℹ️ Tạo nick xong bấm icon bên cạnh nhắn <b>Admin</b> kích hoạt <b>VIP</b>:
+                        ⚡ Tạo tài khoản xong sẽ mở ngay nút &amp; mã <b class="text-emerald-300">QR VietQR (PayOS)</b> để <b class="text-amber-300">tự kích hoạt VIP sau 3 giây</b> (hoặc nhắn Admin):
                     </span>
                     <div class="flex items-center gap-2 flex-shrink-0">
                         <a
@@ -1843,9 +1843,52 @@
                         </div>
                         <div id="renderSyncStatusMsg" class="hidden text-[11px] font-semibold px-3 py-2 rounded-xl border"></div>
                     </div>
+
+                    <!-- Công cụ Thanh Toán Tự Động PayOS (Quét QR tự kích hoạt VIP) -->
+                    <div id="adminPayosConfigCard" class="p-4 rounded-2xl bg-gradient-to-r from-slate-950/90 via-amber-950/20 to-slate-950/90 border border-amber-500/35 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="text-xs font-extrabold text-amber-300 flex items-center gap-1.5">
+                                <i class="fa-solid fa-qrcode"></i> Thanh Toán Tự Động QR PayOS (Tự Kích Hoạt VIP)
+                            </div>
+                            <span id="admPayosStatusBadge" class="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-slate-800 border border-slate-700 text-slate-300">Đang tải...</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 items-end">
+                            <div class="space-y-1">
+                                <label class="text-[11px] font-bold text-slate-300 block">Giá gói VIP (VNĐ)</label>
+                                <input type="number" id="admPayosPrice" min="2000" step="1000" placeholder="50000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400" />
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[11px] font-bold text-slate-300 block">Số ngày VIP cấp</label>
+                                <input type="number" id="admPayosDays" min="1" max="3650" placeholder="30" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400" />
+                            </div>
+                            <div class="space-y-1 sm:col-span-2">
+                                <label class="text-[11px] font-bold text-slate-300 block">Webhook URL PayOS (tùy chọn gắn thêm trên PayOS)</label>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="text" id="admPayosWebhookUrl" readonly value="https://checktiktok.site/api/vip/payos/webhook" class="flex-1 bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-[11px] font-mono text-cyan-300 focus:outline-none" />
+                                    <button type="button" onclick="copyText(document.getElementById('admPayosWebhookUrl').value); showToast('📋 Đã copy Webhook URL PayOS!');" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold whitespace-nowrap transition">
+                                        Copy
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <details class="rounded-xl bg-slate-900/60 border border-slate-800 px-3 py-2">
+                            <summary class="text-[11px] font-bold text-slate-300 cursor-pointer select-none">Đổi khóa API Kênh PayOS (Client ID / API Key / Checksum Key — <span id="admPayosClientPreview" class="text-cyan-300 font-mono">—</span>)</summary>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2.5">
+                                <input type="text" id="admPayosClientId" placeholder="PAYOS_CLIENT_ID mới (để trống nếu giữ nguyên)" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-[11px] text-white font-mono focus:outline-none focus:border-amber-400" />
+                                <input type="password" id="admPayosApiKey" placeholder="PAYOS_API_KEY mới (để trống nếu giữ nguyên)" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-[11px] text-white font-mono focus:outline-none focus:border-amber-400" />
+                                <input type="password" id="admPayosChecksumKey" placeholder="PAYOS_CHECKSUM_KEY mới (để trống nếu giữ nguyên)" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-[11px] text-white font-mono focus:outline-none focus:border-amber-400" />
+                            </div>
+                        </details>
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span class="text-[11px] text-slate-400">Hệ thống tự hỏi PayOS mỗi 3 giây ngay khi khách quét mã nên không cần đụng Webhook của Bot Telegram.</span>
+                            <button type="button" onclick="saveAdminPayosConfig()" class="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow whitespace-nowrap">
+                                <i class="fa-solid fa-floppy-disk"></i> Lưu Cấu Hình PayOS
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Khối thông tin + nút Đổi mật khẩu dành riêng cho tài khoản khách (không phải Admin) -->
+                <!-- Khối thông tin + nút Kích Hoạt QR VIP & Đổi mật khẩu dành riêng cho tài khoản khách -->
                 <div id="nonAdminSelfAccountCard" class="hidden p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300">
@@ -1853,12 +1896,17 @@
                         </div>
                         <div>
                             <div class="text-xs font-extrabold text-white">Tài khoản đang đăng nhập: <span id="selfCardUsername" class="font-mono text-cyan-300">—</span></div>
-                            <div class="text-[11px] text-slate-400">Bấm nút bên cạnh để mở bảng đổi mật khẩu mới riêng tư</div>
+                            <div id="selfCardVipStatus" class="text-[11px] text-slate-400">Quét mã QR VietQR để kích hoạt VIP tự động ngay lập tức</div>
                         </div>
                     </div>
-                    <button type="button" onclick="openChangePasswordModal(currentVipUser ? currentVipUser.username : '', true)" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
-                        <i class="fa-solid fa-key"></i> Đổi Mật Khẩu
-                    </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" id="btnSelfActivateVipQr" onclick="closeVipAdminModal(); openVipQrModal();" class="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow-lg shadow-emerald-500/25">
+                            <i class="fa-solid fa-qrcode"></i> <span id="lblSelfActivateVipQr">Kích Hoạt VIP (Quét QR)</span>
+                        </button>
+                        <button type="button" onclick="openChangePasswordModal(currentVipUser ? currentVipUser.username : '', true)" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
+                            <i class="fa-solid fa-key"></i> Đổi Mật Khẩu
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1907,6 +1955,138 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ============================================================================== -->
+    <!-- 5. MODAL QUÉT MÃ QR PAYOS TỰ ĐỘNG KÍCH HOẠT VIP -->
+    <!-- ============================================================================== -->
+    <div id="vipQrPaymentModal" onclick="if(event.target===this) closeVipQrModal()" class="fixed inset-0 z-[99] bg-black/75 backdrop-blur-lg flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
+        <div class="relative max-w-2xl w-full bg-dark-900/98 border border-emerald-500/45 rounded-3xl shadow-2xl shadow-emerald-950/40 overflow-hidden max-h-[94vh] flex flex-col">
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-3.5 bg-dark-950/95 flex-shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500/25 to-amber-500/25 border border-emerald-400/50 flex items-center justify-center text-emerald-300">
+                        <i class="fa-solid fa-qrcode text-base"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
+                            <span>Kích Hoạt VIP Tự Động (VietQR)</span>
+                            <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase">PayOS 24/7</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-400">
+                            Tài khoản: <b id="vipQrUsername" class="font-mono text-cyan-300">—</b> · Gói: <b id="vipQrPkgSummary" class="text-amber-300">50.000đ / 30 ngày</b>
+                        </p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeVipQrModal()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition" title="Đóng">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+
+            <div class="p-4 sm:p-5 overflow-y-auto custom-scrollbar space-y-4">
+                <!-- Trạng thái đang tải -->
+                <div id="vipQrLoading" class="py-10 flex flex-col items-center justify-center gap-3 text-center">
+                    <div class="w-10 h-10 rounded-full border-4 border-emerald-500/30 border-t-emerald-400 animate-spin"></div>
+                    <p class="text-xs sm:text-sm font-bold text-slate-200">Đang khởi tạo mã VietQR PRO từ PayOS...</p>
+                </div>
+
+                <!-- Lỗi -->
+                <div id="vipQrErrorWrap" class="hidden p-4 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-center space-y-3">
+                    <p id="vipQrErrorText" class="text-xs sm:text-sm font-bold text-rose-200">Không tạo được mã QR thanh toán.</p>
+                    <button type="button" onclick="loadVipQrOrder(true)" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs transition inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate-right"></i> Thử Tạo Lại Mã QR
+                    </button>
+                </div>
+
+                <!-- Màn hình Quét QR -->
+                <div id="vipQrReadyWrap" class="hidden grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
+                    <!-- Cột trái: Ảnh QR + Đếm ngược -->
+                    <div class="md:col-span-5 flex flex-col items-center justify-center bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 space-y-2.5">
+                        <div class="bg-white p-3 rounded-2xl shadow-lg w-full max-w-[235px] flex flex-col items-center">
+                            <img id="vipQrImage" src="" alt="VietQR PayOS" class="w-48 h-48 sm:w-52 sm:h-52 object-contain" />
+                            <div class="mt-1.5 text-[10px] font-black tracking-wide text-slate-700 uppercase">VietQR PRO · Napas 247</div>
+                        </div>
+                        <div class="w-full flex items-center justify-between gap-2 px-1 text-[11px] font-bold">
+                            <span class="text-slate-400">Hiệu lực đơn:</span>
+                            <span id="vipQrCountdown" class="font-mono text-amber-300 bg-amber-950/70 border border-amber-500/40 px-2 py-0.5 rounded-md">15:00</span>
+                        </div>
+                        <div id="vipQrPollStatus" class="w-full px-2.5 py-2 rounded-xl bg-emerald-950/50 border border-emerald-500/35 text-emerald-300 text-[11px] font-bold flex items-center justify-center gap-1.5 text-center">
+                            <i class="fa-solid fa-arrows-rotate animate-spin text-[10px]"></i>
+                            <span>Đang tự kiểm tra mỗi 3 giây...</span>
+                        </div>
+                    </div>
+
+                    <!-- Cột phải: Thông tin chuyển khoản + Nút Kiểm tra -->
+                    <div class="md:col-span-7 flex flex-col justify-between gap-3">
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 space-y-2 text-xs">
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                                <span class="text-slate-400">Ngân hàng:</span>
+                                <span id="vipQrBankName" class="font-extrabold text-white text-right">—</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                                <span class="text-slate-400">Chủ tài khoản:</span>
+                                <span id="vipQrAccName" class="font-extrabold text-cyan-300 text-right">—</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                                <span class="text-slate-400">Số tài khoản:</span>
+                                <div class="flex items-center gap-1.5">
+                                    <span id="vipQrAccNum" class="font-mono font-black text-white text-sm">—</span>
+                                    <button type="button" onclick="copyPayField('vipQrAccNum', 'Số tài khoản')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[10px] font-bold border border-slate-700 transition">Copy</button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                                <span class="text-slate-400">Số tiền VIP:</span>
+                                <div class="flex items-center gap-1.5">
+                                    <span id="vipQrAmount" class="font-mono font-black text-emerald-300 text-sm">—</span>
+                                    <button type="button" onclick="copyPayField('vipQrAmountRaw', 'Số tiền')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[10px] font-bold border border-slate-700 transition">Copy</button>
+                                    <span id="vipQrAmountRaw" class="hidden"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-slate-400">Nội dung CK:</span>
+                                <div class="flex items-center gap-1.5">
+                                    <span id="vipQrDesc" class="font-mono font-black text-amber-300 text-xs sm:text-sm">—</span>
+                                    <button type="button" onclick="copyPayField('vipQrDesc', 'Nội dung CK')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[10px] font-bold border border-slate-700 transition">Copy</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="px-3 py-2 rounded-xl bg-sky-950/40 border border-sky-500/35 text-[11px] text-sky-200 leading-relaxed">
+                            💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống tự bật <b>VIP ngay lập tức</b> không cần chờ Admin!
+                        </div>
+
+                        <div class="space-y-2">
+                            <button type="button" id="btnCheckPayosNow" onclick="checkVipQrPaymentNow(true)" class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition active:scale-95 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-circle-check"></i>
+                                <span>Tôi Đã Chuyển Khoản — Kiểm Tra Ngay</span>
+                            </button>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button" onclick="loadVipQrOrder(true)" class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs transition flex items-center justify-center gap-1.5">
+                                    <i class="fa-solid fa-rotate"></i> Tạo Mã QR Mới
+                                </button>
+                                <a id="vipQrCheckoutLink" href="#" target="_blank" rel="noopener noreferrer" class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 font-bold text-xs transition flex items-center justify-center gap-1.5">
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Mở Trang PayOS
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thành công -->
+                <div id="vipQrSuccessWrap" class="hidden py-6 px-4 rounded-2xl bg-gradient-to-br from-emerald-950/90 via-slate-900 to-cyan-950/80 border border-emerald-400/60 text-center space-y-3">
+                    <div class="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 flex items-center justify-center text-3xl mx-auto shadow-lg shadow-emerald-500/20">
+                        <i class="fa-solid fa-crown"></i>
+                    </div>
+                    <h4 class="text-lg font-black text-emerald-300">KÍCH HOẠT VIP THÀNH CÔNG!</h4>
+                    <p id="vipQrSuccessDetail" class="text-xs sm:text-sm text-slate-200 leading-relaxed">
+                        Tài khoản đã được mở khóa toàn bộ tính năng VIP không giới hạn.
+                    </p>
+                    <button type="button" onclick="finishVipQrSuccess()" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs sm:text-sm shadow-lg transition active:scale-95 inline-flex items-center gap-2">
+                        <i class="fa-solid fa-rocket"></i> Bắt Đầu Quét VIP Ngay
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2047,7 +2227,9 @@
                     <i class="fa-solid fa-bullhorn"></i>
                 </button>
             `;
+            const bannerBtnLbl = document.getElementById('freeModeBannerBtnLabel');
             if (!currentVipUser) {
+                if (bannerBtnLbl) bannerBtnLbl.innerText = 'Đăng Ký/Đăng Nhập VIP';
                 nav.innerHTML = `
                     ${noticeBtn}
                     <button
@@ -2064,6 +2246,9 @@
             }
             const isAdmin = currentVipUser.role === 'admin';
             const isVip = Boolean(currentVipUser.is_vip);
+            if (bannerBtnLbl) {
+                bannerBtnLbl.innerText = (!isAdmin && !isVip) ? 'Kích Hoạt VIP (Quét QR)' : 'Đăng Ký/Đăng Nhập VIP';
+            }
             let badgeCls = 'bg-slate-900/95 border-slate-600 hover:bg-slate-800';
             let iconCls = 'fa-user text-slate-300 text-sm';
             let roleHtml = `
@@ -2092,6 +2277,17 @@
                 `;
             }
             const canSeeBilling = Boolean(isAdmin || isVip);
+            const activateVipBtn = (!isAdmin && !isVip) ? `
+                <button
+                    type="button"
+                    onclick="openVipQrModal()"
+                    class="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-emerald-500/25 border border-emerald-300/45 hover:scale-105 active:scale-95 transition-all duration-200 whitespace-nowrap"
+                    title="Quét mã QR VietQR để tự động kích hoạt VIP ngay lập tức"
+                >
+                    <i class="fa-solid fa-crown text-yellow-200"></i>
+                    <span>Kích Hoạt VIP</span>
+                </button>
+            ` : '';
             const adminBalBtn = canSeeBilling ? `
                 <button
                     type="button"
@@ -2113,6 +2309,7 @@
             nav.innerHTML = `
                 <div class="flex items-center gap-1.5">
                     ${noticeBtn}
+                    ${activateVipBtn}
                     ${adminBalBtn}
                     <button
                         type="button"
@@ -2254,6 +2451,10 @@
 
         function openVipModal(focusInput = true, defaultTab = 'login') {
             closeNoticeModal();
+            if (currentVipUser && !currentVipUser.is_vip && currentVipUser.role !== 'admin') {
+                openVipQrModal();
+                return;
+            }
             const m = document.getElementById('vipLoginModal');
             if (!m) return;
             m.classList.remove('hidden');
@@ -2369,7 +2570,8 @@
                 validateRegPasswordLive();
                 renderVipNav();
                 closeVipModal();
-                showToast(`✅ Đã tạo tài khoản "${currentVipUser.username}"! Liên hệ Admin qua Zalo/FB để kích hoạt VIP.`);
+                showToast(`✅ Đã tạo tài khoản "${currentVipUser.username}"! Đang mở mã QR kích hoạt VIP tự động...`);
+                openVipQrModal();
             } catch (err) {
                 if (errBox) {
                     errBox.innerText = 'Lỗi kết nối máy chủ: ' + err.message;
@@ -2418,7 +2620,7 @@
                 } else if (currentVipUser.is_vip) {
                     showToast(`🎉 Đăng nhập VIP "${currentVipUser.username}" thành công! Đã mở khóa Check Trùng & Video Gốc.`);
                 } else {
-                    showToast(`👤 Đã đăng nhập "${currentVipUser.username}" (Chưa kích hoạt VIP — liên hệ Admin mở khóa).`);
+                    showToast(`👤 Đã đăng nhập "${currentVipUser.username}" — Bấm "Kích Hoạt VIP" góc trên để quét QR mở khóa tự động!`);
                 }
                 if (currentVipUser.is_vip && currentQuery && !document.getElementById('resultSection')?.classList.contains('hidden')) {
                     handleCheck();
@@ -2461,6 +2663,19 @@
                 if (tok && data && data.authenticated && data.user) {
                     currentVipUser = data.user;
                     renderVipNav();
+                    try {
+                        const sp = new URLSearchParams(window.location.search);
+                        const payOrder = sp.get('payos_order');
+                        const paySt = sp.get('payos_status');
+                        if (payOrder) {
+                            window.history.replaceState({}, document.title, window.location.pathname);
+                            if (paySt === 'return' && !currentVipUser.is_vip) {
+                                openVipQrModal(payOrder);
+                            } else if (paySt === 'cancel') {
+                                showToast('ℹ️ Bạn đã hủy giao dịch thanh toán QR vừa rồi.');
+                            }
+                        }
+                    } catch (e) {}
                     return;
                 }
                 if (tok) {
@@ -2498,16 +2713,41 @@
             }
             const nonAdminCard = document.getElementById('nonAdminSelfAccountCard');
             const selfCardName = document.getElementById('selfCardUsername');
+            const selfVipSt = document.getElementById('selfCardVipStatus');
+            const selfQrBtn = document.getElementById('btnSelfActivateVipQr');
+            const selfQrLbl = document.getElementById('lblSelfActivateVipQr');
             if (admSec) {
                 if (currentVipUser.role === 'admin') {
                     admSec.classList.remove('hidden');
                     if (nonAdminCard) nonAdminCard.classList.add('hidden');
                     loadVipUsersList();
                     loadGoogleSheetConfigState();
+                    loadAdminPayosConfig();
                 } else {
                     admSec.classList.add('hidden');
                     if (nonAdminCard) nonAdminCard.classList.remove('hidden');
                     if (selfCardName) selfCardName.innerText = currentVipUser.username || '—';
+                    const isPermVip = Boolean(currentVipUser.is_vip && (!currentVipUser.expires_at || Number(currentVipUser.expires_at) <= 0));
+                    if (selfVipSt) {
+                        if (isPermVip) {
+                            selfVipSt.innerText = '👑 Trạng thái: VIP Vĩnh Viễn (Không giới hạn)';
+                        } else if (currentVipUser.is_vip && currentVipUser.expires_at) {
+                            const dStr = new Date(Number(currentVipUser.expires_at) * 1000).toLocaleDateString('vi-VN');
+                            selfVipSt.innerText = `👑 Trạng thái: Đang là VIP (Hạn đến ${dStr})`;
+                        } else {
+                            selfVipSt.innerText = '⏳ Chưa kích hoạt VIP — Bấm "Kích Hoạt VIP (Quét QR)" để mở tự động ngay!';
+                        }
+                    }
+                    if (selfQrBtn) {
+                        if (isPermVip) {
+                            selfQrBtn.classList.add('hidden');
+                        } else {
+                            selfQrBtn.classList.remove('hidden');
+                            if (selfQrLbl) {
+                                selfQrLbl.innerText = currentVipUser.is_vip ? 'Gia Hạn VIP (Quét QR)' : 'Kích Hoạt VIP (Quét QR)';
+                            }
+                        }
+                    }
                 }
             }
             m?.classList.remove('hidden');
@@ -2977,6 +3217,273 @@
                 showToast('❌ Lỗi kết nối: ' + err.message);
             } finally {
                 if (btn) btn.disabled = false;
+            }
+        }
+
+        let _vipQrActiveOrder = null;
+        let _vipQrPollTimer = null;
+        let _vipQrTickTimer = null;
+        let _vipQrChecking = false;
+
+        function stopVipQrTimers() {
+            if (_vipQrPollTimer) { clearInterval(_vipQrPollTimer); _vipQrPollTimer = null; }
+            if (_vipQrTickTimer) { clearInterval(_vipQrTickTimer); _vipQrTickTimer = null; }
+        }
+
+        function closeVipQrModal() {
+            stopVipQrTimers();
+            document.getElementById('vipQrPaymentModal')?.classList.add('hidden');
+        }
+
+        function copyPayField(elemId, label) {
+            const txt = (document.getElementById(elemId)?.innerText || '').trim();
+            if (!txt || txt === '—') return;
+            copyText(txt);
+            showToast(`📋 Đã sao chép ${label}: ${txt}`);
+        }
+
+        function _showVipQrPaidSuccess(userObj) {
+            stopVipQrTimers();
+            document.getElementById('vipQrLoading')?.classList.add('hidden');
+            document.getElementById('vipQrErrorWrap')?.classList.add('hidden');
+            document.getElementById('vipQrReadyWrap')?.classList.add('hidden');
+            const okWrap = document.getElementById('vipQrSuccessWrap');
+            const detail = document.getElementById('vipQrSuccessDetail');
+            if (userObj) {
+                currentVipUser = userObj;
+                if (detail) {
+                    const expStr = (!userObj.expires_at || Number(userObj.expires_at) <= 0)
+                        ? 'Vĩnh viễn'
+                        : new Date(Number(userObj.expires_at) * 1000).toLocaleDateString('vi-VN');
+                    detail.innerHTML = `Tài khoản <b class="font-mono text-cyan-300">${escapeHtml(userObj.username || '')}</b> đã tự động lên <b class="text-emerald-300">VIP</b> (Hạn dùng: <b>${escapeHtml(expStr)}</b>). Chúc bạn làm việc hiệu quả!`;
+                }
+                renderVipNav();
+                document.getElementById('freeModeUpgradeBanner')?.classList.add('hidden');
+                if (typeof updateLoadMoreButtonState === 'function') updateLoadMoreButtonState();
+            }
+            okWrap?.classList.remove('hidden');
+            showToast('🎉 Đã nhận chuyển khoản & kích hoạt VIP tự động thành công!');
+        }
+
+        function finishVipQrSuccess() {
+            closeVipQrModal();
+            if (currentQuery && !document.getElementById('resultSection')?.classList.contains('hidden')) {
+                handleCheck();
+            }
+        }
+
+        function _startVipQrCountdown(expiredAtSec) {
+            if (_vipQrTickTimer) clearInterval(_vipQrTickTimer);
+            const cdEl = document.getElementById('vipQrCountdown');
+            const updateCd = () => {
+                if (!cdEl) return;
+                const left = Math.max(0, Math.floor(Number(expiredAtSec || 0) - Date.now() / 1000));
+                const mm = String(Math.floor(left / 60)).padStart(2, '0');
+                const ss = String(left % 60).padStart(2, '0');
+                cdEl.innerText = `${mm}:${ss}`;
+                if (left <= 0) {
+                    stopVipQrTimers();
+                    const pEl = document.getElementById('vipQrPollStatus');
+                    if (pEl) pEl.innerHTML = '<i class="fa-solid fa-clock text-rose-400"></i> <span class="text-rose-300">Mã QR đã hết hạn — Bấm "Tạo Mã QR Mới"</span>';
+                }
+            };
+            updateCd();
+            _vipQrTickTimer = setInterval(updateCd, 1000);
+        }
+
+        async function openVipQrModal(checkExistingOrderCode = null) {
+            if (!currentVipUser || !getVipToken()) {
+                openVipModal(true, 'register');
+                return;
+            }
+            if (currentVipUser.role === 'admin' || (currentVipUser.is_vip && (!currentVipUser.expires_at || Number(currentVipUser.expires_at) <= 0))) {
+                showToast('👑 Tài khoản của bạn đã có quyền VIP Vĩnh Viễn rồi!');
+                return;
+            }
+            closeNoticeModal();
+            closeVipModal();
+            const m = document.getElementById('vipQrPaymentModal');
+            const uEl = document.getElementById('vipQrUsername');
+            if (uEl) uEl.innerText = currentVipUser.username || '—';
+            m?.classList.remove('hidden');
+            if (checkExistingOrderCode) {
+                _vipQrActiveOrder = { order_code: Number(checkExistingOrderCode) };
+                await loadVipQrOrder(false);
+                await checkVipQrPaymentNow(true);
+            } else {
+                await loadVipQrOrder(false);
+            }
+        }
+
+        async function loadVipQrOrder(forceNew = false) {
+            stopVipQrTimers();
+            const loading = document.getElementById('vipQrLoading');
+            const errWrap = document.getElementById('vipQrErrorWrap');
+            const errTxt = document.getElementById('vipQrErrorText');
+            const ready = document.getElementById('vipQrReadyWrap');
+            const okWrap = document.getElementById('vipQrSuccessWrap');
+
+            loading?.classList.remove('hidden');
+            errWrap?.classList.add('hidden');
+            ready?.classList.add('hidden');
+            okWrap?.classList.add('hidden');
+
+            try {
+                const resp = await fetch('/api/vip/payos/create-order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + getVipToken()
+                    },
+                    body: JSON.stringify({ force_new: Boolean(forceNew) })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    loading?.classList.add('hidden');
+                    if (errTxt) errTxt.innerText = data.error || 'Không tạo được mã QR PayOS!';
+                    errWrap?.classList.remove('hidden');
+                    return;
+                }
+                if (data.paid && data.user) {
+                    _showVipQrPaidSuccess(data.user);
+                    return;
+                }
+                const ord = data.order || {};
+                _vipQrActiveOrder = ord;
+                const pkgEl = document.getElementById('vipQrPkgSummary');
+                if (pkgEl) pkgEl.innerText = `${Number(ord.amount || 50000).toLocaleString('vi-VN')}đ / ${ord.duration_days || 30} ngày`;
+                const imgEl = document.getElementById('vipQrImage');
+                if (imgEl && ord.qr_data_uri) imgEl.src = ord.qr_data_uri;
+                const bkEl = document.getElementById('vipQrBankName');
+                if (bkEl) bkEl.innerText = ord.bank_name || 'Ngân hàng';
+                const anEl = document.getElementById('vipQrAccName');
+                if (anEl) anEl.innerText = ord.account_name || '—';
+                const numEl = document.getElementById('vipQrAccNum');
+                if (numEl) numEl.innerText = ord.account_number || '—';
+                const amtEl = document.getElementById('vipQrAmount');
+                if (amtEl) amtEl.innerText = Number(ord.amount || 0).toLocaleString('vi-VN') + ' VNĐ';
+                const amtRawEl = document.getElementById('vipQrAmountRaw');
+                if (amtRawEl) amtRawEl.innerText = String(ord.amount || '');
+                const descEl = document.getElementById('vipQrDesc');
+                if (descEl) descEl.innerText = ord.description || '';
+                const chkLink = document.getElementById('vipQrCheckoutLink');
+                if (chkLink) {
+                    if (ord.checkout_url) {
+                        chkLink.href = ord.checkout_url;
+                        chkLink.classList.remove('hidden');
+                    } else {
+                        chkLink.classList.add('hidden');
+                    }
+                }
+                const pollSt = document.getElementById('vipQrPollStatus');
+                if (pollSt) {
+                    pollSt.innerHTML = '<i class="fa-solid fa-arrows-rotate animate-spin text-[10px]"></i> <span>Đang tự kiểm tra mỗi 3 giây...</span>';
+                }
+
+                loading?.classList.add('hidden');
+                ready?.classList.remove('hidden');
+                _startVipQrCountdown(ord.expired_at || (Math.floor(Date.now() / 1000) + 900));
+                _vipQrPollTimer = setInterval(() => checkVipQrPaymentNow(false), 3000);
+            } catch (err) {
+                loading?.classList.add('hidden');
+                if (errTxt) errTxt.innerText = 'Lỗi kết nối PayOS: ' + err.message;
+                errWrap?.classList.remove('hidden');
+            }
+        }
+
+        async function checkVipQrPaymentNow(manual = false) {
+            if (_vipQrChecking || !_vipQrActiveOrder || !_vipQrActiveOrder.order_code) return;
+            const modal = document.getElementById('vipQrPaymentModal');
+            if (!manual && (!modal || modal.classList.contains('hidden'))) {
+                stopVipQrTimers();
+                return;
+            }
+            _vipQrChecking = true;
+            const btn = document.getElementById('btnCheckPayosNow');
+            if (manual && btn) btn.disabled = true;
+            try {
+                const resp = await fetch('/api/vip/payos/check-order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + getVipToken()
+                    },
+                    body: JSON.stringify({ order_code: _vipQrActiveOrder.order_code })
+                });
+                const data = await resp.json();
+                if (data && data.paid && data.user) {
+                    _showVipQrPaidSuccess(data.user);
+                    return;
+                }
+                if (data && (data.status === 'CANCELLED' || data.status === 'EXPIRED')) {
+                    stopVipQrTimers();
+                    const pEl = document.getElementById('vipQrPollStatus');
+                    if (pEl) pEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-400"></i> <span class="text-rose-300">Đơn đã hủy/hết hạn — Bấm "Tạo Mã QR Mới"</span>';
+                    if (manual) showToast('⚠️ Mã QR cũ đã hết hạn hoặc bị hủy. Bấm "Tạo Mã QR Mới" để lấy mã mới.');
+                    return;
+                }
+                if (manual) {
+                    showToast('⏳ Hệ thống chưa ghi nhận tiền về cho đơn này — Vui lòng đợi vài giây rồi thử lại!');
+                }
+            } catch (err) {
+                if (manual) showToast('❌ Lỗi kiểm tra thanh toán: ' + err.message);
+            } finally {
+                _vipQrChecking = false;
+                if (manual && btn) btn.disabled = false;
+            }
+        }
+
+        async function loadAdminPayosConfig() {
+            const badge = document.getElementById('admPayosStatusBadge');
+            try {
+                const resp = await fetch('/api/vip/admin/payos-config', {
+                    headers: { 'Authorization': 'Bearer ' + getVipToken() }
+                });
+                const data = await resp.json();
+                if (!data || !data.success) return;
+                if (document.getElementById('admPayosPrice')) document.getElementById('admPayosPrice').value = data.price_vnd || 50000;
+                if (document.getElementById('admPayosDays')) document.getElementById('admPayosDays').value = data.duration_days || 30;
+                if (document.getElementById('admPayosWebhookUrl') && data.webhook_url) document.getElementById('admPayosWebhookUrl').value = data.webhook_url;
+                if (document.getElementById('admPayosClientPreview')) document.getElementById('admPayosClientPreview').innerText = data.client_id_masked || 'Chưa nhập';
+                if (badge) {
+                    if (data.configured) {
+                        badge.className = 'px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-emerald-950 border border-emerald-500/50 text-emerald-300';
+                        badge.innerText = '🟢 Đã kết nối PayOS';
+                    } else {
+                        badge.className = 'px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-rose-950 border border-rose-500/50 text-rose-300';
+                        badge.innerText = '🔴 Chưa cấu hình';
+                    }
+                }
+            } catch (e) {}
+        }
+
+        async function saveAdminPayosConfig() {
+            const price_vnd = parseInt((document.getElementById('admPayosPrice')?.value || '50000').trim(), 10);
+            const duration_days = parseInt((document.getElementById('admPayosDays')?.value || '30').trim(), 10);
+            const client_id = (document.getElementById('admPayosClientId')?.value || '').trim();
+            const api_key = (document.getElementById('admPayosApiKey')?.value || '').trim();
+            const checksum_key = (document.getElementById('admPayosChecksumKey')?.value || '').trim();
+            try {
+                const resp = await fetch('/api/vip/admin/payos-config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + getVipToken()
+                    },
+                    body: JSON.stringify({ price_vnd, duration_days, client_id, api_key, checksum_key })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    showToast('❌ ' + (data.error || 'Không lưu được cấu hình PayOS'));
+                    return;
+                }
+                if (document.getElementById('admPayosClientId')) document.getElementById('admPayosClientId').value = '';
+                if (document.getElementById('admPayosApiKey')) document.getElementById('admPayosApiKey').value = '';
+                if (document.getElementById('admPayosChecksumKey')) document.getElementById('admPayosChecksumKey').value = '';
+                showToast(data.message || '✅ Đã lưu cấu hình PayOS!');
+                loadAdminPayosConfig();
+            } catch (err) {
+                showToast('❌ Lỗi lưu PayOS: ' + err.message);
             }
         }
 
