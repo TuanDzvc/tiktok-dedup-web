@@ -501,11 +501,17 @@ def _extract_device_info(req: Request, body: Optional[Dict[str, Any]] = None) ->
     return clean_id, clean_lbl, client_ip
 
 
-TEN_DEVICE_USERS = {"admin", "tuandzvcc"}
+UNLIMITED_DEVICE_USERS = {"tuandzvcc"}
+THREE_DEVICE_USERS = {"admin"}
 
 
 def _default_max_devices_for_user(username: str) -> int:
-    return 10 if str(username or "").strip().lower() in TEN_DEVICE_USERS else 1
+    u = str(username or "").strip().lower()
+    if u in UNLIMITED_DEVICE_USERS:
+        return 0
+    if u in THREE_DEVICE_USERS:
+        return 3
+    return 1
 
 
 def _record_and_check_device_unlocked(
@@ -525,11 +531,13 @@ def _record_and_check_device_unlocked(
     prev = devs.get(dev_id) if isinstance(devs.get(dev_id), dict) else {}
     uname = str(u_rec.get("username") or "").strip().lower()
     is_super_admin = str(u_rec.get("role") or "").lower() == "admin"
-    max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else _default_max_devices_for_user(uname))
+    is_unlimited = is_super_admin or (uname in UNLIMITED_DEVICE_USERS)
+    raw_max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else _default_max_devices_for_user(uname))
+    max_devs = 0 if is_unlimited else raw_max_devs
     active_ids = [k for k, v in devs.items() if isinstance(v, dict) and not v.get("blocked")]
 
-    # Kiểm tra danh sách mã máy bị Admin khóa cứng hoặc bị khóa trên tài khoản này (miễn trừ blocked_map toàn cục cho Super Admin)
-    if (not is_super_admin and dev_id in blocked_map) or bool(prev.get("blocked")):
+    # Kiểm tra danh sách mã máy bị Admin khóa cứng hoặc bị khóa trên tài khoản này (miễn trừ toàn bộ cho Chủ hệ thống / tài khoản vô cực)
+    if not is_unlimited and ((dev_id in blocked_map) or bool(prev.get("blocked"))):
         devs[dev_id] = {
             "id": dev_id,
             "label": dev_label or prev.get("label") or "",
@@ -541,11 +549,13 @@ def _record_and_check_device_unlocked(
         u_rec["updated_at"] = now_ts
         if dev_id in blocked_map:
             return f"⛔ Mã máy {dev_id} đã bị Quản trị viên khóa truy cập!"
-        if max_devs == 1 and active_ids:
-            return f"⛔ Tài khoản chỉ dùng 1 máy ({active_ids[0]}) để tránh share tài khoản. Nếu muốn đăng nhập ở máy khác vui lòng liên hệ Admin!"
+        if max_devs == 1:
+            return "⛔ Tài khoản chỉ được dùng trên 1 mã máy để tránh share tài khoản. Nếu muốn đăng nhập thêm ở máy khác vui lòng liên hệ Admin!"
+        if max_devs > 1 and bool(prev.get("auto_limit")):
+            return f"⛔ Tài khoản chỉ được dùng tối đa {max_devs} mã máy để tránh share tài khoản. Nếu muốn đăng nhập thêm ở máy khác vui lòng liên hệ Admin!"
         return f"⛔ Mã máy {dev_id} bị từ chối đăng nhập (Chống share acc)!"
 
-    # Giới hạn số lượng mã máy: admin & tuandzvcc = 10 máy, tất cả tài khoản khác mặc định = 1 mã máy cố định (đổi IP trên cùng mã máy vẫn hợp lệ)
+    # Giới hạn số lượng mã máy: tuandzvcc = vô cực (0), admin = 3 máy, các tài khoản khác mặc định = 1 mã máy cố định (đổi IP trên cùng mã máy vẫn hợp lệ)
     if dev_id not in devs and max_devs > 0:
         if len(active_ids) >= max_devs:
             devs[dev_id] = {
@@ -558,8 +568,8 @@ def _record_and_check_device_unlocked(
             }
             u_rec["updated_at"] = now_ts
             if max_devs == 1:
-                return f"⛔ Tài khoản chỉ dùng 1 máy ({active_ids[0]}) để tránh share tài khoản. Nếu muốn đăng nhập ở máy khác vui lòng liên hệ Admin!"
-            return f"⛔ Đã đủ {max_devs} máy tối đa để tránh share tài khoản. Nếu muốn đăng nhập ở máy khác vui lòng liên hệ Admin!"
+                return "⛔ Tài khoản chỉ được dùng trên 1 mã máy để tránh share tài khoản. Nếu muốn đăng nhập thêm ở máy khác vui lòng liên hệ Admin!"
+            return f"⛔ Tài khoản chỉ được dùng tối đa {max_devs} mã máy để tránh share tài khoản. Nếu muốn đăng nhập thêm ở máy khác vui lòng liên hệ Admin!"
 
     devs[dev_id] = {
         "id": dev_id,
@@ -1497,6 +1507,9 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
             "blocked": is_blk,
         })
     dev_list.sort(key=lambda x: -x["last_seen"])
+    uname_pub = str(u.get("username") or "").strip().lower()
+    raw_max_devs = int(u.get("max_devices") if u.get("max_devices") is not None else _default_max_devices_for_user(uname_pub))
+    pub_max_devs = 0 if (uname_pub in UNLIMITED_DEVICE_USERS or str(u.get("role") or "").lower() == "admin") else raw_max_devs
     out = {
         "username": u.get("username"),
         "role": u.get("role", "member"),
@@ -1506,7 +1519,7 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
         "note": str(u.get("note") or ""),
         "scan_count": int(u.get("scan_count") or 0),
         "created_at": int(u.get("created_at") or 0),
-        "max_devices": int(u.get("max_devices") if u.get("max_devices") is not None else _default_max_devices_for_user(str(u.get("username") or ""))),
+        "max_devices": pub_max_devs,
         "devices": dev_list,
     }
     if include_password:
@@ -2801,14 +2814,18 @@ async def api_vip_admin_upsert_user(req: Request):
             existing["expires_at"] = exp_ts
             if note_in is not None:
                 existing["note"] = str(note_in).strip()[:120]
-            if max_devs_in is not None and str(max_devs_in).strip() != "":
-                existing["max_devices"] = max(1, int(max_devs_in))
+            if target_u in UNLIMITED_DEVICE_USERS:
+                existing["max_devices"] = 0
+            elif max_devs_in is not None and str(max_devs_in).strip() != "":
+                existing["max_devices"] = max(0, int(max_devs_in))
             existing["updated_at"] = now_ts
             saved_pub = _public_vip_user(existing, bmap, include_password=True)
         else:
             m_dev = _default_max_devices_for_user(target_u)
-            if max_devs_in is not None and str(max_devs_in).strip() != "":
-                m_dev = max(1, int(max_devs_in))
+            if target_u in UNLIMITED_DEVICE_USERS:
+                m_dev = 0
+            elif max_devs_in is not None and str(max_devs_in).strip() != "":
+                m_dev = max(0, int(max_devs_in))
             new_rec = {
                 "username": target_u,
                 "password_hash": _hash_password(pwd),

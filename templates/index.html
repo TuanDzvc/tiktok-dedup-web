@@ -1755,7 +1755,7 @@
                             <input type="text" id="admNewUser" placeholder="Username (vd: khach01)" required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="text" id="admNewPass" minlength="6" placeholder="Mật khẩu (từ 6 ký tự)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="number" id="admNewDays" placeholder="Số ngày (0 = Vĩnh viễn)" min="0" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
-                            <input type="number" id="admNewMaxDevs" placeholder="Số máy tối đa (mặc định: 1)" min="1" max="100" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
+                            <input type="number" id="admNewMaxDevs" placeholder="Số máy tối đa (mặc định: 1)" min="0" max="100" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                             <input type="text" id="admNewNote" placeholder="Ghi chú (tên khách/Zalo)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
                         </div>
                         <div class="flex justify-end">
@@ -2832,12 +2832,18 @@
                         </div>`;
                     const devs = Array.isArray(u.devices) ? u.devices : [];
                     const activeDevCount = devs.filter(d => !d.blocked).length;
-                    const defaultMaxDevs = (u.username === 'admin' || u.username === 'tuandzvcc') ? 10 : 1;
-                    const maxDevsNum = u.max_devices || defaultMaxDevs;
-                    let devicesHtml = '<span class="text-slate-400 text-[11px]">Chưa đăng nhập máy nào</span>';
+                    const defaultMaxDevs = u.username === 'tuandzvcc' ? 0 : (u.username === 'admin' ? 3 : 1);
+                    const rawMaxDevs = (u.max_devices !== undefined && u.max_devices !== null) ? Number(u.max_devices) : defaultMaxDevs;
+                    const isUnlimitedDevs = rawMaxDevs <= 0 || u.username === 'tuandzvcc';
+                    const maxDevsLabel = isUnlimitedDevs
+                        ? '<i class="fa-solid fa-infinity text-amber-300 text-xs align-middle" title="Không giới hạn mã máy"></i>'
+                        : `${rawMaxDevs}`;
+                    let devicesHtml = isUnlimitedDevs
+                        ? '<span class="text-amber-300/90 text-[11px] font-bold inline-flex items-center gap-1"><i class="fa-solid fa-infinity text-xs"></i> Không giới hạn máy</span>'
+                        : '<span class="text-slate-400 text-[11px]">Chưa đăng nhập máy nào</span>';
                     if (devs.length > 0) {
-                        const headerChip = `<div class="text-[11px] font-bold mb-1 ${activeDevCount > maxDevsNum ? 'text-rose-400' : 'text-cyan-300'}">
-                            Đã ghi nhận: ${activeDevCount}/${maxDevsNum} máy
+                        const headerChip = `<div class="text-[11px] font-bold mb-1 ${(!isUnlimitedDevs && activeDevCount > rawMaxDevs) ? 'text-rose-400' : 'text-cyan-300'}">
+                            Đã ghi nhận: ${activeDevCount}/${maxDevsLabel} máy
                             ${(!isSelf || u.role === 'admin') ? `<button type="button" onclick="adminDeviceAction('${escapeHtml(u.username)}', '', 'reset_all')" class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white border border-slate-600" title="Xóa lịch sử máy cũ khi khách đổi thiết bị">🔄 Reset</button>` : ''}
                         </div>`;
                         const rowsChip = devs.map(d => {
