@@ -1431,12 +1431,12 @@
     <!-- 1. POPUP THÔNG BÁO KHI MỞ WEB (KHÔNG CHỨA Ô ĐĂNG NHẬP - BLUR KÍNH MỜ MẠNH - TẮT TRONG NGÀY) -->
     <!-- ============================================================================== -->
     <div id="vipWelcomeModal" onclick="if(event.target===this) closeNoticeModal()" class="fixed inset-0 z-[94] bg-black/60 backdrop-blur-lg flex items-center justify-center p-2.5 sm:p-4 transition-all duration-200 hidden">
-        <div class="relative max-w-[1060px] w-[96vw] max-h-[92vh] overflow-y-auto flex flex-col bg-dark-900/95 border border-amber-500/40 rounded-3xl shadow-2xl custom-scrollbar">
+        <div class="relative max-w-[1040px] w-[96vw] max-h-[92vh] flex flex-col bg-dark-900/95 border border-amber-500/40 rounded-3xl shadow-2xl overflow-hidden">
             <div class="absolute -top-16 -right-16 w-44 h-44 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
             <div class="absolute -bottom-16 -left-16 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
             <!-- Header căn giữa hoàn toàn -->
-            <div class="relative flex items-center justify-center border-b border-slate-800/90 px-12 py-4 bg-dark-950/80 z-10 text-center">
+            <div class="relative flex items-center justify-center border-b border-slate-800/90 px-12 py-4 bg-dark-950/80 z-10 text-center flex-shrink-0">
                 <div class="flex flex-col items-center gap-1">
                     <div class="flex items-center justify-center gap-2.5">
                         <div class="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300 text-sm">
@@ -1452,7 +1452,7 @@
             </div>
 
             <!-- Body -->
-            <div class="p-4 sm:p-5 space-y-4 relative z-10">
+            <div class="p-4 sm:p-5 space-y-3.5 relative z-10 overflow-y-auto overflow-x-hidden custom-scrollbar">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-3.5 items-stretch">
                     <!-- Cột Free -->
                     <div class="p-4 rounded-2xl bg-slate-950/85 border border-slate-700/80 space-y-2.5 flex flex-col justify-between">
@@ -1490,7 +1490,7 @@
                         </div>
                     </div>
 
-                    <!-- Ô bên phải: Giá VIP 50K/tháng nổi bật + Liên hệ Zalo & Facebook -->
+                    <!-- Ô bên phải: Giá VIP 50K/tháng nổi bật -->
                     <div class="p-4 rounded-2xl bg-gradient-to-br from-cyan-950/75 via-slate-950/95 to-blue-950/75 border-2 border-cyan-400/80 shadow-xl shadow-cyan-500/20 flex flex-col justify-between space-y-3 relative overflow-hidden">
                         <div class="flex items-center justify-between gap-2">
                             <span class="px-2.5 py-0.5 rounded-lg bg-cyan-500/20 border border-cyan-400/60 text-cyan-200 text-[11px] font-extrabold flex items-center gap-1.5">
@@ -1501,43 +1501,16 @@
                             </span>
                         </div>
 
-                        <div class="text-center py-2.5 px-3 rounded-xl bg-slate-950/85 border border-amber-400/50 shadow-inner">
+                        <div class="text-center py-3.5 px-3 rounded-xl bg-slate-950/85 border border-amber-400/50 shadow-inner">
                             <div class="flex items-baseline justify-center gap-1">
                                 <span class="text-3xl sm:text-4xl font-black bg-gradient-to-r from-yellow-300 via-amber-300 to-orange-400 bg-clip-text text-transparent drop-shadow">50K</span>
                                 <span class="text-sm font-extrabold text-slate-200">/ tháng</span>
-                            </div>
-                            <div class="text-[11px] font-semibold text-cyan-300 mt-0.5">
-                                Phí duy trì tượng trưng — chỉ <b>~1.600đ / ngày</b>
                             </div>
                         </div>
 
                         <p class="text-[11.5px] text-slate-100 leading-relaxed text-center bg-cyan-950/40 border border-cyan-500/30 rounded-xl px-3 py-2">
                             💚 Mức thu này <b class="text-amber-300">chỉ để trả tiền duy trì Server 24/7 &amp; chi phí API</b> quét trực tiếp cho anh em.
                         </p>
-
-                        <div class="grid grid-cols-2 gap-2 pt-0.5">
-                            <a
-                                href="https://zalo.me/0963282278"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="py-2.5 px-3 rounded-xl bg-[#0068FF] hover:bg-[#0057d9] text-white font-extrabold text-xs shadow-lg shadow-blue-500/30 border border-sky-300/50 flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 transition-all"
-                            >
-                                <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M24 6C13.507 6 5 13.387 5 22.5C5 27.57 7.64 32.103 11.83 35.125C11.53 37.39 10.42 40.32 10.33 40.55C10.16 40.98 10.56 41.39 11.01 41.27C13.65 40.57 16.95 39.18 18.59 38.35C20.32 38.77 22.13 39 24 39C34.493 39 43 31.613 43 22.5C43 13.387 34.493 6 24 6Z" fill="white"/>
-                                    <text x="24" y="25.8" text-anchor="middle" fill="#0068FF" font-size="11.5" font-weight="900" font-family="Arial, sans-serif">Zalo</text>
-                                </svg>
-                                <span>Nhắn Zalo</span>
-                            </a>
-                            <a
-                                href="https://www.facebook.com/levantuan.dzvc"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="py-2.5 px-3 rounded-xl bg-[#1877F2] hover:bg-[#1666d1] text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 border border-blue-300/50 flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 transition-all"
-                            >
-                                <i class="fa-brands fa-facebook-f text-sm"></i>
-                                <span>Facebook</span>
-                            </a>
-                        </div>
                     </div>
                 </div>
 
@@ -1545,20 +1518,41 @@
                     💡 Khách có tài khoản bấm nút <b class="text-amber-300">👑 Đăng Nhập VIP</b> ở góc phải trên màn hình để quét Không giới hạn mỗi ngày.
                 </p>
 
-                <!-- Hàng nút full 100% diện tích chiều ngang popup -->
-                <div class="flex flex-col sm:flex-row items-stretch gap-3 pt-1 w-full">
+                <!-- Hàng nút dưới cùng: Tắt thông báo + Zalo + Facebook + Đã Hiểu trên cùng 1 hàng -->
+                <div class="flex flex-col sm:flex-row items-stretch gap-2.5 pt-0.5 w-full">
                     <button
                         type="button"
                         onclick="dismissNoticeForToday()"
-                        class="w-full sm:flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 border border-amber-300/40 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-amber-500/25 transition active:scale-[0.99] flex items-center justify-center gap-2"
+                        class="w-full sm:flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 border border-amber-300/40 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-amber-500/25 transition active:scale-[0.99] flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                         <i class="fa-solid fa-bell-slash text-yellow-100"></i>
                         <span>Tắt thông báo hôm nay (24h)</span>
                     </button>
+                    <a
+                        href="https://zalo.me/0963282278"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="w-full sm:w-auto py-3 px-4 rounded-xl bg-[#0068FF] hover:bg-[#0057d9] text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-blue-500/30 border border-sky-300/50 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] transition whitespace-nowrap"
+                    >
+                        <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M24 6C13.507 6 5 13.387 5 22.5C5 27.57 7.64 32.103 11.83 35.125C11.53 37.39 10.42 40.32 10.33 40.55C10.16 40.98 10.56 41.39 11.01 41.27C13.65 40.57 16.95 39.18 18.59 38.35C20.32 38.77 22.13 39 24 39C34.493 39 43 31.613 43 22.5C43 13.387 34.493 6 24 6Z" fill="white"/>
+                            <text x="24" y="25.8" text-anchor="middle" fill="#0068FF" font-size="11.5" font-weight="900" font-family="Arial, sans-serif">Zalo</text>
+                        </svg>
+                        <span>Nhắn Zalo</span>
+                    </a>
+                    <a
+                        href="https://www.facebook.com/levantuan.dzvc"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="w-full sm:w-auto py-3 px-4 rounded-xl bg-[#1877F2] hover:bg-[#1666d1] text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-blue-600/30 border border-blue-300/50 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] transition whitespace-nowrap"
+                    >
+                        <i class="fa-brands fa-facebook-f text-sm"></i>
+                        <span>Facebook</span>
+                    </a>
                     <button
                         type="button"
                         onclick="closeNoticeModal()"
-                        class="w-full sm:w-40 py-3 px-6 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 transition active:scale-[0.99] flex items-center justify-center"
+                        class="w-full sm:w-36 py-3 px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 transition active:scale-[0.99] flex items-center justify-center whitespace-nowrap"
                     >
                         Đã Hiểu
                     </button>
