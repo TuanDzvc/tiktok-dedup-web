@@ -883,19 +883,19 @@
                         type="button"
                         onclick="exportAccountCheckCSV('current', 'not_recommended')"
                         class="px-3 py-1.5 rounded-xl bg-rose-950/90 hover:bg-rose-900 border border-rose-500/70 text-rose-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
-                        title="Xuất file CSV danh sách tài khoản bị đỏ (không được đề xuất)"
+                        title="Xuất file Excel (.xlsx) danh sách tài khoản bị đỏ (Không đc đề xuất)"
                     >
-                        <i class="fa-solid fa-file-csv text-rose-400"></i>
-                        <span>CSV acc đỏ</span>
+                        <i class="fa-solid fa-file-excel text-rose-400"></i>
+                        <span>Excel acc đỏ</span>
                     </button>
                     <button
                         type="button"
                         onclick="exportAccountCheckCSV('current', 'ok')"
                         class="px-3 py-1.5 rounded-xl bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-500/70 text-emerald-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
-                        title="Xuất file CSV danh sách tài khoản sạch (đề xuất bình thường)"
+                        title="Xuất file Excel (.xlsx) danh sách tài khoản sạch (Bình thường)"
                     >
-                        <i class="fa-solid fa-file-csv text-emerald-400"></i>
-                        <span>CSV acc sạch</span>
+                        <i class="fa-solid fa-file-excel text-emerald-400"></i>
+                        <span>Excel acc sạch</span>
                     </button>
                     <button
                         type="button"
@@ -1089,19 +1089,19 @@
                             type="button"
                             onclick="exportAccountCheckCSV('history', 'not_recommended')"
                             class="px-3 py-1.5 rounded-xl bg-rose-950/90 hover:bg-rose-900 border border-rose-500/70 text-rose-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
-                            title="Xuất file CSV các tài khoản bị đỏ trong lịch sử"
+                            title="Xuất file Excel (.xlsx) các tài khoản bị đỏ trong lịch sử"
                         >
-                            <i class="fa-solid fa-file-csv text-rose-400"></i>
-                            <span>CSV acc đỏ</span>
+                            <i class="fa-solid fa-file-excel text-rose-400"></i>
+                            <span>Excel acc đỏ</span>
                         </button>
                         <button
                             type="button"
                             onclick="exportAccountCheckCSV('history', 'ok')"
                             class="px-3 py-1.5 rounded-xl bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-500/70 text-emerald-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
-                            title="Xuất file CSV các tài khoản sạch trong lịch sử"
+                            title="Xuất file Excel (.xlsx) các tài khoản sạch trong lịch sử"
                         >
-                            <i class="fa-solid fa-file-csv text-emerald-400"></i>
-                            <span>CSV acc sạch</span>
+                            <i class="fa-solid fa-file-excel text-emerald-400"></i>
+                            <span>Excel acc sạch</span>
                         </button>
                         <button
                             type="button"
@@ -5600,46 +5600,72 @@
             return `"${String(val ?? '').replace(/"/g, '""')}"`;
         }
 
-        function exportAccountCheckCSV(source, mode) {
+        function _downloadBlobFile(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        async function exportAccountCheckCSV(source, mode) {
             const srcList = (source === 'history') ? accountCheckHistoryItems : accountCheckResults;
             const matches = _filterAccountsByMode(srcList, mode);
             if (!matches.length) {
-                showToast(mode === 'not_recommended' ? 'Không có tài khoản bị đỏ nào để xuất CSV.' : 'Không có tài khoản sạch nào để xuất CSV.');
+                showToast(mode === 'not_recommended' ? 'Không có tài khoản bị đỏ nào để xuất file.' : 'Không có tài khoản sạch nào để xuất file.');
                 return;
             }
-            const headers = ["STT", "Username", "Tên hiển thị", "Trạng thái đề xuất", "Ngày tạo", "Quốc gia", "Followers", "Link TikTok", "UID", "Thời gian check"];
-            const fallbackTs = Math.floor(Date.now() / 1000);
-            const rows = matches.map((it, idx) => {
+            const prefix = (source === 'history') ? 'TikTok_LichSu_' : 'TikTok_';
+            const tag = (mode === 'ok') ? 'AccSach' : 'AccDo';
+            const dateStr = new Date().toISOString().slice(0, 10);
+            const baseName = `${prefix}${tag}_${dateStr}`;
+
+            const rows = matches.map(it => {
                 const rawHandle = String(it.unique_id || it.username || '').replace(/[^a-zA-Z0-9._-]/g, '');
                 const regCode = it.region ? formatCountryCode(it.region) : '';
                 const regFull = regCode ? formatCountryFull(regCode, it.region_display) : 'Không rõ';
-                const statusLabel = it.recommend_label || (it.recommend_status === 'not_recommended' ? 'Tài khoản không được đề xuất' : 'Đề xuất bình thường');
-                const chkStr = formatHistoryTime(it.checked_at || fallbackTs);
-                return [
-                    idx + 1,
-                    _csvCell(rawHandle ? '@' + rawHandle : ''),
-                    _csvCell(it.nickname || rawHandle || ''),
-                    _csvCell(statusLabel),
-                    _csvCell(it.create_date || '—'),
-                    _csvCell(regFull),
-                    Number(it.followers || 0),
-                    _csvCell(rawHandle ? `https://www.tiktok.com/@${rawHandle}` : ''),
-                    _csvCell(it.uid || ''),
-                    _csvCell(chkStr),
-                ].join(',');
+                const statusTxt = (it.recommend_status === 'ok') ? 'Bình thường' : 'Không đc đề xuất';
+                return {
+                    user: rawHandle ? '@' + rawHandle : '',
+                    create_date: it.create_date || '—',
+                    country: regFull,
+                    followers: Number(it.followers || 0),
+                    link: rawHandle ? `https://www.tiktok.com/@${rawHandle}` : '',
+                    status: statusTxt,
+                };
             });
 
-            const csvContent = "\uFEFF" + [headers.map(_csvCell).join(','), ...rows].join("\r\n");
-            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            const prefix = (source === 'history') ? 'TikTok_LichSu_' : 'TikTok_';
-            const tag = (mode === 'ok') ? 'AccSach' : 'AccDo';
-            a.download = `${prefix}${tag}_${new Date().toISOString().slice(0, 10)}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast(`📄 Đã xuất CSV ${matches.length} tài khoản (${mode === 'ok' ? 'sạch' : 'bị đỏ'})!`);
+            try {
+                const resp = await fetch('/api/export-accounts-excel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rows, filename: `${baseName}.xlsx` }),
+                });
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    _downloadBlobFile(blob, `${baseName}.xlsx`);
+                    showToast(`📊 Đã xuất Excel ${matches.length} tài khoản (${mode === 'ok' ? 'Bình thường' : 'Không đc đề xuất'})!`);
+                    return;
+                }
+            } catch (e) {}
+
+            // Dự phòng CSV 7 cột nếu không kết nối được trình xuất Excel
+            const headers = ["STT", "User", "Ngày tạo", "Quốc gia", "Followers", "Link Tiktok", "Trạng thái"];
+            const csvRows = rows.map((r, idx) => [
+                idx + 1,
+                _csvCell(r.user),
+                _csvCell(r.create_date),
+                _csvCell(r.country),
+                r.followers,
+                _csvCell(r.link),
+                _csvCell(r.status),
+            ].join(','));
+            const csvContent = "\uFEFF" + [headers.map(_csvCell).join(','), ...csvRows].join("\r\n");
+            _downloadBlobFile(new Blob([csvContent], { type: "text/csv;charset=utf-8;" }), `${baseName}.csv`);
+            showToast(`📄 Đã xuất CSV ${matches.length} tài khoản (${mode === 'ok' ? 'Bình thường' : 'Không đc đề xuất'})!`);
         }
 
         function jumpToChannelCheckFromAccount(username) {

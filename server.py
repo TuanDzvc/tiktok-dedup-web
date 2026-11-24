@@ -1692,7 +1692,7 @@ def _supabase_pull_snapshot_sync(sb_cfg: Dict[str, Any]) -> Optional[Dict[str, A
         r = requests.get(
             f"{sb_cfg['url']}/storage/v1/object/{SUPABASE_SYNC_BUCKET}/{SUPABASE_SYNC_OBJECT}?t={int(time.time() * 1000)}",
             headers={**_supabase_headers(sb_cfg), "Cache-Control": "no-cache", "Pragma": "no-cache"},
-            timeout=10,
+            timeout=25,
         )
         if r.status_code == 200:
             data = r.json()
@@ -1715,10 +1715,10 @@ def _supabase_push_snapshot_sync(snap: Dict[str, Any], sb_cfg: Dict[str, Any]) -
     payload_bytes = json.dumps(snap, ensure_ascii=False).encode("utf-8")
     obj_url = f"{sb_cfg['url']}/storage/v1/object/{SUPABASE_SYNC_BUCKET}/{SUPABASE_SYNC_OBJECT}"
     try:
-        r = requests.post(obj_url, headers=hdrs, data=payload_bytes, timeout=12)
+        r = requests.post(obj_url, headers=hdrs, data=payload_bytes, timeout=25)
         if r.status_code in (400, 404):
             if _supabase_ensure_bucket_sync(sb_cfg):
-                r = requests.post(obj_url, headers=hdrs, data=payload_bytes, timeout=12)
+                r = requests.post(obj_url, headers=hdrs, data=payload_bytes, timeout=25)
         return r.status_code in (200, 201)
     except Exception as exc:
         logger.warning(f"[SupabaseSync] Lỗi ghi snapshot: {exc}")
@@ -3764,6 +3764,121 @@ def api_clear_all_account_check_history(req: Request):
 def api_delete_account_check_history_item(req: Request, target_username: str):
     """Xóa 1 tài khoản khỏi Lịch sử Check Tài Khoản của tài khoản đang đăng nhập."""
     return _delete_history_item_response(req, target_username, "account_entries", "account_deleted", "Tên tài khoản không hợp lệ.")
+
+
+@app.post("/api/export-accounts-excel")
+async def api_export_accounts_excel(req: Request):
+    """Xuất danh sách Check Tài Khoản ra file Excel (.xlsx) 7 cột căn giữa, giãn rộng cột."""
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+
+    raw_rows = body.get("rows") if isinstance(body, dict) else None
+    if not isinstance(raw_rows, list) or not raw_rows:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Không có dữ liệu để xuất Excel."})
+    if len(raw_rows) > 500:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Tối đa 500 dòng mỗi lần xuất."})
+
+    raw_fn = str((body.get("filename") if isinstance(body, dict) else "") or "TikTok_Accounts.xlsx")
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]", "_", raw_fn.rsplit(".", 1)[0])[:80] or "TikTok_Accounts"
+    safe_fn = f"{safe_stem}.xlsx"
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Check Tai Khoan"
+
+    headers = ["STT", "User", "Ngày tạo", "Quốc gia", "Followers", "Link Tiktok", "Trạng thái"]
+    center_align = Alignment(horizontal="center", vertical="center")
+    hdr_fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+    hdr_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    hdr_border = Border(
+        left=Side(style="thin", color="334155"),
+        right=Side(style="thin", color="334155"),
+        top=Side(style="thin", color="334155"),
+        bottom=Side(style="thin", color="334155"),
+    )
+    cell_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1"),
+    )
+    base_font = Font(name="Calibri", size=11, color="0F172A")
+    link_font = Font(name="Calibri", size=11, color="1D4ED8", underline="single")
+    ok_font = Font(name="Calibri", size=11, bold=True, color="047857")
+    ok_fill = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
+    bad_font = Font(name="Calibri", size=11, bold=True, color="BE123C")
+    bad_fill = PatternFill(start_color="FFF1F2", end_color="FFF1F2", fill_type="solid")
+
+    ws.append(headers)
+    ws.row_dimensions[1].height = 28
+    max_lens = {idx: len(str(h)) for idx, h in enumerate(headers, start=1)}
+    for col_idx in range(1, len(headers) + 1):
+        c = ws.cell(row=1, column=col_idx)
+        c.fill = hdr_fill
+        c.font = hdr_font
+        c.alignment = center_align
+        c.border = hdr_border
+
+    for i, item in enumerate(raw_rows, start=1):
+        row_obj = item if isinstance(item, dict) else {}
+        u_str = str(row_obj.get("user") or "").strip()
+        c_date = str(row_obj.get("create_date") or "—").strip()
+        country = str(row_obj.get("country") or "Không rõ").strip()
+        try:
+            fol_val = int(row_obj.get("followers") or 0)
+        except Exception:
+            fol_val = 0
+        link_url = str(row_obj.get("link") or "").strip()
+        status_str = str(row_obj.get("status") or "Bình thường").strip()
+        if status_str not in ("Bình thường", "Không đc đề xuất"):
+            status_str = "Không đc đề xuất" if "không" in status_str.lower() else "Bình thường"
+
+        r_idx = i + 1
+        vals = [i, u_str, c_date, country, fol_val, link_url, status_str]
+        ws.append(vals)
+        ws.row_dimensions[r_idx].height = 22
+
+        for col_idx, val in enumerate(vals, start=1):
+            c = ws.cell(row=r_idx, column=col_idx)
+            c.alignment = center_align
+            c.border = cell_border
+            c.font = base_font
+            if col_idx == 5:
+                c.number_format = "#,##0"
+                disp_len = len(f"{fol_val:,}")
+            else:
+                disp_len = len(str(val or ""))
+            if disp_len > max_lens[col_idx]:
+                max_lens[col_idx] = disp_len
+
+            if col_idx == 6 and link_url.startswith("http"):
+                c.hyperlink = link_url
+                c.font = link_font
+            elif col_idx == 7:
+                is_ok = (status_str == "Bình thường")
+                c.font = ok_font if is_ok else bad_font
+                c.fill = ok_fill if is_ok else bad_fill
+
+    min_widths = {1: 10, 2: 26, 3: 16, 4: 24, 5: 16, 6: 48, 7: 24}
+    for col_idx, min_w in min_widths.items():
+        ws.column_dimensions[get_column_letter(col_idx)].width = max(min_w, min(65, max_lens[col_idx] + 6))
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = f"A1:G{len(raw_rows) + 1}"
+
+    buf = BytesIO()
+    wb.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{safe_fn}"'},
+    )
 
 @app.get("/api/proxy/image")
 def proxy_image(
