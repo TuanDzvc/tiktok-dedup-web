@@ -56,6 +56,10 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #38bdf8;
         }
+        input[type="search"]::-webkit-search-cancel-button {
+            -webkit-appearance: none;
+            appearance: none;
+        }
 
         @media (min-width: 1024px) {
             .sticky-user-sidebar {
@@ -254,8 +258,19 @@
                                     <div class="relative">
                                         <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]"></i>
                                         <input 
-                                            type="text" 
+                                            type="search" 
                                             id="pickerFilterInput" 
+                                            name="tikflow_picker_filter"
+                                            value=""
+                                            autocomplete="off"
+                                            autocorrect="off"
+                                            autocapitalize="off"
+                                            spellcheck="false"
+                                            data-lpignore="true"
+                                            data-form-type="other"
+                                            readonly
+                                            onfocus="this.removeAttribute('readonly')"
+                                            onblur="if(!this.value) this.setAttribute('readonly', 'readonly')"
                                             oninput="filterChannelPickerAccounts(this.value)" 
                                             placeholder="Tìm nhanh theo tên, @handle..." 
                                             class="w-full pl-7 pr-2.5 py-1 bg-slate-900/90 border border-slate-700/80 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400 placeholder-slate-500" 
@@ -301,8 +316,8 @@
                         </div>
                     </div>
 
-                    <!-- DÒNG 2: Nút Kiểm Tra Ngay & Nút Lịch Sử Check căn giữa (mặc định ngầm 18 video) -->
-                    <div class="flex flex-wrap items-center justify-center gap-3 pt-1.5">
+                    <!-- DÒNG 2: Nút Kiểm Tra Ngay & Nút Lịch Sử Check xếp dọc căn giữa -->
+                    <div class="flex flex-col items-center justify-center gap-2.5 pt-1.5">
                         <input type="hidden" id="scanLimitSelect" value="18" />
                         <button 
                             type="button" 
@@ -317,7 +332,7 @@
                             type="button"
                             id="btnToggleCheckHistory"
                             onclick="toggleCheckHistoryPanel()"
-                            class="hidden w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95"
+                            class="hidden px-6 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-xs sm:text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95"
                             title="Xem lại các kênh đã check gần đây (chỉ dành cho tài khoản đã đăng nhập, tự xóa sau 7 ngày)"
                         >
                             <i class="fa-solid fa-clock-rotate-left text-cyan-400"></i>
@@ -395,12 +410,32 @@
                     <div class="relative flex-grow sm:flex-grow-0 sm:w-52">
                         <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
                         <input
-                            type="text"
+                            type="search"
                             id="checkHistorySearchInput"
-                            oninput="renderCheckHistory()"
-                            placeholder="Tìm @username..."
-                            class="w-full pl-8 pr-3 py-1.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+                            name="tikflow_hist_channel_filter"
+                            value=""
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            data-lpignore="true"
+                            data-form-type="other"
+                            readonly
+                            onfocus="this.removeAttribute('readonly')"
+                            onblur="if(!this.value) this.setAttribute('readonly', 'readonly')"
+                            oninput="handleCheckHistorySearchInput(this)"
+                            placeholder="Lọc kênh đã check..."
+                            class="w-full pl-8 pr-7 py-1.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
                         />
+                        <button
+                            type="button"
+                            id="btnClearHistorySearch"
+                            onclick="clearCheckHistorySearch()"
+                            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-0.5"
+                            title="Xóa từ khóa lọc"
+                        >
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
                     </div>
                     <button
                         type="button"
@@ -710,8 +745,19 @@
                             <div class="relative w-full sm:w-60">
                                 <i class="fa-solid fa-filter absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
                                 <input 
-                                    type="text" 
+                                    type="search" 
                                     id="searchDescInput" 
+                                    name="tikflow_desc_filter"
+                                    value=""
+                                    autocomplete="off"
+                                    autocorrect="off"
+                                    autocapitalize="off"
+                                    spellcheck="false"
+                                    data-lpignore="true"
+                                    data-form-type="other"
+                                    readonly
+                                    onfocus="this.removeAttribute('readonly')"
+                                    onblur="if(!this.value) this.setAttribute('readonly', 'readonly')"
                                     oninput="filterVideos()"
                                     placeholder="Lọc theo mô tả..." 
                                     class="w-full pl-8 pr-3 py-1.5 bg-slate-800/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
@@ -1294,8 +1340,19 @@
                     <div class="relative w-56 flex-shrink-0">
                         <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
                         <input 
-                            type="text" 
+                            type="search" 
                             id="studioSearchInput" 
+                            name="tikflow_studio_filter"
+                            value=""
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            data-lpignore="true"
+                            data-form-type="other"
+                            readonly
+                            onfocus="this.removeAttribute('readonly')"
+                            onblur="if(!this.value) this.setAttribute('readonly', 'readonly')"
                             placeholder="Lọc tiêu đề hoặc aweme_id..." 
                             oninput="handleStudioSearch(this.value)"
                             class="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-7 pr-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 placeholder-slate-500 font-medium"
@@ -5053,6 +5110,7 @@
         let checkHistoryItems = [];
         let checkHistoryLoadedForUser = '';
         let checkHistoryFilter = 'all';
+        let checkHistorySearchQuery = '';
         let expandedHistoryChannels = new Set();
         let historyChannelVideoFilter = {};
 
@@ -5063,9 +5121,33 @@
             const isOpen = !sec.classList.contains('hidden');
             btn.className = currentVipUser
                 ? (isOpen
-                    ? 'inline-flex w-full sm:w-auto px-5 py-3 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border-2 border-cyan-400 text-cyan-200 font-bold text-sm shadow-lg shadow-cyan-500/20 transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95'
-                    : 'inline-flex w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95')
-                : 'hidden w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95';
+                    ? 'inline-flex px-6 py-2.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border-2 border-cyan-400 text-cyan-200 font-bold text-xs sm:text-sm shadow-lg shadow-cyan-500/20 transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95'
+                    : 'inline-flex px-6 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-xs sm:text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95')
+                : 'hidden px-6 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-xs sm:text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95';
+        }
+
+        function handleCheckHistorySearchInput(el) {
+            if (!el) return;
+            if (document.activeElement !== el) {
+                el.value = checkHistorySearchQuery;
+                if (!checkHistorySearchQuery) el.setAttribute('readonly', 'readonly');
+                return;
+            }
+            checkHistorySearchQuery = String(el.value || '');
+            const clearBtn = document.getElementById('btnClearHistorySearch');
+            if (clearBtn) clearBtn.classList.toggle('hidden', !checkHistorySearchQuery.trim());
+            renderCheckHistory();
+        }
+
+        function clearCheckHistorySearch() {
+            checkHistorySearchQuery = '';
+            const searchEl = document.getElementById('checkHistorySearchInput');
+            if (searchEl) {
+                searchEl.value = '';
+                searchEl.setAttribute('readonly', 'readonly');
+            }
+            document.getElementById('btnClearHistorySearch')?.classList.add('hidden');
+            renderCheckHistory();
         }
 
         function syncCheckHistoryAuthUI() {
@@ -5074,8 +5156,15 @@
             if (!currentVipUser) {
                 checkHistoryItems = [];
                 checkHistoryLoadedForUser = '';
+                checkHistorySearchQuery = '';
                 expandedHistoryChannels.clear();
                 historyChannelVideoFilter = {};
+                const sEl = document.getElementById('checkHistorySearchInput');
+                if (sEl) {
+                    sEl.value = '';
+                    sEl.setAttribute('readonly', 'readonly');
+                }
+                document.getElementById('btnClearHistorySearch')?.classList.add('hidden');
                 if (btn) {
                     btn.classList.add('hidden');
                     btn.classList.remove('inline-flex');
@@ -5095,6 +5184,7 @@
             updateCheckHistoryToggleBtnState();
             const curU = String(currentVipUser.username || '').trim().toLowerCase();
             if (curU && checkHistoryLoadedForUser !== curU) {
+                clearCheckHistorySearch();
                 loadCheckHistory(true);
             }
         }
@@ -5326,7 +5416,15 @@
             if (badgeCnt) badgeCnt.innerText = `${totalAll} kênh`;
             if (!listEl || !emptyEl) return;
 
-            const q = String(document.getElementById('checkHistorySearchInput')?.value || '').trim().toLowerCase().replace(/^@+/, '');
+            const searchEl = document.getElementById('checkHistorySearchInput');
+            if (searchEl && document.activeElement !== searchEl && searchEl.value !== checkHistorySearchQuery) {
+                searchEl.value = checkHistorySearchQuery;
+                if (!checkHistorySearchQuery) searchEl.setAttribute('readonly', 'readonly');
+            }
+            const clearBtn = document.getElementById('btnClearHistorySearch');
+            if (clearBtn) clearBtn.classList.toggle('hidden', !checkHistorySearchQuery.trim());
+
+            const q = String(checkHistorySearchQuery || '').trim().toLowerCase().replace(/^@+/, '');
             const filtered = checkHistoryItems.filter(item => {
                 const u = String(item.username || '').toLowerCase();
                 const nick = String(item.nickname || '').toLowerCase();
