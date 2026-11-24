@@ -3465,6 +3465,17 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                 content={"success": False, "device_blocked": True, "error": f"⛔ Mã máy {dev_id} đã bị Quản trị viên khóa truy cập!"},
             )
 
+    is_tuandzvcc = bool(vip_user and str(vip_user.get("username") or "").strip().lower() == "tuandzvcc")
+    if max_cursor > 0 and not is_tuandzvcc:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "load_more_restricted": True,
+                "error": "Tính năng quét thêm 18 video tiếp theo chỉ khả dụng cho tài khoản quản trị chính.",
+            },
+        )
+
     allow_paid_dedup = True
     dedup_locked = False
     q_stat = None
@@ -3484,7 +3495,6 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     if force_ext:
         cookie = ""
     clean_user = extract_clean_username(query.lstrip("!"))
-    is_tuandzvcc = bool(vip_user and str(vip_user.get("username") or "").strip().lower() == "tuandzvcc")
 
     # Chỉ tài khoản tuandzvcc mới được phép tự động tra cứu và dùng cookie nick trong tool / server
     if is_tuandzvcc and not cookie and clean_user and not force_ext:
@@ -3520,6 +3530,8 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
 
     internal_cost = res.pop("_internal_cost", None) if isinstance(res, dict) else None
     if isinstance(res, dict) and res.get("success"):
+        if not is_tuandzvcc:
+            res["hasMore"] = False
         if has_vip_access:
             res["vip_mode"] = True
             res["dedup_locked"] = False

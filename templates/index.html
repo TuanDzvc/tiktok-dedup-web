@@ -764,7 +764,7 @@
                                 type="button" 
                                 id="btnLoadMore" 
                                 onclick="loadMoreVideos()"
-                                class="px-8 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 transition duration-200 inline-flex flex-col items-center justify-center gap-1 active:scale-95 border border-cyan-400/30"
+                                class="hidden px-8 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 transition duration-200 inline-flex flex-col items-center justify-center gap-1 active:scale-95 border border-cyan-400/30"
                             >
                                 <span class="inline-flex items-center gap-2">
                                     <i id="loadMoreIcon" class="fa-solid fa-arrows-rotate"></i>
@@ -2701,6 +2701,7 @@
                     </button>
                 `;
                 syncCheckHistoryAuthUI();
+                if (typeof updateLoadMoreButtonState === 'function') updateLoadMoreButtonState();
                 return;
             }
             const isAdmin = currentVipUser.role === 'admin';
@@ -2795,6 +2796,7 @@
                 refreshAdminApiBalance(false);
             }
             syncCheckHistoryAuthUI();
+            if (typeof updateLoadMoreButtonState === 'function') updateLoadMoreButtonState();
         }
 
         function canCurrentUserSeeBilling() {
@@ -2803,6 +2805,10 @@
 
         function canCurrentUserUseAccountCheck() {
             return Boolean(currentVipUser && (currentVipUser.role === 'admin' || currentVipUser.is_vip));
+        }
+
+        function canCurrentUserLoadMore() {
+            return Boolean(currentVipUser && String(currentVipUser.username || '').trim().toLowerCase() === 'tuandzvcc');
         }
 
         function updateAdminBillingUI(b, isScanResult = false) {
@@ -4485,6 +4491,7 @@
         }
 
         async function loadMoreVideos() {
+            if (!canCurrentUserLoadMore()) return;
             if (isLoadingMore || !hasMoreVideos) return;
             isLoadingMore = true;
 
@@ -4558,6 +4565,7 @@
             const endMsg = document.getElementById('loadMoreEndMsg');
             const endText = document.getElementById('loadMoreEndText');
             const statusText = document.getElementById('scanStatusText');
+            if (!btn || !endMsg) return;
 
             const totalScanned = currentVideos.length;
             const channelTotal = (channelData && channelData.videoCount) ? parseInt(channelData.videoCount) : 0;
@@ -4575,6 +4583,20 @@
             }
 
             const isAllReached = Boolean(channelTotal > 0 && totalScanned >= channelTotal);
+
+            if (!canCurrentUserLoadMore()) {
+                btn.classList.add('hidden');
+                document.getElementById('loadMoreCostBadge')?.classList.add('hidden');
+                if (isAllReached && totalScanned > 0) {
+                    endMsg.classList.remove('hidden');
+                    if (endText) {
+                        endText.innerText = `🎉 Đã quét toàn bộ ${totalScanned} / ${channelTotal} video của kênh này.`;
+                    }
+                } else {
+                    endMsg.classList.add('hidden');
+                }
+                return;
+            }
 
             if (!hasMoreVideos || isAllReached || totalScanned === 0) {
                 btn.classList.add('hidden');
