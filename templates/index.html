@@ -192,7 +192,36 @@
     </header>
 
     <!-- Main Content Container -->
-    <main class="flex-grow max-w-7xl 2xl:max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <main class="flex-grow max-w-7xl 2xl:max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+        <!-- Workspace Tabs (Shown only when logged in; hidden for guests) -->
+        <div id="mainWorkspaceTabs" class="hidden text-center">
+            <div class="inline-flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-xl backdrop-blur-md">
+                <button
+                    type="button"
+                    id="tabMainChecker"
+                    onclick="switchMainWorkspaceTab('checker')"
+                    class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition whitespace-nowrap"
+                >
+                    <i class="fa-solid fa-bolt text-amber-300"></i>
+                    <span>Kiểm Tra Kênh</span>
+                </button>
+                <button
+                    type="button"
+                    id="tabMainHistory"
+                    onclick="switchMainWorkspaceTab('history')"
+                    class="px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap"
+                    title="Xem lại các kênh đã check trong 7 ngày gần nhất"
+                >
+                    <i class="fa-solid fa-clock-rotate-left text-cyan-400"></i>
+                    <span>Lịch Sử Check</span>
+                    <span id="checkHistoryNavCount" class="px-1.5 py-0.5 rounded-md bg-cyan-950 border border-cyan-500/40 text-cyan-300 font-mono text-[11px] font-extrabold tabular-nums">0</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab 1: Checker Workspace -->
+        <div id="checkerWorkspace" class="space-y-8">
 
         <!-- Hero Section: Input Box -->
         <section class="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl relative border border-slate-700/60">
@@ -316,8 +345,8 @@
                         </div>
                     </div>
 
-                    <!-- DÒNG 2: Nút Kiểm Tra Ngay & Nút Lịch Sử Check xếp dọc căn giữa -->
-                    <div class="flex flex-col items-center justify-center gap-2.5 pt-1.5">
+                    <!-- DÒNG 2: Nút Kiểm Tra Ngay căn chính giữa (mặc định ngầm 18 video) -->
+                    <div class="flex items-center justify-center pt-1.5">
                         <input type="hidden" id="scanLimitSelect" value="18" />
                         <button 
                             type="button" 
@@ -327,17 +356,6 @@
                         >
                             <i class="fa-solid fa-bolt text-amber-300"></i>
                             <span>Kiểm Tra Ngay</span>
-                        </button>
-                        <button
-                            type="button"
-                            id="btnToggleCheckHistory"
-                            onclick="toggleCheckHistoryPanel()"
-                            class="hidden px-6 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-xs sm:text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95"
-                            title="Xem lại các kênh đã check gần đây (chỉ dành cho tài khoản đã đăng nhập, tự xóa sau 7 ngày)"
-                        >
-                            <i class="fa-solid fa-clock-rotate-left text-cyan-400"></i>
-                            <span>Lịch sử check</span>
-                            <span id="checkHistoryNavCount" class="px-1.5 py-0.5 rounded-md bg-cyan-950 border border-cyan-500/40 text-cyan-300 font-mono text-[11px] font-extrabold tabular-nums">0</span>
                         </button>
                     </div>
                 </form>
@@ -383,91 +401,6 @@
             <i class="fa-solid fa-triangle-exclamation text-xl text-rose-400"></i>
             <span id="errorMessage" class="text-sm font-medium"></span>
         </div>
-
-        <!-- Check History Section (Logged-in users only, hidden for guests) -->
-        <section id="checkHistorySection" class="hidden glass-panel rounded-3xl p-4 sm:p-6 border border-slate-700/80 shadow-2xl space-y-4">
-            <div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 pb-3 border-b border-slate-800/90">
-                <div class="flex flex-wrap items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-xl bg-cyan-950/90 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow">
-                        <i class="fa-solid fa-clock-rotate-left"></i>
-                    </div>
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <h2 class="text-base sm:text-lg font-extrabold text-white tracking-tight">Lịch sử check</h2>
-                            <span id="checkHistoryCountBadge" class="px-2 py-0.5 rounded-lg bg-cyan-950/90 border border-cyan-500/40 text-cyan-300 font-mono text-xs font-extrabold">0 kênh</span>
-                            <span class="px-2 py-0.5 rounded-lg bg-slate-800/90 border border-slate-700 text-[11px] font-semibold text-slate-300">
-                                <i class="fa-solid fa-rotate text-amber-400 mr-1 text-[10px]"></i>Ghi đè lần mới nhất · Tự xóa sau 7 ngày
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
-                    <div class="flex items-center gap-1.5 text-xs font-bold">
-                        <button type="button" id="histFilterAll" onclick="setCheckHistoryFilter('all')" class="px-3 py-1.5 rounded-xl bg-cyan-600 text-white transition whitespace-nowrap">Tất cả</button>
-                        <button type="button" id="histFilterDup" onclick="setCheckHistoryFilter('dup')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 transition whitespace-nowrap">🔴 Có trùng</button>
-                        <button type="button" id="histFilterFyp" onclick="setCheckHistoryFilter('fyp')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition whitespace-nowrap">🚨 Có mất FYP</button>
-                    </div>
-                    <div class="relative flex-grow sm:flex-grow-0 sm:w-52">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
-                        <input
-                            type="search"
-                            id="checkHistorySearchInput"
-                            name="tikflow_hist_channel_filter"
-                            value=""
-                            autocomplete="off"
-                            autocorrect="off"
-                            autocapitalize="off"
-                            spellcheck="false"
-                            data-lpignore="true"
-                            data-form-type="other"
-                            readonly
-                            onfocus="this.removeAttribute('readonly')"
-                            onblur="if(!this.value) this.setAttribute('readonly', 'readonly')"
-                            oninput="handleCheckHistorySearchInput(this)"
-                            placeholder="Lọc kênh đã check..."
-                            class="w-full pl-8 pr-7 py-1.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
-                        />
-                        <button
-                            type="button"
-                            id="btnClearHistorySearch"
-                            onclick="clearCheckHistorySearch()"
-                            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-0.5"
-                            title="Xóa từ khóa lọc"
-                        >
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </div>
-                    <button
-                        type="button"
-                        onclick="clearAllCheckHistory()"
-                        class="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-700/70 text-rose-200 text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
-                        title="Xóa toàn bộ lịch sử check của tài khoản này"
-                    >
-                        <i class="fa-solid fa-trash-can text-[11px]"></i>
-                        <span>Xóa tất cả</span>
-                    </button>
-                    <button
-                        type="button"
-                        onclick="toggleCheckHistoryPanel(false)"
-                        class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
-                        title="Thu gọn bảng Lịch sử check"
-                    >
-                        <i class="fa-solid fa-chevron-up text-[10px]"></i>
-                        <span>Thu gọn</span>
-                    </button>
-                </div>
-            </div>
-
-            <div id="checkHistoryList" class="space-y-2.5">
-                <!-- Accordion channel cards injected by JS -->
-            </div>
-
-            <div id="checkHistoryEmpty" class="hidden py-10 px-4 text-center space-y-2 text-slate-400">
-                <i class="fa-solid fa-clock-rotate-left text-3xl text-slate-600"></i>
-                <p id="checkHistoryEmptyText" class="text-sm font-semibold text-slate-300">Chưa có lịch sử check nào trong 7 ngày gần nhất.</p>
-                <p class="text-xs text-slate-500">Hãy kiểm tra một kênh TikTok — hệ thống sẽ tự lưu kết quả mới nhất tại đây.</p>
-            </div>
-        </section>
 
         <!-- Result Section (Hidden until search succeeds) -->
         <section id="resultSection" class="hidden">
@@ -841,6 +774,93 @@
 
             </div>
 
+        </section>
+
+        </div> <!-- /#checkerWorkspace -->
+
+        <!-- Tab 2: Dedicated Check History Section (Logged-in users only, hidden for guests) -->
+        <section id="checkHistorySection" class="hidden glass-panel rounded-3xl p-4 sm:p-6 border border-slate-700/80 shadow-2xl space-y-4">
+            <div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 pb-3 border-b border-slate-800/90">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-cyan-950/90 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h2 class="text-base sm:text-lg font-extrabold text-white tracking-tight">Lịch sử check</h2>
+                            <span id="checkHistoryCountBadge" class="px-2 py-0.5 rounded-lg bg-cyan-950/90 border border-cyan-500/40 text-cyan-300 font-mono text-xs font-extrabold">0 kênh</span>
+                            <span class="px-2 py-0.5 rounded-lg bg-slate-800/90 border border-slate-700 text-[11px] font-semibold text-slate-300">
+                                <i class="fa-solid fa-rotate text-amber-400 mr-1 text-[10px]"></i>Ghi đè lần mới nhất · Tự xóa sau 7 ngày
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
+                    <div class="flex items-center gap-1.5 text-xs font-bold">
+                        <button type="button" id="histFilterAll" onclick="setCheckHistoryFilter('all')" class="px-3 py-1.5 rounded-xl bg-cyan-600 text-white transition whitespace-nowrap">Tất cả</button>
+                        <button type="button" id="histFilterDup" onclick="setCheckHistoryFilter('dup')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 transition whitespace-nowrap">🔴 Có trùng</button>
+                        <button type="button" id="histFilterFyp" onclick="setCheckHistoryFilter('fyp')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition whitespace-nowrap">🚨 Có mất FYP</button>
+                    </div>
+                    <div class="relative flex-grow sm:flex-grow-0 sm:w-52">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                        <input
+                            type="search"
+                            id="checkHistorySearchInput"
+                            name="tikflow_hist_channel_filter"
+                            value=""
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            data-lpignore="true"
+                            data-form-type="other"
+                            readonly
+                            onfocus="this.removeAttribute('readonly')"
+                            onblur="if(!this.value) this.setAttribute('readonly', 'readonly')"
+                            oninput="handleCheckHistorySearchInput(this)"
+                            placeholder="Lọc kênh đã check..."
+                            class="w-full pl-8 pr-7 py-1.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+                        />
+                        <button
+                            type="button"
+                            id="btnClearHistorySearch"
+                            onclick="clearCheckHistorySearch()"
+                            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-0.5"
+                            title="Xóa từ khóa lọc"
+                        >
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <button
+                        type="button"
+                        onclick="clearAllCheckHistory()"
+                        class="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-700/70 text-rose-200 text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        title="Xóa toàn bộ lịch sử check của tài khoản này"
+                    >
+                        <i class="fa-solid fa-trash-can text-[11px]"></i>
+                        <span>Xóa tất cả</span>
+                    </button>
+                    <button
+                        type="button"
+                        onclick="switchMainWorkspaceTab('checker')"
+                        class="px-3 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-500/60 text-cyan-200 hover:text-white text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        title="Quay lại giao diện Kiểm Tra Kênh"
+                    >
+                        <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                        <span>Quay lại Kiểm Tra</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="checkHistoryList" class="space-y-2.5">
+                <!-- Accordion channel cards injected by JS -->
+            </div>
+
+            <div id="checkHistoryEmpty" class="hidden py-10 px-4 text-center space-y-2 text-slate-400">
+                <i class="fa-solid fa-clock-rotate-left text-3xl text-slate-600"></i>
+                <p id="checkHistoryEmptyText" class="text-sm font-semibold text-slate-300">Chưa có lịch sử check nào trong 7 ngày gần nhất.</p>
+                <p class="text-xs text-slate-500">Hãy sang tab Kiểm Tra Kênh để quét một kênh TikTok — hệ thống sẽ tự lưu kết quả mới nhất tại đây.</p>
+            </div>
         </section>
 
     </main>
@@ -4040,9 +4060,8 @@
             currentVideoNotice = '';
 
             document.getElementById('errorBanner').classList.add('hidden');
+            switchMainWorkspaceTab('checker');
             document.getElementById('resultSection').classList.add('hidden');
-            document.getElementById('checkHistorySection')?.classList.add('hidden');
-            updateCheckHistoryToggleBtnState();
             document.getElementById('scanningSection').classList.remove('hidden');
             document.getElementById('btnSubmit').disabled = true;
             document.getElementById('btnSubmit').classList.add('opacity-70');
@@ -5107,6 +5126,7 @@
         }
 
         // ==================== CHECK HISTORY (LỊCH SỬ CHECK) ====================
+        let activeMainWorkspaceTab = 'checker';
         let checkHistoryItems = [];
         let checkHistoryLoadedForUser = '';
         let checkHistoryFilter = 'all';
@@ -5114,16 +5134,28 @@
         let expandedHistoryChannels = new Set();
         let historyChannelVideoFilter = {};
 
-        function updateCheckHistoryToggleBtnState() {
-            const btn = document.getElementById('btnToggleCheckHistory');
-            const sec = document.getElementById('checkHistorySection');
-            if (!btn || !sec) return;
-            const isOpen = !sec.classList.contains('hidden');
-            btn.className = currentVipUser
-                ? (isOpen
-                    ? 'inline-flex px-6 py-2.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border-2 border-cyan-400 text-cyan-200 font-bold text-xs sm:text-sm shadow-lg shadow-cyan-500/20 transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95'
-                    : 'inline-flex px-6 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-xs sm:text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95')
-                : 'hidden px-6 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-xs sm:text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95';
+        function switchMainWorkspaceTab(tabName) {
+            const targetTab = (!currentVipUser || tabName !== 'history') ? 'checker' : 'history';
+            activeMainWorkspaceTab = targetTab;
+
+            const checkerWs = document.getElementById('checkerWorkspace');
+            const historySec = document.getElementById('checkHistorySection');
+            const tabChecker = document.getElementById('tabMainChecker');
+            const tabHistory = document.getElementById('tabMainHistory');
+
+            if (checkerWs) checkerWs.classList.toggle('hidden', targetTab !== 'checker');
+            if (historySec) historySec.classList.toggle('hidden', targetTab !== 'history');
+
+            const activeCls = 'px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition whitespace-nowrap';
+            const inactiveCls = 'px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap';
+            if (tabChecker) tabChecker.className = (targetTab === 'checker') ? activeCls : inactiveCls;
+            if (tabHistory) tabHistory.className = (targetTab === 'history') ? activeCls : inactiveCls;
+
+            if (targetTab === 'history') {
+                renderCheckHistory();
+                loadCheckHistory(false);
+                try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+            }
         }
 
         function handleCheckHistorySearchInput(el) {
@@ -5151,8 +5183,7 @@
         }
 
         function syncCheckHistoryAuthUI() {
-            const btn = document.getElementById('btnToggleCheckHistory');
-            const sec = document.getElementById('checkHistorySection');
+            const tabsBar = document.getElementById('mainWorkspaceTabs');
             if (!currentVipUser) {
                 checkHistoryItems = [];
                 checkHistoryLoadedForUser = '';
@@ -5165,31 +5196,24 @@
                     sEl.setAttribute('readonly', 'readonly');
                 }
                 document.getElementById('btnClearHistorySearch')?.classList.add('hidden');
-                if (btn) {
-                    btn.classList.add('hidden');
-                    btn.classList.remove('inline-flex');
-                }
-                if (sec) sec.classList.add('hidden');
+                if (tabsBar) tabsBar.classList.add('hidden');
                 const navCnt = document.getElementById('checkHistoryNavCount');
                 if (navCnt) navCnt.innerText = '0';
                 const badgeCnt = document.getElementById('checkHistoryCountBadge');
                 if (badgeCnt) badgeCnt.innerText = '0 kênh';
-                updateCheckHistoryToggleBtnState();
+                switchMainWorkspaceTab('checker');
                 return;
             }
-            if (btn) {
-                btn.classList.remove('hidden');
-                btn.classList.add('inline-flex');
-            }
-            updateCheckHistoryToggleBtnState();
+            if (tabsBar) tabsBar.classList.remove('hidden');
             const curU = String(currentVipUser.username || '').trim().toLowerCase();
             if (curU && checkHistoryLoadedForUser !== curU) {
                 clearCheckHistorySearch();
-                loadCheckHistory(true);
+                loadCheckHistory(false);
             }
+            switchMainWorkspaceTab(activeMainWorkspaceTab);
         }
 
-        async function loadCheckHistory(autoOpenIfIdle = false) {
+        async function loadCheckHistory(_unused = false) {
             if (!currentVipUser) return;
             try {
                 const resp = await fetch('/api/check-history', { headers: getDeviceHeaders(true) });
@@ -5203,32 +5227,18 @@
                 checkHistoryLoadedForUser = String(currentVipUser.username || '').trim().toLowerCase();
                 checkHistoryItems = Array.isArray(data.items) ? data.items : [];
                 renderCheckHistory();
-                const resHidden = document.getElementById('resultSection')?.classList.contains('hidden');
-                if (autoOpenIfIdle && checkHistoryItems.length > 0 && resHidden) {
-                    toggleCheckHistoryPanel(true, false);
-                }
             } catch (e) {
                 console.warn('Lỗi tải Lịch sử check:', e);
             }
         }
 
-        function toggleCheckHistoryPanel(forceState = null, shouldScroll = true) {
+        function toggleCheckHistoryPanel(forceState = null, _shouldScroll = true) {
             if (!currentVipUser) return;
-            const sec = document.getElementById('checkHistorySection');
-            if (!sec) return;
-            const currentlyOpen = !sec.classList.contains('hidden');
-            const targetOpen = forceState === null ? !currentlyOpen : Boolean(forceState);
-            if (targetOpen) {
-                sec.classList.remove('hidden');
-                renderCheckHistory();
-                loadCheckHistory(false);
-                if (shouldScroll) {
-                    sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+            if (forceState === null) {
+                switchMainWorkspaceTab(activeMainWorkspaceTab === 'history' ? 'checker' : 'history');
             } else {
-                sec.classList.add('hidden');
+                switchMainWorkspaceTab(forceState ? 'history' : 'checker');
             }
-            updateCheckHistoryToggleBtnState();
         }
 
         function setCheckHistoryFilter(mode) {
@@ -5328,8 +5338,7 @@
             hasMoreVideos = false;
             currentVideoNotice = '';
 
-            document.getElementById('checkHistorySection')?.classList.add('hidden');
-            updateCheckHistoryToggleBtnState();
+            switchMainWorkspaceTab('checker');
             renderResults(fakeRes);
             document.getElementById('resultSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             showToast(`⚡ Đã mở lại kết quả đã lưu của @${item.username} (0đ)`);
@@ -5341,6 +5350,7 @@
             const cleanHandle = '@' + key;
             const inputEl = document.getElementById('channelInput');
             if (inputEl) inputEl.value = cleanHandle;
+            switchMainWorkspaceTab('checker');
             handleCheck();
         }
 
