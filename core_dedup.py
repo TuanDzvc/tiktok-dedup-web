@@ -3227,8 +3227,75 @@ def _first_avatar_url(usr: Dict[str, Any]) -> str:
     return ""
 
 
+def _fetch_account_country_free_borrowed(
+    unique_id: str,
+    sec_uid: str,
+    *,
+    has_videos: bool = True,
+    is_private: bool = False,
+) -> str:
+    """Lấy mã quốc gia 0đ bằng cookie mượn (Creator API video mới nhất -> locationCreated trên trang video)."""
+    if is_private or not has_videos or not sec_uid or not unique_id:
+        return ""
+    pool = get_borrowed_cookies_pool(exclude_username=unique_id)
+    if not pool:
+        return ""
+    for ck, ua, _ in pool[:2]:
+        try:
+            items = fetch_external_channel_videos_creator_api(
+                sec_uid=sec_uid,
+                cookie_str=ck,
+                ua_str=ua or DEFAULT_UA,
+                proxy_str="",
+                max_videos=1,
+            )
+            if not items:
+                continue
+            vid = str(items[0].get("id") or "").strip()
+            if not vid.isdigit():
+                continue
+            r_vid = requests.get(
+                f"https://www.tiktok.com/@{unique_id}/video/{vid}",
+                headers={
+                    "User-Agent": ua or DEFAULT_UA,
+                    "Cookie": ck,
+                    "Referer": "https://www.tiktok.com/",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+                timeout=7,
+            )
+            if r_vid.status_code != 200 or not r_vid.text:
+                continue
+            raw_loc = ""
+            m_uni = re.search(
+                r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)</script>',
+                r_vid.text,
+            )
+            if m_uni:
+                try:
+                    scope = json.loads(m_uni.group(1)).get("__DEFAULT_SCOPE__", {})
+                    raw_loc = (
+                        scope.get("webapp.video-detail", {})
+                        .get("itemInfo", {})
+                        .get("itemStruct", {})
+                        .get("locationCreated")
+                        or ""
+                    )
+                except Exception:
+                    raw_loc = ""
+            if not raw_loc:
+                m_loc = re.search(r'"locationCreated"\s*:\s*"([A-Za-z]{2})"', r_vid.text)
+                if m_loc:
+                    raw_loc = m_loc.group(1)
+            if _is_valid_country_code(raw_loc):
+                return normalize_country_code(raw_loc)
+        except Exception:
+            continue
+    return ""
+
+
 def check_single_account_profile_tikhub(raw_input: str, api_key: str = "") -> Dict[str, Any]:
-    """Kiểm tra trạng thái đề xuất (account_labels), ngày tạo, quốc gia & follow qua TikHub."""
+    """Kiểm tra trạng thái đề xuất (account_labels), ngày tạo & follow (đúng 1 request TikHub $0.001); quốc gia lấy 0đ từ cache/cookie mượn."""
     handle = _resolve_bulk_account_handle(raw_input)
     if not handle:
         return {
@@ -3320,22 +3387,19 @@ def check_single_account_profile_tikhub(raw_input: str, api_key: str = "") -> Di
     if country_code:
         cached_hit = True
     else:
-        try:
-            r_cnt = requests.get(
-                "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_country_by_username",
-                headers=hdrs,
-                params={"username": unique_id},
-                timeout=12,
+        for raw_u_reg in (usr.get("region"), usr.get("country"), usr.get("account_region")):
+            if _is_valid_country_code(str(raw_u_reg or "")):
+                country_code = normalize_country_code(str(raw_u_reg))
+                break
+        if not country_code:
+            country_code = _fetch_account_country_free_borrowed(
+                unique_id,
+                sec_uid,
+                has_videos=(videos > 0),
+                is_private=is_private,
             )
-            b_cnt = r_cnt.json() if r_cnt.content else {}
-            if r_cnt.status_code == 200 and isinstance(b_cnt, dict) and b_cnt.get("code") == 200:
-                api_calls += 1
-                raw_country = (b_cnt.get("data") or {}).get("country") or ""
-                if _is_valid_country_code(raw_country):
-                    country_code = normalize_country_code(raw_country)
-                    _set_cached_account_country(unique_id, uid, country_code)
-        except Exception:
-            pass
+        if country_code:
+            _set_cached_account_country(unique_id, uid, country_code)
 
     region_disp = format_full_country_display(country_code) if country_code else "Không rõ"
     label_info = _parse_account_labels(usr.get("account_labels"))
