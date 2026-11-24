@@ -4981,7 +4981,7 @@
             } else if (v.is_fyp_restricted && isThisDup) {
                 dupBadge = `
                     <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                        <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị trùng nội dung với video gốc&#10;Vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> ${isSameChDup ? 'Trùng chính kênh & Mất FYP' : 'Trùng & Mất FYP'}</span>
+                        <span data-tip="${penTitle || (v.shadowReason || 'Vừa bị trùng nội dung với video gốc&#10;Vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> ${isSameChDup ? 'Trùng chính kênh & Mất FYP' : 'Trùng & Mất FYP'}</span>
                         ${origBtn}
                     </div>
                 `;

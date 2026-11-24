@@ -113,6 +113,111 @@ def _build_requests_proxies(proxy: str = "") -> Optional[Dict[str, str]]:
     return {"http": p_c, "https": p_c}
 
 
+_EN_PENALTY_TITLE_VI_NATIVE = {
+    "community guidelines": "Nguyên tắc Cộng đồng",
+    "unoriginal content and intellectual property rights": "Nội dung không phải nguyên tác và quyền sở hữu trí tuệ",
+    "unoriginal, low-quality, and qr code content": "Nội dung không nguyên bản, chất lượng thấp hoặc chứa mã QR",
+    "low-quality content": "Nội dung chất lượng thấp",
+    "fake engagement": "Hành vi lừa dối và tương tác giả",
+    "deceptive behavior": "Hành vi lừa dối và tương tác giả",
+    "spam and deceptive behavior": "Hành vi lừa dối và tương tác giả",
+    "sensitive and mature themes": "Chủ đề nhạy cảm và người lớn",
+    "dangerous activities and challenges": "Hoạt động và thử thách nguy hiểm",
+    "shocking and graphic content": "Nội dung gây sốc và phản cảm",
+    "misinformation": "Thông tin sai lệch",
+    "regulated goods and commercial activities": "Hàng hóa bị quản lý và hoạt động thương mại",
+    "harassment and bullying": "Quấy rối và bắt nạt",
+    "hateful behavior": "Hành vi gây thù ghét",
+    "violent and hateful organizations and individuals": "Tổ chức và cá nhân bạo lực, thù ghét",
+    "suicide and self-harm": "Tự tử và tự làm hại bản thân",
+    "mental and behavioral health": "Sức khỏe tâm thần và hành vi",
+    "youth safety and well-being": "An toàn và phúc lợi thanh thiếu niên",
+    "privacy and security": "Quyền riêng tư và bảo mật",
+    "civic and election integrity": "Tính toàn vẹn dân sự và bầu cử",
+}
+
+_EXACT_REASON_CODE_MAP_NATIVE = {
+    "121": "Nội dung không phải nguyên tác và quyền sở hữu trí tuệ (Mã 121 · Không đủ điều kiện FYP)",
+    "999": "Nguyên tắc Cộng đồng (Mã 999 · Không đủ điều kiện FYP)",
+    "9": "Không đủ điều kiện xuất hiện trên bảng tin Cho bạn (Mã 09 · Hạn chế FYP)",
+    "10": "Nội dung phản cảm / Giật gân (Mã 10 · Không đủ điều kiện FYP)",
+    "11": "Hành vi lừa dối và tương tác giả (Mã 11 · Không đủ điều kiện FYP)",
+    "12": "Spam và thao túng hệ thống (Mã 12 · Không đủ điều kiện FYP)",
+    "13": "Nội dung không nguyên bản / Trùng lặp (Mã 13 · Không đủ điều kiện FYP)",
+}
+
+
+def _format_penalty_reason_details_native(penalties: list, reason_codes: list = None, appeal_status: int = 0) -> Tuple[str, List[Dict[str, str]]]:
+    """Trích xuất & chuẩn hóa lý do án phạt tiếng Việt khớp app TikTok trên điện thoại."""
+    reason_info_list: List[Dict[str, str]] = []
+    seen_info = set()
+    collected_codes: List[str] = []
+    seen_codes = set()
+
+    for raw_c in (reason_codes or []):
+        c_str = str(raw_c or "").strip()
+        if c_str and c_str not in seen_codes:
+            seen_codes.add(c_str)
+            collected_codes.append(c_str)
+
+    for pen in (penalties or []):
+        if not isinstance(pen, dict):
+            continue
+        for raw_c in (pen.get("reason_codes") or pen.get("reasonCodes") or []):
+            c_str = str(raw_c or "").strip()
+            if c_str and c_str not in seen_codes:
+                seen_codes.add(c_str)
+                collected_codes.append(c_str)
+        for pr in (pen.get("penalty_reason_info_list") or []):
+            if not isinstance(pr, dict):
+                continue
+            code = str(pr.get("code") or "").strip()
+            title = str(pr.get("title") or "").strip()
+            content = str(pr.get("content") or "").strip()
+            if title:
+                title = _EN_PENALTY_TITLE_VI_NATIVE.get(title.lower(), title)
+            key = (code, title, content)
+            if (code or title or content) and key not in seen_info:
+                seen_info.add(key)
+                reason_info_list.append({
+                    "code": code,
+                    "title": title,
+                    "content": content,
+                })
+
+    formatted_parts: List[str] = []
+    seen_parts = set()
+    for info in reason_info_list:
+        code = info.get("code", "")
+        title = info.get("title", "")
+        if not title:
+            continue
+        part = f"{title} (Mã {code} · Không đủ điều kiện FYP)" if code else f"{title} (Không đủ điều kiện FYP)"
+        if part not in seen_parts:
+            seen_parts.add(part)
+            formatted_parts.append(part)
+
+    if not formatted_parts and collected_codes:
+        for c_str in collected_codes:
+            part = _EXACT_REASON_CODE_MAP_NATIVE.get(c_str) or f"Vi phạm chính sách kiểm duyệt (Mã {c_str} · Không đủ điều kiện FYP)"
+            if part not in seen_parts:
+                seen_parts.add(part)
+                formatted_parts.append(part)
+
+    result = " | ".join(formatted_parts)
+    if not result:
+        for info in reason_info_list:
+            content = info.get("content", "")
+            if content:
+                result = content[:160]
+                break
+
+    if result and appeal_status == 4 and "(kháng xịt)" not in result.lower():
+        result += " (Kháng xịt)"
+
+    return result, reason_info_list
+
+
 def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "", vid: str = "", create_time: int = 0, region: str = "") -> dict:
     """Lấy chi tiết biên bản xử phạt kiểm duyệt video (getPenaltyDetails) từ TikTok Moderation API."""
     if not vid:
@@ -130,6 +235,7 @@ def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "
         "Cookie": _cookie_to_header_str(cookie_str),
         "Referer": "https://www.tiktok.com/tiktokstudio/content",
         "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
         "Origin": "https://www.tiktok.com"
     }
 
@@ -144,7 +250,7 @@ def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "
     if ct_val <= 0:
         ct_val = int(time.time())
 
-    params = {"vid": vid_clean, "createTime": ct_val}
+    params = {"vid": vid_clean, "createTime": ct_val, "app_language": "vi"}
     for host in hosts:
         url = f"{host}/mod/v1/getPenaltyDetails/"
         try:
@@ -160,44 +266,62 @@ def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "
                 sc = d.get("status_code", d.get("statusCode", 0))
                 if sc == 8:
                     continue
-                app_st = d.get("appeal_status", d.get("appealStatus", 0))
+                if sc not in (0, None):
+                    continue
+                penalties = d.get("penalties") or []
+                first_pen = penalties[0] if penalties and isinstance(penalties[0], dict) else {}
+                app_st = None
+                for cand in (
+                    d.get("appeal_status"),
+                    d.get("appealStatus"),
+                    first_pen.get("appeal_status"),
+                    first_pen.get("appealStatus"),
+                ):
+                    if cand is not None:
+                        app_st = cand
+                        break
                 try:
                     app_st_int = int(app_st) if app_st is not None else 0
                 except Exception:
                     app_st_int = 0
                 is_restored = (app_st_int == 1) or bool(d.get("isRestored") or d.get("is_restored"))
-                penalties = d.get("penalties") or []
                 has_pen = bool(penalties or d.get("hasPenalty") or d.get("has_penalty")) and not is_restored
+
+                rc_list: List[str] = []
+                seen_rc = set()
+                for raw_rc in (d.get("reasonCodes") or d.get("reason_codes") or []):
+                    s_rc = str(raw_rc or "").strip()
+                    if s_rc and s_rc not in seen_rc:
+                        seen_rc.add(s_rc)
+                        rc_list.append(s_rc)
+                for pen in penalties:
+                    if not isinstance(pen, dict):
+                        continue
+                    for raw_rc in (pen.get("reason_codes") or pen.get("reasonCodes") or []):
+                        s_rc = str(raw_rc or "").strip()
+                        if s_rc and s_rc not in seen_rc:
+                            seen_rc.add(s_rc)
+                            rc_list.append(s_rc)
+
                 top_det = ""
-                if penalties and not is_restored:
-                    p0 = penalties[0] if isinstance(penalties[0], dict) else {}
-                    top_det = p0.get("penalty_detail") or p0.get("description") or p0.get("penaltyDetail") or ""
-                    rc_list = [str(x) for x in (p0.get("reason_codes") or [])]
+                reason_info_list: List[Dict[str, str]] = []
+                if has_pen:
+                    top_det, reason_info_list = _format_penalty_reason_details_native(penalties, rc_list, app_st_int)
                     if not top_det:
-                        pr_list = p0.get("penalty_reason_info_list") or []
-                        if pr_list and isinstance(pr_list[0], dict):
-                            raw_c = str(pr_list[0].get("content") or "")
-                            if "ineligible for the fyf" in raw_c.lower() or "for you" in raw_c.lower():
-                                top_det = "Không đủ điều kiện xuất hiện trên Bảng tin Cho bạn (TNS · Hạn chế FYP)"
-                            elif raw_c:
-                                top_det = raw_c[:160]
-                    if not top_det:
-                        if "13" in rc_list:
-                            top_det = "Mất đề xuất FYP: Nội dung không nguyên bản / Trùng lặp"
-                        elif "11" in rc_list:
-                            top_det = "Mất đề xuất FYP: Tương tác giả / Hành vi lừa dối"
-                        elif "10" in rc_list:
-                            top_det = "Mất đề xuất FYP: Nội dung nhạy cảm / Hành vi nguy hiểm / Giật gân"
-                        elif "12" in rc_list:
-                            top_det = "Mất đề xuất FYP: Spam / Thao túng hệ thống"
-                        elif "9" in rc_list or "999" in rc_list:
-                            top_det = "Mất đề xuất FYP: Không đủ điều kiện lên Bảng tin Xu hướng (Cho bạn)"
-                    if app_st_int == 4 and top_det:
-                        top_det += " (Kháng xịt)"
+                        raw_detail = d.get("penalty_detail") or first_pen.get("penalty_detail") or first_pen.get("description") or ""
+                        if isinstance(raw_detail, str) and raw_detail.strip():
+                            top_det = raw_detail.strip()
+                        if app_st_int == 4 and top_det and "(kháng xịt)" not in top_det.lower():
+                            top_det += " (Kháng xịt)"
+                elif is_restored:
+                    top_det = "Đã gỡ án phạt (Kháng về thành công)"
+
                 return {
                     "success": True,
                     "hasPenalty": has_pen,
                     "isRestored": is_restored,
+                    "reasonCodes": rc_list,
+                    "penalty_reason_info_list": reason_info_list,
                     "penalties": penalties,
                     "top_penalty_details": top_det or ("Có án phạt vi phạm kiểm duyệt (Hạn chế FYP)" if has_pen else "")
                 }
@@ -219,6 +343,7 @@ def sync_items_penalty_data_native(pen_items: list, cookie_str: str, ua: str = "
             if p_res.get("success"):
                 if p_res.get("isRestored"):
                     p["is_restored"] = True
+                    p["penalty_details"] = "Đã gỡ án phạt (Kháng về thành công)"
                 has_pen = bool(p_res.get("hasPenalty"))
                 if has_pen:
                     p["has_penalty"] = True
@@ -226,12 +351,15 @@ def sync_items_penalty_data_native(pen_items: list, cookie_str: str, ua: str = "
                     p["is_fyp_restricted"] = True
                     p["shadow"] = True
                     p["shadowban"] = True
-                    top_d = p_res.get("top_penalty_details")
-                    if top_d:
-                        p["penalty_details"] = top_d
-                        p["shadowReason"] = top_d
-                        if "trùng lặp" in top_d.lower() or "không nguyên bản" in top_d.lower():
-                            p["is_dup"] = True
+                    rc_list = [str(x).strip() for x in (p_res.get("reasonCodes") or []) if str(x).strip()]
+                    rc_set = set(rc_list)
+                    p["reason_codes"] = rc_list
+                    p["penalty_reason_info_list"] = p_res.get("penalty_reason_info_list") or []
+                    top_d = str(p_res.get("top_penalty_details") or "").strip() or "Hạn chế xuất hiện trên bảng tin Cho bạn"
+                    p["penalty_details"] = top_d
+                    p["shadowReason"] = top_d
+                    if "13" in rc_set:
+                        p["is_dup"] = True
         except Exception:
             pass
 
@@ -2967,7 +3095,13 @@ def fetch_channel_info_and_posts(
         )
 
         is_shadow = bool(it.get("shadow", False) or it.get("shadowban", False))
-        shadow_reason = str(it.get("shadowReason") or "")
+        raw_pen_str = str(it.get("penalty_details") or "").strip()
+        if "kháng về thành công" in raw_pen_str.lower() and (has_pen or is_dup):
+            raw_pen_str = ""
+        raw_shadow_str = str(it.get("shadowReason") or "").strip()
+        if "kháng về thành công" in raw_shadow_str.lower() and has_pen:
+            raw_shadow_str = ""
+        shadow_reason = raw_shadow_str or raw_pen_str
         # Shadowban & FYP restriction: Xác định từ tín hiệu thực của TikTok (status 141, penaltyContext TNS/EC, NFF, oEmbed 403, item_control, isProhibited, mute)
         if is_copyright:
             shadow_reason = "Vi phạm bản quyền âm thanh / hình ảnh (TikTok tự khóa Riêng tư & ngừng đề xuất Xu hướng)"
@@ -3001,9 +3135,6 @@ def fetch_channel_info_and_posts(
             is_fyp = True
             is_shadow = True
 
-        raw_pen_str = str(it.get("penalty_details") or "")
-        if "kháng về thành công" in raw_pen_str.lower() and (has_pen or is_dup):
-            raw_pen_str = ""
         pen_details_str = dup_reason if is_crp_punished and not has_fyp_pen else (raw_pen_str or dup_reason or shadow_reason or "")
         if is_copyright and not raw_pen_str:
             pen_details_str = "Vi phạm bản quyền âm thanh / hình ảnh (Bị khóa Riêng tư)"
