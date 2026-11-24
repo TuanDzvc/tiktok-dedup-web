@@ -909,6 +909,171 @@ def _save_persistent_groupid_cache() -> None:
             pass
 
 
+_ORIGIN_META_CACHE_LOCK = threading.Lock()
+_ORIGIN_META_CACHE_LOADED = False
+_ORIGIN_META_CACHE: Dict[str, Dict[str, Any]] = {}
+_ORIGIN_META_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "origin_meta_cache.json")
+
+
+def _load_origin_meta_cache() -> Dict[str, Dict[str, Any]]:
+    """Tải bộ nhớ đệm metadata video gốc (tách biệt với groupid_cache.json)."""
+    global _ORIGIN_META_CACHE_LOADED
+    with _ORIGIN_META_CACHE_LOCK:
+        if not _ORIGIN_META_CACHE_LOADED:
+            _ORIGIN_META_CACHE_LOADED = True
+            try:
+                if os.path.exists(_ORIGIN_META_CACHE_PATH):
+                    with open(_ORIGIN_META_CACHE_PATH, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        _ORIGIN_META_CACHE.update(data)
+            except Exception:
+                pass
+        return _ORIGIN_META_CACHE
+
+
+def _save_origin_meta_cache() -> None:
+    """Lưu nguyên tử metadata video gốc xuống origin_meta_cache.json."""
+    with _ORIGIN_META_CACHE_LOCK:
+        try:
+            tmp_path = _ORIGIN_META_CACHE_PATH + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(_ORIGIN_META_CACHE, f, ensure_ascii=False)
+            os.replace(tmp_path, _ORIGIN_META_CACHE_PATH)
+        except Exception:
+            pass
+
+
+def _fetch_origin_videos_meta_free(
+    origin_ids: List[str],
+    preferred_cookie: str = "",
+    preferred_ua: str = "",
+    exclude_username: str = "",
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Tra cứu miễn phí (0đ) author_uid, author_unique_id, duration & data_size của video gốc qua TikTok SSR
+    bằng cookie mượn để nhận diện chính xác trùng cùng kênh ngay cả khi video gốc nằm ngoài danh sách vừa quét.
+    """
+    cache_ref = _load_origin_meta_cache()
+    now_ts = int(time.time())
+    result_map: Dict[str, Dict[str, Any]] = {}
+    to_fetch: List[str] = []
+    seen_ids = set()
+
+    for raw_oid in (origin_ids or []):
+        oid = str(raw_oid or "").strip()
+        if not oid or oid in seen_ids or not oid.isdigit():
+            continue
+        seen_ids.add(oid)
+        with _ORIGIN_META_CACHE_LOCK:
+            entry = cache_ref.get(oid)
+            entry_copy = dict(entry) if isinstance(entry, dict) else None
+        if entry_copy:
+            age_s = max(0, now_ts - int(entry_copy.get("ts") or 0))
+            if entry_copy.get("unavailable") is True:
+                if age_s < 21600:
+                    result_map[oid] = entry_copy
+                    continue
+            elif (entry_copy.get("author_uid") or entry_copy.get("author_unique_id")) and age_s < 604800:
+                result_map[oid] = entry_copy
+                continue
+        if len(to_fetch) < 18:
+            to_fetch.append(oid)
+
+    if not to_fetch:
+        return result_map
+
+    cookie_cands: List[Tuple[str, str]] = []
+    seen_cks = set()
+    if preferred_cookie:
+        p_hdr = _cookie_to_header_str(preferred_cookie)
+        if p_hdr:
+            seen_cks.add(p_hdr)
+            cookie_cands.append((p_hdr, preferred_ua or DEFAULT_UA))
+    for p_ck, p_ua, _ in get_borrowed_cookies_pool(exclude_username=exclude_username):
+        hdr_ck = _cookie_to_header_str(p_ck)
+        if hdr_ck and hdr_ck not in seen_cks:
+            seen_cks.add(hdr_ck)
+            cookie_cands.append((hdr_ck, p_ua or preferred_ua or DEFAULT_UA))
+        if len(cookie_cands) >= 3:
+            break
+
+    if not cookie_cands:
+        return result_map
+
+    def _probe_one(oid: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+        for ck_hdr, ck_ua in cookie_cands[:3]:
+            try:
+                res = requests.get(
+                    f"https://www.tiktok.com/@tiktok/video/{oid}",
+                    headers={
+                        "User-Agent": ck_ua or DEFAULT_UA,
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Cookie": ck_hdr,
+                    },
+                    timeout=5,
+                )
+                if res.status_code != 200 or not res.text:
+                    continue
+                m = re.search(
+                    r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)</script>',
+                    res.text,
+                    re.S,
+                )
+                if not m:
+                    # SlardarWAF / chưa có SSR JSON -> thử cookie tiếp theo, không ghi negative cache
+                    continue
+                d = json.loads(m.group(1))
+                vd = (d.get("__DEFAULT_SCOPE__", {}) or {}).get("webapp.video-detail", {}) or {}
+                item = (vd.get("itemInfo") or {}).get("itemStruct") or {}
+                if isinstance(item, dict) and isinstance(item.get("author"), dict):
+                    au = item["author"]
+                    v_obj = item.get("video") if isinstance(item.get("video"), dict) else {}
+                    au_uid = str(au.get("id") or au.get("uid") or "").strip()
+                    au_un = str(au.get("uniqueId") or "").strip()
+                    raw_dur = float(v_obj.get("duration") or 0)
+                    dur_s = (raw_dur / 1000.0) if raw_dur > 3600 else raw_dur
+                    data_size = int(v_obj.get("size") or 0)
+                    if data_size <= 0 and isinstance(v_obj.get("bitrateInfo"), list) and v_obj["bitrateInfo"]:
+                        b0 = v_obj["bitrateInfo"][0] if isinstance(v_obj["bitrateInfo"][0], dict) else {}
+                        pa = b0.get("PlayAddr") if isinstance(b0.get("PlayAddr"), dict) else {}
+                        data_size = int(pa.get("DataSize") or 0)
+                    return oid, {
+                        "author_uid": au_uid,
+                        "author_unique_id": au_un,
+                        "dur_s": dur_s,
+                        "data_size": data_size,
+                        "unavailable": False,
+                        "ts": int(time.time()),
+                    }
+                return oid, {
+                    "author_uid": "",
+                    "author_unique_id": "",
+                    "dur_s": 0.0,
+                    "data_size": 0,
+                    "unavailable": True,
+                    "ts": int(time.time()),
+                }
+            except Exception:
+                continue
+        return oid, None
+
+    fetched_entries: Dict[str, Dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=min(6, len(to_fetch))) as ex:
+        for oid, meta in ex.map(_probe_one, to_fetch):
+            if meta is not None:
+                fetched_entries[oid] = meta
+                result_map[oid] = meta
+
+    if fetched_entries:
+        with _ORIGIN_META_CACHE_LOCK:
+            cache_ref.update(fetched_entries)
+        _save_origin_meta_cache()
+
+    return result_map
+
+
 _TIKHUB_PAID_ROUTE_COOLDOWN_UNTIL: float = 0.0
 _TIKHUB_SECUID_NEXT_CURSOR: Dict[str, int] = {}
 _SCAN_COST_TLS = threading.local()
@@ -2851,6 +3016,50 @@ def fetch_channel_info_and_posts(
                     "ct": int(x_it.get("createTime") or x_it.get("create_time") or x_it.get("post_time") or 0),
                 }
     cur_ch_uid = str(check_user_info.get("uid") or "").strip()
+    if (not cur_ch_uid or cur_ch_uid == "---") and raw_items:
+        for x_it in raw_items:
+            if not isinstance(x_it, dict):
+                continue
+            x_aid = str(x_it.get("id") or x_it.get("aweme_id") or x_it.get("item_id") or "").strip()
+            c_x = p_gid_cache_ref.get(x_aid) if (x_aid and isinstance(p_gid_cache_ref, dict)) else None
+            cand_uid = str((c_x.get("author_uid") if isinstance(c_x, dict) else "") or ((x_it.get("author") or {}).get("uid") if isinstance(x_it.get("author"), dict) else "") or ((x_it.get("author") or {}).get("id") if isinstance(x_it.get("author"), dict) else "") or "").strip()
+            if cand_uid and cand_uid != "---":
+                cur_ch_uid = cand_uid
+                break
+    cur_ch_handle = str(channel_info.get("uniqueId") or username or "").lstrip("@").strip().lower()
+
+    origin_meta_map: Dict[str, Dict[str, Any]] = {}
+    if allow_paid_groupid and raw_items:
+        unresolved_gids: List[str] = []
+        seen_ug = set()
+        for x_it in raw_items:
+            if not isinstance(x_it, dict):
+                continue
+            x_aid = str(x_it.get("id") or x_it.get("aweme_id") or x_it.get("item_id") or "").strip()
+            if not x_aid:
+                continue
+            x_tkm = tkm_cache.get(x_aid, {})
+            cand_gid = str(x_it.get("group_id") or x_it.get("groupId") or x_tkm.get("group_id") or "").strip()
+            if (
+                cand_gid
+                and cand_gid != x_aid
+                and cand_gid not in ("0", "None", "null")
+                and cand_gid not in own_channel_map
+                and not (isinstance(p_gid_cache_ref, dict) and isinstance(p_gid_cache_ref.get(cand_gid), dict) and p_gid_cache_ref[cand_gid].get("author_uid"))
+                and cand_gid not in seen_ug
+            ):
+                seen_ug.add(cand_gid)
+                unresolved_gids.append(cand_gid)
+        if unresolved_gids:
+            try:
+                origin_meta_map = _fetch_origin_videos_meta_free(
+                    unresolved_gids,
+                    preferred_cookie=effective_cookie,
+                    preferred_ua=matched_acc_ua,
+                    exclude_username="" if allow_tool_self_cookies else username,
+                )
+            except Exception:
+                origin_meta_map = {}
 
     for it in raw_items:
         aweme_id = str(it.get("id") or it.get("aweme_id") or it.get("item_id") or "")
@@ -2920,24 +3129,36 @@ def fetch_channel_info_and_posts(
             this_dur_s = _extract_item_dur_sec(it)
             c_this = p_gid_cache_ref.get(aweme_id) if isinstance(p_gid_cache_ref, dict) else None
             c_orig = p_gid_cache_ref.get(group_id) if isinstance(p_gid_cache_ref, dict) else None
-            is_same_channel_origin = (group_id in own_channel_map) or bool(
-                cur_ch_uid and cur_ch_uid != "---" and isinstance(c_orig, dict) and c_orig.get("author_uid") == cur_ch_uid
+            o_meta_raw = origin_meta_map.get(group_id) or _load_origin_meta_cache().get(group_id)
+            o_meta = o_meta_raw if (isinstance(o_meta_raw, dict) and not o_meta_raw.get("unavailable")) else {}
+            orig_uid = str((c_orig.get("author_uid") if isinstance(c_orig, dict) else "") or o_meta.get("author_uid") or "").strip()
+            orig_handle = str(o_meta.get("author_unique_id") or "").lstrip("@").strip().lower()
+            is_same_channel_origin = (
+                (group_id in own_channel_map)
+                or bool(cur_ch_uid and cur_ch_uid != "---" and orig_uid and orig_uid == cur_ch_uid)
+                or bool(cur_ch_handle and orig_handle and orig_handle == cur_ch_handle)
             )
             if is_same_channel_origin:
                 orig_info = own_channel_map.get(group_id) or {}
                 orig_dur_s = float(orig_info.get("dur_s") or 0)
                 if orig_dur_s <= 0 and isinstance(c_orig, dict) and int(c_orig.get("dur_ms") or 0) > 0:
                     orig_dur_s = float(c_orig["dur_ms"]) / 1000.0
+                if orig_dur_s <= 0 and o_meta:
+                    orig_dur_s = float(o_meta.get("dur_s") or 0)
                 this_ms = int(c_this.get("dur_ms") or 0) if isinstance(c_this, dict) else 0
                 orig_ms = int(c_orig.get("dur_ms") or 0) if isinstance(c_orig, dict) else 0
                 this_sz = int((c_this or {}).get("data_size") or (own_channel_map.get(aweme_id) or {}).get("size") or 0)
-                orig_sz = int((c_orig or {}).get("data_size") or orig_info.get("size") or 0)
+                orig_sz = int((c_orig or {}).get("data_size") or orig_info.get("size") or o_meta.get("data_size") or 0)
+                has_comparable_dur = (this_ms > 0 and orig_ms > 0) or (this_dur_s > 0 and orig_dur_s > 0)
                 is_exact_self_repost = False
                 if this_ms > 0 and orig_ms > 0:
                     is_exact_self_repost = abs(this_ms - orig_ms) <= 400 and (this_sz == 0 or orig_sz == 0 or abs(this_sz - orig_sz) / max(this_sz, orig_sz) < 0.03)
                 elif this_dur_s > 0 and orig_dur_s > 0:
-                    is_exact_self_repost = abs(this_dur_s - orig_dur_s) < 1.0 and (this_sz == 0 or orig_sz == 0 or abs(this_sz - orig_sz) / max(this_sz, orig_sz) < 0.03)
-                if is_exact_self_repost:
+                    is_exact_self_repost = abs(this_dur_s - orig_dur_s) <= 1.2 and (this_sz == 0 or orig_sz == 0 or abs(this_sz - orig_sz) / max(this_sz, orig_sz) < 0.03)
+                else:
+                    # Không đủ metadata thời lượng để loại trừ -> giữ cờ trùng chính kênh an toàn
+                    is_exact_self_repost = True
+                if is_exact_self_repost or not has_comparable_dur:
                     is_same_channel_dup = True
                 else:
                     # Là 2 phần video khác nhau trên chính kênh này (không phải đăng đúp cùng 1 video, không phải reup kênh khác)
@@ -3066,8 +3287,15 @@ def fetch_channel_info_and_posts(
             if c_gid and c_gid != aweme_id and c_gid not in ("0", "None", "null"):
                 dup_origin_vid = c_gid
                 c_cache_orig = p_gid_cache_ref.get(dup_origin_vid) if isinstance(p_gid_cache_ref, dict) else None
-                if (dup_origin_vid in own_channel_map) or (
-                    cur_ch_uid and cur_ch_uid != "---" and isinstance(c_cache_orig, dict) and c_cache_orig.get("author_uid") == cur_ch_uid
+                o_meta_c = origin_meta_map.get(dup_origin_vid) or _load_origin_meta_cache().get(dup_origin_vid) or {}
+                if not isinstance(o_meta_c, dict) or o_meta_c.get("unavailable"):
+                    o_meta_c = {}
+                c_orig_uid = str((c_cache_orig.get("author_uid") if isinstance(c_cache_orig, dict) else "") or o_meta_c.get("author_uid") or "").strip()
+                c_orig_handle = str(o_meta_c.get("author_unique_id") or "").lstrip("@").strip().lower()
+                if (
+                    (dup_origin_vid in own_channel_map)
+                    or (cur_ch_uid and cur_ch_uid != "---" and c_orig_uid and c_orig_uid == cur_ch_uid)
+                    or (cur_ch_handle and c_orig_handle and c_orig_handle == cur_ch_handle)
                 ):
                     is_same_channel_dup = True
                     dup_reason = "Trùng chính kênh (Đăng đúp cùng 1 video trên chính kênh này)"
@@ -3192,7 +3420,12 @@ def fetch_channel_info_and_posts(
             if is_same_channel_dup and clean_u:
                 origin_url = f"https://www.tiktok.com/@{clean_u}/video/{target_orig_id}"
             else:
-                origin_url = f"https://www.tiktok.com/@tiktok/video/{target_orig_id}"
+                orig_meta_u = origin_meta_map.get(target_orig_id) or _load_origin_meta_cache().get(target_orig_id) or {}
+                orig_u = str(orig_meta_u.get("author_unique_id") or "").lstrip("@").strip() if isinstance(orig_meta_u, dict) and not orig_meta_u.get("unavailable") else ""
+                if orig_u:
+                    origin_url = f"https://www.tiktok.com/@{orig_u}/video/{target_orig_id}"
+                else:
+                    origin_url = f"https://www.tiktok.com/@tiktok/video/{target_orig_id}"
 
         post_data = {
             "id": aweme_id,

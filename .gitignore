@@ -18,3 +18,4 @@ server.log
 PUBLIC_DOMAIN.txt
 check_history.json
 account_country_cache.json
+origin_meta_cache.json
