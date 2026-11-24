@@ -1581,8 +1581,8 @@ def _supabase_pull_snapshot_sync(sb_cfg: Dict[str, Any]) -> Optional[Dict[str, A
         return None
     try:
         r = requests.get(
-            f"{sb_cfg['url']}/storage/v1/object/{SUPABASE_SYNC_BUCKET}/{SUPABASE_SYNC_OBJECT}",
-            headers=_supabase_headers(sb_cfg),
+            f"{sb_cfg['url']}/storage/v1/object/{SUPABASE_SYNC_BUCKET}/{SUPABASE_SYNC_OBJECT}?t={int(time.time() * 1000)}",
+            headers={**_supabase_headers(sb_cfg), "Cache-Control": "no-cache", "Pragma": "no-cache"},
             timeout=10,
         )
         if r.status_code == 200:
@@ -1601,6 +1601,7 @@ def _supabase_push_snapshot_sync(snap: Dict[str, Any], sb_cfg: Dict[str, Any]) -
         **_supabase_headers(sb_cfg),
         "Content-Type": "application/json",
         "x-upsert": "true",
+        "cache-control": "0",
     }
     payload_bytes = json.dumps(snap, ensure_ascii=False).encode("utf-8")
     obj_url = f"{sb_cfg['url']}/storage/v1/object/{SUPABASE_SYNC_BUCKET}/{SUPABASE_SYNC_OBJECT}"
