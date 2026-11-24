@@ -194,8 +194,8 @@
     <!-- Main Content Container -->
     <main class="flex-grow max-w-7xl 2xl:max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-        <!-- Workspace Tabs (Checker & Account Check always visible; Check History shown only when logged in) -->
-        <div id="mainWorkspaceTabs" class="text-center">
+        <!-- Workspace Tabs (Shown only when logged in; Check Tài Khoản strictly for VIP & Admin) -->
+        <div id="mainWorkspaceTabs" class="hidden text-center">
             <div class="inline-flex flex-wrap items-center justify-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-xl backdrop-blur-md">
                 <button
                     type="button"
@@ -210,7 +210,7 @@
                     type="button"
                     id="tabMainAccountCheck"
                     onclick="switchMainWorkspaceTab('account_check')"
-                    class="px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap"
+                    class="hidden px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap"
                     title="Check hàng loạt trạng thái đề xuất (tài khoản không được đề xuất), ngày tạo, quốc gia & follower"
                 >
                     <i class="fa-solid fa-user-shield text-rose-400"></i>
@@ -950,7 +950,7 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-between lg:justify-end">
-                    <div class="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-900/95 border border-slate-700/80">
+                    <div id="checkHistorySubTabs" class="hidden inline-flex items-center gap-1 p-1 rounded-xl bg-slate-900/95 border border-slate-700/80">
                         <button
                             type="button"
                             id="subTabHistDedup"
@@ -965,7 +965,7 @@
                             type="button"
                             id="subTabHistAccount"
                             onclick="switchCheckHistorySubTab('account')"
-                            class="px-3.5 py-1.5 rounded-lg bg-transparent hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition whitespace-nowrap"
+                            class="hidden px-3.5 py-1.5 rounded-lg bg-transparent hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition whitespace-nowrap"
                         >
                             <i class="fa-solid fa-user-shield text-rose-400 text-[11px]"></i>
                             <span>Check Tài Khoản</span>
@@ -2798,6 +2798,10 @@
         }
 
         function canCurrentUserSeeBilling() {
+            return Boolean(currentVipUser && (currentVipUser.role === 'admin' || currentVipUser.is_vip));
+        }
+
+        function canCurrentUserUseAccountCheck() {
             return Boolean(currentVipUser && (currentVipUser.role === 'admin' || currentVipUser.is_vip));
         }
 
@@ -5423,8 +5427,9 @@
         let accountCheckLoading = false;
 
         function switchMainWorkspaceTab(tabName) {
+            const canAcc = canCurrentUserUseAccountCheck();
             let targetTab = 'checker';
-            if (tabName === 'account_check') {
+            if (tabName === 'account_check' && canAcc) {
                 targetTab = 'account_check';
             } else if (tabName === 'history' && currentVipUser) {
                 targetTab = 'history';
@@ -5445,7 +5450,10 @@
             const activeCls = 'px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition whitespace-nowrap';
             const inactiveCls = 'px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap';
             if (tabChecker) tabChecker.className = (targetTab === 'checker') ? activeCls : inactiveCls;
-            if (tabAccount) tabAccount.className = (targetTab === 'account_check') ? activeCls : inactiveCls;
+            if (tabAccount) {
+                tabAccount.className = (targetTab === 'account_check') ? activeCls : inactiveCls;
+                tabAccount.classList.toggle('hidden', !canAcc);
+            }
             if (tabHistory) {
                 tabHistory.className = (targetTab === 'history') ? activeCls : inactiveCls;
                 tabHistory.classList.toggle('hidden', !currentVipUser);
@@ -5612,6 +5620,7 @@
         }
 
         async function exportAccountCheckCSV(source, mode) {
+            if (!canCurrentUserUseAccountCheck()) return;
             const srcList = (source === 'history') ? accountCheckHistoryItems : accountCheckResults;
             const matches = _filterAccountsByMode(srcList, mode);
             if (!matches.length) {
@@ -5641,7 +5650,7 @@
             try {
                 const resp = await fetch('/api/export-accounts-excel', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...getDeviceHeaders(true) },
                     body: JSON.stringify({ rows, filename: `${baseName}.xlsx` }),
                 });
                 if (resp.ok) {
@@ -5678,6 +5687,11 @@
         }
 
         async function runBulkAccountCheck() {
+            if (!canCurrentUserUseAccountCheck()) {
+                showToast('⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!');
+                openVipModal(true);
+                return;
+            }
             if (accountCheckLoading) return;
             const errBox = document.getElementById('accountCheckError');
             const errMsg = document.getElementById('accountCheckErrorMsg');
@@ -5731,8 +5745,8 @@
                         renderVipNav();
                     }
                     showAccErr((data && data.error) || 'Không thể kiểm tra danh sách tài khoản.');
-                    if (data && data.quota_exceeded) {
-                        showToast('⛔ Hết lượt Miễn Phí hôm nay trên thiết bị này! Nâng cấp VIP để check hàng loạt.');
+                    if (data && (data.vip_required || data.quota_exceeded)) {
+                        showToast(data.vip_required ? '⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!' : '⛔ Hết lượt Miễn Phí hôm nay trên thiết bị này! Nâng cấp VIP để check hàng loạt.');
                         openVipModal(true);
                     }
                     return;
@@ -6013,14 +6027,17 @@
 
         function syncCheckHistoryAuthUI() {
             const tabsBar = document.getElementById('mainWorkspaceTabs');
+            const accTab = document.getElementById('tabMainAccountCheck');
             const histTab = document.getElementById('tabMainHistory');
-            if (tabsBar) tabsBar.classList.remove('hidden');
+            const subTabsBox = document.getElementById('checkHistorySubTabs');
+            const subTabAcc = document.getElementById('subTabHistAccount');
             if (!currentVipUser) {
                 checkHistoryItems = [];
                 accountCheckHistoryItems = [];
                 checkHistoryLoadedForUser = '';
                 checkHistorySearchQuery = '';
                 accountCheckHistorySearchQuery = '';
+                activeCheckHistorySubTab = 'dedup';
                 expandedHistoryChannels.clear();
                 historyChannelVideoFilter = {};
                 for (const [id, clrId] of [['checkHistorySearchInput', 'btnClearHistorySearch'], ['accHistorySearchInput', 'btnClearAccHistorySearch']]) {
@@ -6031,18 +6048,37 @@
                     }
                     document.getElementById(clrId)?.classList.add('hidden');
                 }
+                if (tabsBar) tabsBar.classList.add('hidden');
+                if (accTab) accTab.classList.add('hidden');
                 if (histTab) histTab.classList.add('hidden');
+                if (subTabsBox) subTabsBox.classList.add('hidden');
+                if (subTabAcc) subTabAcc.classList.add('hidden');
+                clearAccountCheckResults();
                 updateCheckHistoryCounts();
-                switchMainWorkspaceTab(activeMainWorkspaceTab === 'history' ? 'checker' : activeMainWorkspaceTab);
+                switchMainWorkspaceTab('checker');
                 return;
             }
+            const canAcc = canCurrentUserUseAccountCheck();
+            if (tabsBar) tabsBar.classList.remove('hidden');
             if (histTab) histTab.classList.remove('hidden');
+            if (accTab) accTab.classList.toggle('hidden', !canAcc);
+            if (subTabsBox) subTabsBox.classList.toggle('hidden', !canAcc);
+            if (subTabAcc) subTabAcc.classList.toggle('hidden', !canAcc);
+            if (!canAcc) {
+                clearAccountCheckResults();
+                accountCheckHistoryItems = [];
+                activeCheckHistorySubTab = 'dedup';
+                if (activeMainWorkspaceTab === 'account_check') {
+                    activeMainWorkspaceTab = 'checker';
+                }
+            }
             const curU = String(currentVipUser.username || '').trim().toLowerCase();
             if (curU && checkHistoryLoadedForUser !== curU) {
                 clearCheckHistorySearch();
                 clearAccHistorySearch();
                 loadCheckHistory(false);
             }
+            updateCheckHistoryCounts();
             switchMainWorkspaceTab(activeMainWorkspaceTab);
         }
 
@@ -6061,7 +6097,7 @@
                 if (!data || !data.success) return;
                 checkHistoryLoadedForUser = String(currentVipUser.username || '').trim().toLowerCase();
                 checkHistoryItems = Array.isArray(data.items) ? data.items : [];
-                accountCheckHistoryItems = Array.isArray(data.account_items) ? data.account_items : [];
+                accountCheckHistoryItems = (canCurrentUserUseAccountCheck() && Array.isArray(data.account_items)) ? data.account_items : [];
                 renderCheckHistory();
                 renderAccountCheckHistory();
             } catch (e) {
@@ -6071,7 +6107,8 @@
 
         function updateCheckHistoryCounts() {
             const dedupCnt = checkHistoryItems.length;
-            const accCnt = accountCheckHistoryItems.length;
+            const canAcc = canCurrentUserUseAccountCheck();
+            const accCnt = canAcc ? accountCheckHistoryItems.length : 0;
             const navCnt = document.getElementById('checkHistoryNavCount');
             const dBadge = document.getElementById('subTabHistDedupCount');
             const aBadge = document.getElementById('subTabHistAccountCount');
@@ -6080,24 +6117,30 @@
             if (dBadge) dBadge.innerText = String(dedupCnt);
             if (aBadge) aBadge.innerText = String(accCnt);
             if (hdrBadge) {
-                hdrBadge.innerText = (activeCheckHistorySubTab === 'account') ? `${accCnt} tài khoản` : `${dedupCnt} kênh`;
+                hdrBadge.innerText = (activeCheckHistorySubTab === 'account' && canAcc) ? `${accCnt} tài khoản` : `${dedupCnt} kênh`;
             }
         }
 
         function switchCheckHistorySubTab(subTab) {
-            activeCheckHistorySubTab = (subTab === 'account') ? 'account' : 'dedup';
+            const canAcc = canCurrentUserUseAccountCheck();
+            activeCheckHistorySubTab = (subTab === 'account' && canAcc) ? 'account' : 'dedup';
             const dedupPanel = document.getElementById('checkHistoryDedupPanel');
             const accPanel = document.getElementById('checkHistoryAccountPanel');
             const dedupBtn = document.getElementById('subTabHistDedup');
             const accBtn = document.getElementById('subTabHistAccount');
+            const subTabsBox = document.getElementById('checkHistorySubTabs');
 
+            if (subTabsBox) subTabsBox.classList.toggle('hidden', !canAcc);
             if (dedupPanel) dedupPanel.classList.toggle('hidden', activeCheckHistorySubTab !== 'dedup');
-            if (accPanel) accPanel.classList.toggle('hidden', activeCheckHistorySubTab !== 'account');
+            if (accPanel) accPanel.classList.toggle('hidden', !canAcc || activeCheckHistorySubTab !== 'account');
 
             const onCls = 'px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-extrabold text-xs flex items-center gap-1.5 transition whitespace-nowrap shadow';
             const offCls = 'px-3.5 py-1.5 rounded-lg bg-transparent hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition whitespace-nowrap';
             if (dedupBtn) dedupBtn.className = (activeCheckHistorySubTab === 'dedup') ? onCls : offCls;
-            if (accBtn) accBtn.className = (activeCheckHistorySubTab === 'account') ? onCls : offCls;
+            if (accBtn) {
+                accBtn.className = (activeCheckHistorySubTab === 'account') ? onCls : offCls;
+                accBtn.classList.toggle('hidden', !canAcc);
+            }
 
             updateCheckHistoryCounts();
             if (activeCheckHistorySubTab === 'account') {
@@ -6140,6 +6183,7 @@
         }
 
         function recheckAccountFromHistory(username) {
+            if (!canCurrentUserUseAccountCheck()) return;
             const clean = String(username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
             if (!clean) return;
             const el = document.getElementById('accountCheckInput');

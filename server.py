@@ -368,6 +368,22 @@ RENDER_SYNC_BASE = (os.environ.get("RENDER_SYNC_BASE") or "https://tiktok-dedup-
 PRIMARY_SYNC_BASE = (os.environ.get("PRIMARY_SYNC_BASE") or "https://checktiktok.site").rstrip("/")
 SUPABASE_SYNC_BUCKET = "tikflow-vip-vault"
 SUPABASE_SYNC_OBJECT = "sync_snapshot.json"
+
+
+def _env_number(name: str, default: float, minimum: float) -> float:
+    try:
+        return max(minimum, float(os.environ.get(name) or default))
+    except (TypeError, ValueError):
+        return default
+
+
+# Periodic safety-net sync (real changes are still pushed right away by
+# _schedule_peer_sync_push). 5 min keeps Render awake while cutting Supabase load.
+PEER_SYNC_INTERVAL_SEC = _env_number("PEER_SYNC_INTERVAL_SEC", 300, 60)
+# Check history / free quota change on every check: batch them instead of 1s.
+CHECK_HISTORY_SYNC_DELAY_SEC = _env_number("CHECK_HISTORY_SYNC_DELAY_SEC", 20, 1)
+_PEER_SYNC_TIMER_DUE = 0.0
+_SB_LAST_SNAPSHOT_HASH = ""
 _PEER_SYNC_STATUS: Dict[str, Any] = {
     "last_ok_at": 0,
     "last_error": "",
@@ -444,7 +460,7 @@ def _save_free_quota_unlocked(qmap: Dict[str, Dict[str, int]], keep_day: str) ->
         tmp_f = FREE_QUOTA_FILE.with_suffix(".json.tmp")
         tmp_f.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp_f, FREE_QUOTA_FILE)
-        _schedule_peer_sync_push(1.0)
+        _schedule_peer_sync_push(CHECK_HISTORY_SYNC_DELAY_SEC)
     except Exception as e:
         logger.error(f"[FreeQuota] Lỗi lưu free_daily_quota.json: {e}")
 
@@ -710,7 +726,7 @@ def _save_check_history_unlocked(hmap: Dict[str, Any], schedule_sync: bool = Tru
         tmp_f.write_text(json.dumps(hmap, ensure_ascii=False), encoding="utf-8")
         os.replace(tmp_f, CHECK_HISTORY_FILE)
         if schedule_sync:
-            _schedule_peer_sync_push(1.0)
+            _schedule_peer_sync_push(CHECK_HISTORY_SYNC_DELAY_SEC)
     except Exception as e:
         logger.error(f"[CheckHistory] Lỗi lưu check_history.json: {e}")
 
@@ -1725,8 +1741,21 @@ def _supabase_push_snapshot_sync(snap: Dict[str, Any], sb_cfg: Dict[str, Any]) -
         return False
 
 
+def _snapshot_content_hash(snap: Any) -> str:
+    """Hash of snapshot content, ignoring exported_at, to skip identical uploads."""
+    if not isinstance(snap, dict):
+        return ""
+    try:
+        body = {k: v for k, v in snap.items() if k != "exported_at"}
+        raw = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    except Exception:
+        return ""
+
+
 def _sync_two_way_with_peer_sync(push_after_pull: bool = True) -> Dict[str, Any]:
     """Đồng bộ 2 chiều qua Supabase Storage (bền vững) + HTTP Peer PC ⇄ Render."""
+    global _SB_LAST_SNAPSHOT_HASH
     if not _PEER_SYNC_RUN_LOCK.acquire(blocking=False):
         return {"ok": True, "skipped": "busy"}
     try:
@@ -1739,14 +1768,24 @@ def _sync_two_way_with_peer_sync(push_after_pull: bool = True) -> Dict[str, Any]
         if sb_cfg.get("configured"):
             try:
                 sb_remote = _supabase_pull_snapshot_sync(sb_cfg)
+                remote_hash = ""
                 if sb_remote is not None:
                     sb_pulled = True
+                    remote_hash = _snapshot_content_hash(sb_remote)
                     with _VIP_LOCK:
                         _merge_sync_state_unlocked(sb_remote)
                 if push_after_pull or sb_remote is None:
                     with _VIP_LOCK:
                         snap_sb = _export_sync_snapshot_unlocked()
-                    if _supabase_push_snapshot_sync(snap_sb, sb_cfg):
+                    local_hash = _snapshot_content_hash(snap_sb)
+                    if local_hash and local_hash == remote_hash:
+                        # Cloud copy already identical: skip the ~1 MB re-upload.
+                        sb_push_ok = True
+                        _PEER_SYNC_STATUS["supabase_push_skipped_at"] = int(time.time())
+                    else:
+                        sb_push_ok = _supabase_push_snapshot_sync(snap_sb, sb_cfg)
+                    if sb_push_ok:
+                        _SB_LAST_SNAPSHOT_HASH = local_hash
                         sb_ok = True
                         _PEER_SYNC_STATUS["supabase_ok_at"] = int(time.time())
                         _PEER_SYNC_STATUS["supabase_error"] = ""
@@ -1795,7 +1834,10 @@ def _sync_two_way_with_peer_sync(push_after_pull: bool = True) -> Dict[str, Any]
                 if sb_ok:
                     with _VIP_LOCK:
                         snap_after_peer = _export_sync_snapshot_unlocked()
-                    _supabase_push_snapshot_sync(snap_after_peer, sb_cfg)
+                    after_hash = _snapshot_content_hash(snap_after_peer)
+                    if not after_hash or after_hash != _SB_LAST_SNAPSHOT_HASH:
+                        if _supabase_push_snapshot_sync(snap_after_peer, sb_cfg):
+                            _SB_LAST_SNAPSHOT_HASH = after_hash
 
             if push_after_pull and (not is_cloud or pulled_remote is not None):
                 try:
@@ -1839,24 +1881,40 @@ def _sync_two_way_with_peer_sync(push_after_pull: bool = True) -> Dict[str, Any]
 
 
 def _schedule_peer_sync_push(delay_sec: float = 0.4) -> None:
-    """Đẩy ngay thay đổi tài khoản sang server đối diện sau 0.4s debounce."""
-    global _PEER_SYNC_TIMER
+    """Gom thay đổi rồi đồng bộ sang Supabase/server đối diện.
+
+    Nếu đã có lịch đồng bộ đến hạn sớm hơn thì giữ nguyên (không dời mãi khi
+    check liên tục); thay đổi gấp (delay nhỏ) vẫn được kéo lịch lên sớm hơn.
+    """
+    global _PEER_SYNC_TIMER, _PEER_SYNC_TIMER_DUE
     if _APPLYING_REMOTE_SYNC or os.getenv("PYTEST_CURRENT_TEST"):
         return
 
     def _run_bg():
-        _sync_two_way_with_peer_sync(push_after_pull=True)
+        global _PEER_SYNC_TIMER
+        with _PEER_SYNC_TIMER_LOCK:
+            if _PEER_SYNC_TIMER is threading.current_thread():
+                _PEER_SYNC_TIMER = None
+        res = _sync_two_way_with_peer_sync(push_after_pull=True)
+        if isinstance(res, dict) and res.get("skipped") == "busy":
+            _schedule_peer_sync_push(3.0)
 
+    delay = max(0.1, float(delay_sec))
+    due = time.time() + delay
     with _PEER_SYNC_TIMER_LOCK:
-        if _PEER_SYNC_TIMER is not None:
+        pending = _PEER_SYNC_TIMER
+        if pending is not None and pending.is_alive() and _PEER_SYNC_TIMER_DUE <= due:
+            return
+        if pending is not None:
             try:
-                _PEER_SYNC_TIMER.cancel()
+                pending.cancel()
             except Exception:
                 pass
-        t = threading.Timer(max(0.1, float(delay_sec)), _run_bg)
+        t = threading.Timer(delay, _run_bg)
         t.daemon = True
         t.start()
         _PEER_SYNC_TIMER = t
+        _PEER_SYNC_TIMER_DUE = due
 
 
 def _create_vip_token(username: str, token_ver: int = 1, ttl_days: int = 30) -> str:
@@ -2122,7 +2180,7 @@ def on_startup():
         time.sleep(2.5)
         while True:
             _sync_two_way_with_peer_sync(push_after_pull=True)
-            time.sleep(60)
+            time.sleep(PEER_SYNC_INTERVAL_SEC)
 
     threading.Thread(target=_peer_sync_loop, daemon=True).start()
 
@@ -3567,11 +3625,6 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
         return JSONResponse(status_code=400, content={"success": False, "error": "Mỗi lần kiểm tra tối đa 50 tài khoản. Vui lòng chia nhỏ danh sách!"})
 
     vip_user = _extract_vip_user(req, body)
-    raw_explicit_dev = re.sub(
-        r"[^A-Z0-9-]",
-        "",
-        str(req.headers.get("x-device-id") or (body.get("device_id") if isinstance(body, dict) else "") or "").strip().upper(),
-    )[:20]
     dev_id, dev_label, client_ip_chk = _extract_device_info(req, body)
     has_vip_access = False
     checked_username = ""
@@ -3594,34 +3647,15 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
                 content={"success": False, "device_blocked": True, "error": f"⛔ Mã máy {dev_id} đã bị Quản trị viên khóa truy cập!"},
             )
 
-    if not has_vip_access:
-        if not re.match(r"^DEV-[0-9A-Z]{6,12}$", raw_explicit_dev):
-            return JSONResponse(
-                status_code=400,
-                content={"success": False, "error": "Không xác thực được Mã máy thiết bị. Vui lòng tải lại trang web (Ctrl+F5) và thử lại!"},
-            )
-        q_stat = _get_free_quota_status(dev_id, checked_username)
-        rem = int(q_stat.get("remaining") or 0)
-        if rem <= 0:
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "success": False,
-                    "quota_exceeded": True,
-                    "free_quota": q_stat,
-                    "error": f"⛔ Bạn đã dùng hết {FREE_DAILY_LIMIT}/{FREE_DAILY_LIMIT} lượt Miễn Phí hôm nay trên thiết bị này. Vui lòng nâng cấp VIP để check không giới hạn!",
-                },
-            )
-        if len(unique_inputs) > rem:
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "success": False,
-                    "quota_exceeded": True,
-                    "free_quota": q_stat,
-                    "error": f"Bạn chỉ còn {rem}/{FREE_DAILY_LIMIT} lượt Miễn Phí hôm nay — vui lòng dán tối đa {rem} tài khoản hoặc nâng cấp VIP để check hàng loạt!",
-                },
-            )
+    if not vip_user or not has_vip_access:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "vip_required": True,
+                "error": "⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!",
+            },
+        )
 
     batch_res = await asyncio.to_thread(check_accounts_batch_tikhub, unique_inputs, 6)
     batch_res["duplicate_lines_skipped"] = int(batch_res.get("duplicate_lines_skipped") or 0) + pre_dup_skipped
@@ -3652,10 +3686,6 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
             "est_scans_left": bal_info["est_scans_left"],
             "usd_rate": _TIKHUB_USD_TO_VND,
         }
-    else:
-        batch_res["vip_mode"] = False
-        if not has_vip_access:
-            batch_res["free_quota"] = _consume_free_quota(dev_id, checked_username, amount=checked_total)
 
     if vip_user and checked_username:
         try:
@@ -3674,6 +3704,8 @@ def _clear_history_bucket_response(req: Request, entries_key: str, deleted_key: 
     vip_user = _extract_vip_user(req)
     if not vip_user:
         return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
+    if entries_key == "account_entries" and not _has_vip_privilege(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "vip_required": True, "error": "⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!"})
     acct = str(vip_user.get("username") or "").strip().lower()
     now_ts = int(time.time())
     with _HISTORY_LOCK:
@@ -3693,6 +3725,8 @@ def _delete_history_item_response(req: Request, target_username: str, entries_ke
     vip_user = _extract_vip_user(req)
     if not vip_user:
         return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
+    if entries_key == "account_entries" and not _has_vip_privilege(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "vip_required": True, "error": "⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!"})
     acct = str(vip_user.get("username") or "").strip().lower()
     target = re.sub(r"[^a-zA-Z0-9._-]", "", str(target_username or "").lstrip("@").strip().lower())
     if not target:
@@ -3717,6 +3751,7 @@ def api_get_check_history(req: Request):
     if not vip_user:
         return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
     acct = str(vip_user.get("username") or "").strip().lower()
+    can_acc_hist = _has_vip_privilege(vip_user)
     now_ts = int(time.time())
     with _HISTORY_LOCK:
         hmap = _load_check_history_unlocked()
@@ -3732,7 +3767,7 @@ def api_get_check_history(req: Request):
         account_items = sorted(
             (v for v in acc_entries.values() if isinstance(v, dict)),
             key=lambda x: -int(x.get("checked_at") or 0),
-        )
+        ) if can_acc_hist else []
     return JSONResponse(content={
         "success": True,
         "ttl_days": 7,
@@ -3773,6 +3808,17 @@ async def api_export_accounts_excel(req: Request):
         body = await req.json()
     except Exception:
         return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not vip_user or not _has_vip_privilege(vip_user):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "vip_required": True,
+                "error": "⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!",
+            },
+        )
 
     raw_rows = body.get("rows") if isinstance(body, dict) else None
     if not isinstance(raw_rows, list) or not raw_rows:
