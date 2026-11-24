@@ -284,8 +284,9 @@ def api_get_penalty_details_native(cookie_str: str, ua: str = "", proxy: str = "
                     app_st_int = int(app_st) if app_st is not None else 0
                 except Exception:
                     app_st_int = 0
-                is_restored = (app_st_int == 1) or bool(d.get("isRestored") or d.get("is_restored"))
-                has_pen = bool(penalties or d.get("hasPenalty") or d.get("has_penalty")) and not is_restored
+                active_pen = bool(penalties or d.get("hasPenalty") or d.get("has_penalty"))
+                is_restored = (not active_pen) and ((app_st_int == 1) or bool(d.get("isRestored") or d.get("is_restored")))
+                has_pen = active_pen and not is_restored
 
                 rc_list: List[str] = []
                 seen_rc = set()
@@ -3345,9 +3346,9 @@ def fetch_channel_info_and_posts(
             is_shadow = True
         elif is_tns_fyp_ban:
             if (ec_verdict not in (0, 1)) or it.get("is_nff_or_nr") or it.get("_oembed_restricted"):
-                shadow_reason = shadow_reason or "Mất đề xuất Xu hướng (FYP): Nội dung bị AI đánh dấu nhạy cảm / hành vi nguy hiểm / chất lượng thấp / dính logo-QR"
+                shadow_reason = shadow_reason or "Không đủ điều kiện xuất hiện trên bảng tin Cho bạn (Hạn chế FYP · Cần cookie chính chủ để xem chi tiết lý do)"
             else:
-                shadow_reason = shadow_reason or "Mất đề xuất Xu hướng (FYP): Bị bộ lọc an toàn nội dung của TikTok chặn phân phối"
+                shadow_reason = shadow_reason or "Không đủ điều kiện xuất hiện trên bảng tin Cho bạn (Bị bộ lọc phân phối TikTok hạn chế FYP)"
             is_fyp = True
             is_shadow = True
         elif is_muted:
