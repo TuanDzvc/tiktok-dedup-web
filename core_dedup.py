@@ -3026,3 +3026,416 @@ def fetch_channel_info_and_posts(
             "cached_hits": int(scan_cost_ctx.get("cached_hits") or 0),
         },
     }
+
+
+# ==============================================================================
+# BULK ACCOUNT STATUS & RECOMMENDATION CHECKER (TikHub handler_user_profile)
+# ==============================================================================
+
+ACCOUNT_COUNTRY_CACHE_FILE = Path(__file__).resolve().parent / "account_country_cache.json"
+_ACCOUNT_COUNTRY_CACHE_LOCK = threading.Lock()
+_ACCOUNT_COUNTRY_CACHE: Dict[str, Dict[str, str]] = {"by_handle": {}, "by_uid": {}}
+_ACCOUNT_COUNTRY_CACHE_LOADED = False
+
+
+def _load_account_country_cache_unlocked() -> Dict[str, Dict[str, str]]:
+    """Tải bộ nhớ đệm quốc gia tài khoản từ account_country_cache.json."""
+    global _ACCOUNT_COUNTRY_CACHE_LOADED
+    if not _ACCOUNT_COUNTRY_CACHE_LOADED:
+        _ACCOUNT_COUNTRY_CACHE_LOADED = True
+        try:
+            if ACCOUNT_COUNTRY_CACHE_FILE.exists():
+                raw = json.loads(ACCOUNT_COUNTRY_CACHE_FILE.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    bh = raw.get("by_handle")
+                    bu = raw.get("by_uid")
+                    if isinstance(bh, dict):
+                        _ACCOUNT_COUNTRY_CACHE["by_handle"].update({str(k).lower(): str(v) for k, v in bh.items() if k and v})
+                    if isinstance(bu, dict):
+                        _ACCOUNT_COUNTRY_CACHE["by_uid"].update({str(k): str(v) for k, v in bu.items() if k and v})
+        except Exception:
+            pass
+    return _ACCOUNT_COUNTRY_CACHE
+
+
+def _save_account_country_cache_unlocked() -> None:
+    """Lưu nguyên tử account_country_cache.json xuống đĩa."""
+    try:
+        tmp_f = ACCOUNT_COUNTRY_CACHE_FILE.with_suffix(".json.tmp")
+        tmp_f.write_text(json.dumps(_ACCOUNT_COUNTRY_CACHE, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp_f, ACCOUNT_COUNTRY_CACHE_FILE)
+    except Exception:
+        pass
+
+
+def _is_valid_country_code(code: Any) -> bool:
+    c = normalize_country_code(code)
+    return len(c) == 2 and c.isalpha() and c not in ("UN", "XX", "ZZ", "EU")
+
+
+def _get_cached_account_country(username: str = "", uid: str = "") -> str:
+    """Lấy quốc gia tài khoản từ cache đĩa hoặc danh sách nick trong Studio (0đ API)."""
+    u_key = str(username or "").lstrip("@").strip().lower()
+    uid_key = str(uid or "").strip()
+    with _ACCOUNT_COUNTRY_CACHE_LOCK:
+        cache = _load_account_country_cache_unlocked()
+        if uid_key and uid_key in cache["by_uid"]:
+            cand = normalize_country_code(cache["by_uid"][uid_key])
+            if _is_valid_country_code(cand):
+                return cand
+        if u_key and u_key in cache["by_handle"]:
+            cand = normalize_country_code(cache["by_handle"][u_key])
+            if _is_valid_country_code(cand):
+                return cand
+    se_mod = sys.modules.get("studio_engine")
+    if se_mod and u_key:
+        try:
+            entry = getattr(se_mod, "ACTIVE_STUDIO_ACCOUNTS", {}).get(u_key)
+            if isinstance(entry, dict):
+                acc_obj = entry.get("account") or {}
+                c_raw = acc_obj.get("country") or acc_obj.get("region") or ""
+                if _is_valid_country_code(c_raw):
+                    return normalize_country_code(c_raw)
+        except Exception:
+            pass
+    return ""
+
+
+def _set_cached_account_country(username: str, uid: str, country_code: str) -> None:
+    """Lưu quốc gia đã tra cứu vào cache đĩa để các lần check sau không tốn thêm API."""
+    norm_c = normalize_country_code(country_code)
+    if not _is_valid_country_code(norm_c):
+        return
+    u_key = str(username or "").lstrip("@").strip().lower()
+    uid_key = str(uid or "").strip()
+    with _ACCOUNT_COUNTRY_CACHE_LOCK:
+        cache = _load_account_country_cache_unlocked()
+        changed = False
+        if u_key and cache["by_handle"].get(u_key) != norm_c:
+            cache["by_handle"][u_key] = norm_c
+            changed = True
+        if uid_key and cache["by_uid"].get(uid_key) != norm_c:
+            cache["by_uid"][uid_key] = norm_c
+            changed = True
+        if changed:
+            _save_account_country_cache_unlocked()
+
+
+def _extract_handle_from_url_or_text(raw: str) -> str:
+    """Trích xuất handle sạch từ link tiktok.com/@user, @user hoặc username thuần."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    m_at = re.search(r"tiktok\.com/@([^/?#&\s]+)", s, re.I)
+    if m_at:
+        cand = m_at.group(1)
+    elif "tiktok.com/" in s.lower():
+        after = re.split(r"tiktok\.com/", s, maxsplit=1, flags=re.I)[-1]
+        cand = after.split("?")[0].split("#")[0].split("/")[0]
+        if cand.lower() in ("video", "photo", "v", "t", "explore", "foryou", "following", "live", "discover", "music", "tag"):
+            return ""
+    else:
+        cand = s.split("?")[0].split("#")[0].split("/")[0]
+    cand = urllib.parse.unquote(cand).strip().lstrip("@").lower()
+    return cand if re.match(r"^[a-z0-9._-]{2,36}$", cand) else ""
+
+
+def _resolve_bulk_account_handle(raw_input: str) -> str:
+    """Chuẩn hóa mọi dạng @user, link hồ sơ, link video hoặc link rút gọn vt/vm về username sạch."""
+    s = str(raw_input or "").strip()
+    if not s:
+        return ""
+    if re.search(r"https?://(?:vt|vm)\.tiktok\.com/|tiktok\.com/t/", s, re.I):
+        m_url = re.search(r"https?://\S+", s)
+        target_url = m_url.group(0) if m_url else s
+        try:
+            r = requests.get(target_url, headers={"User-Agent": DEFAULT_UA}, allow_redirects=True, timeout=8)
+            h_redir = _extract_handle_from_url_or_text(r.url or "")
+            if h_redir:
+                return h_redir
+            m_uid_txt = re.search(r'"uniqueId":"([^"]+)"', r.text or "")
+            if m_uid_txt:
+                h_html = _extract_handle_from_url_or_text(m_uid_txt.group(1))
+                if h_html:
+                    return h_html
+        except Exception:
+            return ""
+    return _extract_handle_from_url_or_text(s)
+
+
+def _parse_account_labels(raw_labels: Any) -> Dict[str, Any]:
+    """Chuẩn hóa trường account_labels từ TikTok Mobile API thành trạng thái đề xuất rõ ràng."""
+    labels_list: List[Dict[str, Any]] = []
+    if isinstance(raw_labels, str) and raw_labels.strip().startswith(("[", "{")):
+        try:
+            raw_labels = json.loads(raw_labels)
+        except Exception:
+            raw_labels = []
+    if isinstance(raw_labels, dict):
+        raw_labels = [raw_labels]
+    if isinstance(raw_labels, list):
+        for item in raw_labels:
+            if isinstance(item, dict):
+                labels_list.append({
+                    "content": str(item.get("content") or "").strip(),
+                    "label_type": item.get("label_type"),
+                })
+            elif isinstance(item, str) and item.strip():
+                labels_list.append({"content": item.strip(), "label_type": None})
+
+    for lb in labels_list:
+        l_type = lb.get("label_type")
+        c_low = lb["content"].lower()
+        if str(l_type) == "2" or "not recommended" in c_low or "không được đề xuất" in c_low:
+            return {
+                "recommend_status": "not_recommended",
+                "recommend_label": "Tài khoản không được đề xuất",
+                "is_not_recommended": True,
+                "raw_labels": labels_list,
+            }
+
+    first_warn = next((lb["content"] for lb in labels_list if lb.get("content")), "")
+    if first_warn:
+        label_vn = "Cảnh báo tài khoản" if "account warning" in first_warn.lower() else first_warn
+        return {
+            "recommend_status": "warning",
+            "recommend_label": label_vn,
+            "is_not_recommended": False,
+            "raw_labels": labels_list,
+        }
+
+    return {
+        "recommend_status": "ok",
+        "recommend_label": "Đề xuất bình thường",
+        "is_not_recommended": False,
+        "raw_labels": [],
+    }
+
+
+def _first_avatar_url(usr: Dict[str, Any]) -> str:
+    """Chọn URL ảnh đại diện đầu tiên khả dụng từ hồ sơ Mobile API."""
+    for key in ("avatar_larger", "avatar_medium", "avatar_thumb", "avatar_300x300", "avatar_168x168"):
+        av_obj = usr.get(key)
+        if isinstance(av_obj, dict):
+            urls = av_obj.get("url_list")
+            if isinstance(urls, list):
+                for u in urls:
+                    if isinstance(u, str) and u.startswith("http"):
+                        return u
+        elif isinstance(av_obj, str) and av_obj.startswith("http"):
+            return av_obj
+    return ""
+
+
+def check_single_account_profile_tikhub(raw_input: str, api_key: str = "") -> Dict[str, Any]:
+    """Kiểm tra trạng thái đề xuất (account_labels), ngày tạo, quốc gia & follow qua TikHub."""
+    handle = _resolve_bulk_account_handle(raw_input)
+    if not handle:
+        return {
+            "ok": False,
+            "input": str(raw_input or "").strip(),
+            "unique_id": "",
+            "error": "Đường dẫn hoặc @username không hợp lệ.",
+            "_api_calls": 0,
+            "_cached_country_hit": False,
+        }
+
+    tik_key = (api_key or _get_tikhub_api_key()).strip()
+    if not tik_key:
+        return {
+            "ok": False,
+            "input": str(raw_input or "").strip(),
+            "unique_id": handle,
+            "error": "Chưa cấu hình TIKHUB_API_KEY trên máy chủ.",
+            "_api_calls": 0,
+            "_cached_country_hit": False,
+        }
+
+    hdrs = {"Authorization": f"Bearer {tik_key}", "Accept": "application/json"}
+    api_calls = 0
+    cached_hit = False
+
+    try:
+        r = requests.get(
+            "https://api.tikhub.io/api/v1/tiktok/app/v3/handler_user_profile",
+            headers=hdrs,
+            params={"unique_id": handle},
+            timeout=15,
+        )
+        body = r.json() if r.content else {}
+    except Exception as exc:
+        return {
+            "ok": False,
+            "input": str(raw_input or "").strip(),
+            "unique_id": handle,
+            "error": f"Lỗi kết nối API: {exc}",
+            "_api_calls": 0,
+            "_cached_country_hit": False,
+        }
+
+    if r.status_code != 200 or not isinstance(body, dict) or body.get("code") != 200:
+        return {
+            "ok": False,
+            "input": str(raw_input or "").strip(),
+            "unique_id": handle,
+            "error": "Không tìm thấy tài khoản hoặc tài khoản đã bị khóa.",
+            "_api_calls": 0,
+            "_cached_country_hit": False,
+        }
+
+    api_calls += 1
+    usr = (body.get("data") or {}).get("user")
+    if not isinstance(usr, dict) or not str(usr.get("uid") or "").strip():
+        return {
+            "ok": False,
+            "input": str(raw_input or "").strip(),
+            "unique_id": handle,
+            "error": "Không tìm thấy tài khoản hoặc tài khoản đã bị khóa.",
+            "_api_calls": api_calls,
+            "_cached_country_hit": False,
+        }
+
+    uid = str(usr.get("uid") or "").strip()
+    sec_uid = str(usr.get("sec_uid") or "").strip()
+    unique_id = str(usr.get("unique_id") or handle).lstrip("@").strip() or handle
+    nickname = str(usr.get("nickname") or unique_id)
+    avatar = _first_avatar_url(usr)
+
+    followers = int(usr.get("follower_count") or 0)
+    following = int(usr.get("following_count") or 0)
+    videos = int(usr.get("aweme_count") or 0)
+    likes = int(usr.get("total_favorited") or 0)
+    is_private = bool(usr.get("secret"))
+
+    create_date = decode_snowflake_timestamp(uid) or "—"
+    if create_date == "—":
+        try:
+            ct = int(usr.get("create_time") or 0)
+            if ct > 0:
+                create_date = datetime.datetime.fromtimestamp(ct).strftime("%d/%m/%Y")
+        except Exception:
+            pass
+
+    country_code = _get_cached_account_country(unique_id, uid)
+    if country_code:
+        cached_hit = True
+    else:
+        try:
+            r_cnt = requests.get(
+                "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_country_by_username",
+                headers=hdrs,
+                params={"username": unique_id},
+                timeout=12,
+            )
+            b_cnt = r_cnt.json() if r_cnt.content else {}
+            if r_cnt.status_code == 200 and isinstance(b_cnt, dict) and b_cnt.get("code") == 200:
+                api_calls += 1
+                raw_country = (b_cnt.get("data") or {}).get("country") or ""
+                if _is_valid_country_code(raw_country):
+                    country_code = normalize_country_code(raw_country)
+                    _set_cached_account_country(unique_id, uid, country_code)
+        except Exception:
+            pass
+
+    region_disp = format_full_country_display(country_code) if country_code else "Không rõ"
+    label_info = _parse_account_labels(usr.get("account_labels"))
+
+    return {
+        "ok": True,
+        "input": str(raw_input or "").strip(),
+        "uid": uid,
+        "sec_uid": sec_uid,
+        "unique_id": unique_id,
+        "nickname": nickname,
+        "avatar": avatar,
+        "create_date": create_date,
+        "region": country_code,
+        "region_display": region_disp,
+        "followers": followers,
+        "followers_fmt": format_count_compact(followers),
+        "following": following,
+        "videos": videos,
+        "likes": likes,
+        "is_private": is_private,
+        **label_info,
+        "_api_calls": api_calls,
+        "_cached_country_hit": cached_hit,
+    }
+
+
+def check_accounts_batch_tikhub(raw_inputs: List[str], max_workers: int = 6) -> Dict[str, Any]:
+    """Kiểm tra song song danh sách tài khoản TikTok (lọc trùng & giữ nguyên thứ tự)."""
+    cleaned_raws = [str(x or "").strip() for x in (raw_inputs or []) if str(x or "").strip()]
+    if not cleaned_raws:
+        return {
+            "success": False,
+            "error": "Vui lòng nhập ít nhất 1 @username hoặc link TikTok.",
+            "results": [],
+            "summary": {"total": 0, "ok_count": 0, "not_recommended_count": 0, "warning_count": 0, "error_count": 0},
+            "api_calls": 0,
+            "cached_country_hits": 0,
+            "cost_usd": 0.0,
+            "duplicate_lines_skipped": 0,
+        }
+
+    # Giải link rút gọn & chuẩn hóa handle song song trước khi lọc trùng để tránh gọi API trùng
+    resolve_workers = min(8, max(1, len(cleaned_raws)))
+    with ThreadPoolExecutor(max_workers=resolve_workers) as r_ex:
+        resolved_handles = list(r_ex.map(_resolve_bulk_account_handle, cleaned_raws))
+
+    seen_keys = set()
+    unique_items: List[Tuple[str, str]] = []
+    dup_skipped = 0
+    for raw_in, h_res in zip(cleaned_raws, resolved_handles):
+        dedup_k = h_res if h_res else f"raw:{raw_in.lower()}"
+        if dedup_k in seen_keys:
+            dup_skipped += 1
+            continue
+        seen_keys.add(dedup_k)
+        unique_items.append((raw_in, h_res or raw_in))
+
+    api_key = _get_tikhub_api_key()
+    workers = min(max(1, int(max_workers or 6)), max(1, len(unique_items)))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        raw_results = list(ex.map(lambda pair: check_single_account_profile_tikhub(pair[1], api_key=api_key), unique_items))
+
+    results: List[Dict[str, Any]] = []
+    total_calls = 0
+    cached_hits = 0
+    ok_cnt = 0
+    not_rec_cnt = 0
+    warn_cnt = 0
+    err_cnt = 0
+
+    for (orig_raw, _), item in zip(unique_items, raw_results):
+        item_clean = dict(item)
+        item_clean["input"] = orig_raw
+        total_calls += int(item_clean.pop("_api_calls", 0) or 0)
+        if item_clean.pop("_cached_country_hit", False):
+            cached_hits += 1
+
+        if not item_clean.get("ok"):
+            err_cnt += 1
+        elif item_clean.get("recommend_status") == "not_recommended":
+            not_rec_cnt += 1
+        elif item_clean.get("recommend_status") == "warning":
+            warn_cnt += 1
+        else:
+            ok_cnt += 1
+        results.append(item_clean)
+
+    return {
+        "success": True,
+        "results": results,
+        "summary": {
+            "total": len(results),
+            "ok_count": ok_cnt,
+            "not_recommended_count": not_rec_cnt,
+            "warning_count": warn_cnt,
+            "error_count": err_cnt,
+        },
+        "api_calls": total_calls,
+        "cached_country_hits": cached_hits,
+        "cost_usd": round(total_calls * 0.001, 4),
+        "duplicate_lines_skipped": dup_skipped,
+    }

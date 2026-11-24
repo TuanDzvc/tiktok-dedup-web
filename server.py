@@ -53,7 +53,7 @@ import requests
 
 # Import engine trích xuất
 import core_dedup
-from core_dedup import fetch_channel_info_and_posts, DEFAULT_UA, get_borrowed_cookie
+from core_dedup import fetch_channel_info_and_posts, check_accounts_batch_tikhub, DEFAULT_UA, get_borrowed_cookie
 import studio_engine
 
 # Cấu hình Google Sheet Webhook lưu vết người dùng
@@ -467,10 +467,11 @@ def _get_free_quota_status(dev_id: str, username: str = "") -> Dict[str, Any]:
     }
 
 
-def _consume_free_quota(dev_id: str, username: str = "") -> Dict[str, Any]:
+def _consume_free_quota(dev_id: str, username: str = "", amount: int = 1) -> Dict[str, Any]:
     day_k = _vn_date_key()
     dev_k = f"dev:{dev_id}"
     usr_k = f"usr:{username.strip().lower()}" if username else ""
+    step = max(1, int(amount or 1))
     with _QUOTA_LOCK:
         qmap = _load_free_quota_unlocked()
         bucket = qmap.get(day_k)
@@ -479,7 +480,7 @@ def _consume_free_quota(dev_id: str, username: str = "") -> Dict[str, Any]:
             qmap[day_k] = bucket
         dev_used = int(bucket.get(dev_k) or 0)
         usr_used = int(bucket.get(usr_k) or 0) if usr_k else 0
-        new_used = max(dev_used, usr_used) + 1
+        new_used = max(dev_used, usr_used) + step
         bucket[dev_k] = new_used
         if usr_k:
             bucket[usr_k] = new_used
@@ -3416,6 +3417,143 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         background_tasks.add_task(prefetch_thumbnails, v_list)
         
     return JSONResponse(content=res)
+
+
+@app.post("/api/check-accounts")
+async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
+    """Kiểm tra hàng loạt trạng thái đề xuất (account_labels), ngày tạo, quốc gia và follow theo danh sách user/link."""
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu yêu cầu không hợp lệ."})
+
+    raw_inputs: List[str] = []
+    if isinstance(body.get("inputs"), list):
+        raw_inputs = [str(x or "").strip() for x in body.get("inputs") or []]
+    elif isinstance(body.get("raw_text"), str):
+        raw_inputs = re.split(r"[\r\n,\t ]+", body.get("raw_text") or "")
+
+    # Tách token lẫn dấu phẩy/khoảng trắng trong từng phần tử và lọc trùng giữ thứ tự
+    tokens: List[str] = []
+    for item in raw_inputs:
+        for part in re.split(r"[\r\n,\t ]+", str(item or "").strip()):
+            p = part.strip()
+            if p:
+                tokens.append(p)
+
+    seen_handles = set()
+    unique_inputs: List[str] = []
+    pre_dup_skipped = 0
+    for tok in tokens:
+        ext_h = core_dedup._extract_handle_from_url_or_text(tok)
+        dedup_k = ext_h if ext_h else f"raw:{tok.lower()}"
+        if dedup_k in seen_handles:
+            pre_dup_skipped += 1
+            continue
+        seen_handles.add(dedup_k)
+        unique_inputs.append(tok)
+
+    if not unique_inputs:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Vui lòng dán ít nhất 1 @username hoặc link TikTok!"})
+    if len(unique_inputs) > 50:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Mỗi lần kiểm tra tối đa 50 tài khoản. Vui lòng chia nhỏ danh sách!"})
+
+    vip_user = _extract_vip_user(req, body)
+    raw_explicit_dev = re.sub(
+        r"[^A-Z0-9-]",
+        "",
+        str(req.headers.get("x-device-id") or (body.get("device_id") if isinstance(body, dict) else "") or "").strip().upper(),
+    )[:20]
+    dev_id, dev_label, client_ip_chk = _extract_device_info(req, body)
+    has_vip_access = False
+    checked_username = ""
+
+    with _VIP_LOCK:
+        bmap_db = _load_blocked_devices_unlocked()
+        if vip_user:
+            users_db = _load_vip_users_unlocked()
+            u_rec = users_db.get(vip_user["username"])
+            if isinstance(u_rec, dict):
+                checked_username = str(u_rec.get("username") or "")
+                dev_err = _record_and_check_device_unlocked(u_rec, dev_id, dev_label, client_ip_chk, bmap_db)
+                _save_vip_users_unlocked(users_db)
+                if dev_err:
+                    return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": dev_err})
+                has_vip_access = _has_vip_privilege(u_rec)
+        elif dev_id in bmap_db:
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "device_blocked": True, "error": f"⛔ Mã máy {dev_id} đã bị Quản trị viên khóa truy cập!"},
+            )
+
+    if not has_vip_access:
+        if not re.match(r"^DEV-[0-9A-Z]{6,12}$", raw_explicit_dev):
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Không xác thực được Mã máy thiết bị. Vui lòng tải lại trang web (Ctrl+F5) và thử lại!"},
+            )
+        q_stat = _get_free_quota_status(dev_id, checked_username)
+        rem = int(q_stat.get("remaining") or 0)
+        if rem <= 0:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "success": False,
+                    "quota_exceeded": True,
+                    "free_quota": q_stat,
+                    "error": f"⛔ Bạn đã dùng hết {FREE_DAILY_LIMIT}/{FREE_DAILY_LIMIT} lượt Miễn Phí hôm nay trên thiết bị này. Vui lòng nâng cấp VIP để check không giới hạn!",
+                },
+            )
+        if len(unique_inputs) > rem:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "success": False,
+                    "quota_exceeded": True,
+                    "free_quota": q_stat,
+                    "error": f"Bạn chỉ còn {rem}/{FREE_DAILY_LIMIT} lượt Miễn Phí hôm nay — vui lòng dán tối đa {rem} tài khoản hoặc nâng cấp VIP để check hàng loạt!",
+                },
+            )
+
+    batch_res = await asyncio.to_thread(check_accounts_batch_tikhub, unique_inputs, 6)
+    batch_res["duplicate_lines_skipped"] = int(batch_res.get("duplicate_lines_skipped") or 0) + pre_dup_skipped
+    if not batch_res.get("success"):
+        return JSONResponse(status_code=400, content=batch_res)
+
+    checked_total = max(1, len(batch_res.get("results") or unique_inputs))
+    if has_vip_access and checked_username:
+        with _VIP_LOCK:
+            users_db = _load_vip_users_unlocked()
+            u_rec = users_db.get(checked_username)
+            if isinstance(u_rec, dict):
+                u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + checked_total
+                _save_vip_users_unlocked(users_db)
+        c_usd = round(float(batch_res.get("cost_usd") or 0.0), 4)
+        c_calls = int(batch_res.get("api_calls") or 0)
+        c_cached = int(batch_res.get("cached_country_hits") or 0)
+        c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
+        bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
+        batch_res["vip_mode"] = True
+        batch_res["admin_billing"] = {
+            "scan_cost_usd": c_usd,
+            "scan_cost_vnd": c_vnd,
+            "api_calls": c_calls,
+            "cached_hits": c_cached,
+            "balance_usd": bal_info["total_usd"],
+            "balance_vnd": bal_info["total_vnd"],
+            "est_scans_left": bal_info["est_scans_left"],
+            "usd_rate": _TIKHUB_USD_TO_VND,
+        }
+    else:
+        batch_res["vip_mode"] = False
+        if not has_vip_access:
+            batch_res["free_quota"] = _consume_free_quota(dev_id, checked_username, amount=checked_total)
+
+    av_items = [{"cover_url": it["avatar"]} for it in (batch_res.get("results") or []) if isinstance(it, dict) and it.get("avatar")]
+    if av_items:
+        background_tasks.add_task(prefetch_thumbnails, av_items)
+
+    return JSONResponse(content=batch_res)
 
 
 @app.get("/api/check-history")

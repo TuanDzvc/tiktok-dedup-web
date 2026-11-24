@@ -17,3 +17,4 @@ vip_sync_meta.json
 server.log
 PUBLIC_DOMAIN.txt
 check_history.json
+account_country_cache.json

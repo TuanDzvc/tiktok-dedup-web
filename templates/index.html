@@ -194,9 +194,9 @@
     <!-- Main Content Container -->
     <main class="flex-grow max-w-7xl 2xl:max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-        <!-- Workspace Tabs (Shown only when logged in; hidden for guests) -->
-        <div id="mainWorkspaceTabs" class="hidden text-center">
-            <div class="inline-flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-xl backdrop-blur-md">
+        <!-- Workspace Tabs (Checker & Account Check always visible; Check History shown only when logged in) -->
+        <div id="mainWorkspaceTabs" class="text-center">
+            <div class="inline-flex flex-wrap items-center justify-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-xl backdrop-blur-md">
                 <button
                     type="button"
                     id="tabMainChecker"
@@ -208,9 +208,20 @@
                 </button>
                 <button
                     type="button"
+                    id="tabMainAccountCheck"
+                    onclick="switchMainWorkspaceTab('account_check')"
+                    class="px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap"
+                    title="Check hàng loạt trạng thái đề xuất (tài khoản không được đề xuất), ngày tạo, quốc gia & follower"
+                >
+                    <i class="fa-solid fa-user-shield text-rose-400"></i>
+                    <span>Check Tài Khoản</span>
+                    <span id="accountCheckNavCount" class="hidden px-1.5 py-0.5 rounded-md bg-cyan-950 border border-cyan-500/40 text-cyan-300 font-mono text-[11px] font-extrabold tabular-nums">0</span>
+                </button>
+                <button
+                    type="button"
                     id="tabMainHistory"
                     onclick="switchMainWorkspaceTab('history')"
-                    class="px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap"
+                    class="hidden px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap"
                     title="Xem lại các kênh đã check trong 7 ngày gần nhất"
                 >
                     <i class="fa-solid fa-clock-rotate-left text-cyan-400"></i>
@@ -778,7 +789,132 @@
 
         </div> <!-- /#checkerWorkspace -->
 
-        <!-- Tab 2: Dedicated Check History Section (Logged-in users only, hidden for guests) -->
+        <!-- Tab 2: Dedicated Account Check Workspace (Bulk Red-Warning / Recommendation Status) -->
+        <section id="accountCheckWorkspace" class="hidden space-y-6">
+            <div class="glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl relative border border-slate-700/60">
+                <div class="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+                    <div class="absolute -top-24 -left-24 w-72 h-72 bg-rose-500/12 rounded-full blur-3xl animate-pulse-slow"></div>
+                    <div class="absolute -bottom-24 -right-24 w-72 h-72 bg-cyan-500/12 rounded-full blur-3xl animate-pulse-slow"></div>
+                </div>
+
+                <div class="relative z-10 max-w-4xl mx-auto space-y-5">
+                    <div class="text-center space-y-2">
+                        <h1 class="text-2xl sm:text-4xl font-extrabold tracking-tight">
+                            <span class="text-white">Check Tài Khoản TikTok</span>
+                            <span class="bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent"> &amp; Cảnh Báo Đề Xuất</span>
+                        </h1>
+                        <p class="text-sm sm:text-base text-slate-400 leading-relaxed">
+                            Soi nhanh cảnh báo đỏ <b class="text-rose-300">⚠️ Tài khoản không được đề xuất</b>, ngày tạo, quốc gia và lượt follower hàng loạt.<br />
+                            <span class="text-slate-300 font-medium">Dán mỗi link hoặc @username 1 dòng — tự động xuống dòng thông minh để bạn dán tiếp liên tục.</span>
+                        </p>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div class="bg-dark-900/95 rounded-2xl border-2 border-slate-700/80 focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-500/20 transition-all shadow-xl p-3 sm:p-4">
+                            <textarea
+                                id="accountCheckInput"
+                                name="tikflow_bulk_account_lines"
+                                rows="6"
+                                autocomplete="off"
+                                autocorrect="off"
+                                autocapitalize="off"
+                                spellcheck="false"
+                                data-lpignore="true"
+                                data-form-type="other"
+                                onpaste="handleAccountCheckSmartPaste(event)"
+                                oninput="updateAccountCheckInputCount()"
+                                onkeydown="if((event.ctrlKey || event.metaKey) && event.key === 'Enter'){ event.preventDefault(); runBulkAccountCheck(); }"
+                                placeholder="Dán @username hoặc link kênh TikTok vào đây (mỗi lần dán tự xuống dòng mới để bạn dán tiếp ngay)...&#10;Ví dụ:&#10;https://www.tiktok.com/@moodybfpisw&#10;@user1407066781450"
+                                class="w-full bg-transparent border-none text-white text-sm font-mono leading-relaxed focus:outline-none placeholder-slate-500 resize-y custom-scrollbar min-h-[128px]"
+                            ></textarea>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs">
+                                <span id="accountCheckInputCount" class="px-3 py-1 rounded-xl bg-slate-900/90 border border-slate-700/80 text-cyan-300 font-bold tabular-nums">
+                                    0 tài khoản
+                                </span>
+                                <span id="accountCheckDupHint" class="hidden px-2.5 py-1 rounded-xl bg-amber-950/70 border border-amber-600/40 text-amber-300 font-semibold"></span>
+                                <span class="text-slate-400 text-[11px]">Tối đa 50 tài khoản / lần (Ctrl + Enter để check nhanh)</span>
+                            </div>
+
+                            <div class="flex items-center gap-2.5 w-full sm:w-auto justify-center sm:justify-end">
+                                <button
+                                    type="button"
+                                    id="btnClearAccountCheckInput"
+                                    onclick="clearAccountCheckInput()"
+                                    class="hidden px-4 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/80 text-slate-300 hover:text-white text-xs sm:text-sm font-bold transition whitespace-nowrap"
+                                    title="Xóa danh sách vừa dán"
+                                >
+                                    <i class="fa-solid fa-eraser mr-1"></i> Xóa ô nhập
+                                </button>
+                                <button
+                                    type="button"
+                                    id="btnRunAccountCheck"
+                                    onclick="runBulkAccountCheck()"
+                                    class="w-full sm:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-sm sm:text-base shadow-lg shadow-cyan-500/25 transition duration-200 flex items-center justify-center gap-2 active:scale-95 whitespace-nowrap"
+                                >
+                                    <i id="btnRunAccountCheckIcon" class="fa-solid fa-bolt text-amber-300"></i>
+                                    <span id="btnRunAccountCheckText">Check Ngay</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="accountCheckError" class="hidden max-w-2xl mx-auto p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-200 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 text-center shadow-lg">
+                        <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
+                        <span id="accountCheckErrorMsg"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary, Filters & Export Bar -->
+            <div id="accountCheckSummaryBar" class="hidden glass-panel rounded-2xl p-3.5 sm:p-4 border border-slate-700/80 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                    <button type="button" id="btnAccFilterAll" onclick="setAccountCheckFilter('all')" class="px-3 py-1.5 rounded-xl font-bold bg-cyan-500 text-dark-950 transition">Tất cả (0)</button>
+                    <button type="button" id="btnAccFilterNotRec" onclick="setAccountCheckFilter('not_recommended')" class="px-3 py-1.5 rounded-xl font-bold bg-slate-800/90 border border-rose-600/50 text-rose-300 hover:bg-rose-950/80 transition">⚠️ Không được đề xuất (0)</button>
+                    <button type="button" id="btnAccFilterOk" onclick="setAccountCheckFilter('ok')" class="px-3 py-1.5 rounded-xl font-bold bg-slate-800/90 border border-emerald-600/50 text-emerald-300 hover:bg-emerald-950/80 transition">✅ Đề xuất bình thường (0)</button>
+                    <button type="button" id="btnAccFilterErr" onclick="setAccountCheckFilter('error')" class="hidden px-3 py-1.5 rounded-xl font-bold bg-slate-800/90 border border-slate-600 text-slate-300 hover:bg-slate-700 transition">❌ Lỗi (0)</button>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 text-xs w-full lg:w-auto justify-start lg:justify-end">
+                    <span id="accountCheckCostInfo" class="hidden px-3 py-1.5 rounded-xl bg-slate-900/90 border border-amber-500/40 text-amber-300 font-bold tabular-nums"></span>
+                    <button
+                        type="button"
+                        onclick="copyAccountCheckHandles('not_recommended')"
+                        class="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-600/60 text-rose-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        title="Sao chép danh sách tài khoản bị cảnh báo không được đề xuất"
+                    >
+                        <i class="fa-regular fa-copy"></i>
+                        <span>Copy acc bị đỏ</span>
+                    </button>
+                    <button
+                        type="button"
+                        onclick="copyAccountCheckHandles('ok')"
+                        class="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        title="Sao chép danh sách tài khoản sạch đang đề xuất bình thường"
+                    >
+                        <i class="fa-regular fa-copy"></i>
+                        <span>Copy acc sạch</span>
+                    </button>
+                    <button
+                        type="button"
+                        onclick="clearAccountCheckResults()"
+                        class="px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/70 text-slate-300 hover:text-white font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                        <i class="fa-solid fa-trash-can text-[11px]"></i>
+                        <span>Xóa kết quả</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Account Result Cards -->
+            <div id="accountCheckResultsList" class="space-y-3">
+                <!-- Account cards injected by JS -->
+            </div>
+        </section>
+
+        <!-- Tab 3: Dedicated Check History Section (Logged-in users only, hidden for guests) -->
         <section id="checkHistorySection" class="hidden glass-panel rounded-3xl p-4 sm:p-6 border border-slate-700/80 shadow-2xl space-y-4">
             <div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 pb-3 border-b border-slate-800/90">
                 <div class="flex flex-wrap items-center gap-2.5">
@@ -5125,7 +5261,7 @@
             document.getElementById('videoModal').classList.remove('hidden');
         }
 
-        // ==================== CHECK HISTORY (LỊCH SỬ CHECK) ====================
+        // ==================== WORKSPACE TABS & ACCOUNT CHECK ====================
         let activeMainWorkspaceTab = 'checker';
         let checkHistoryItems = [];
         let checkHistoryLoadedForUser = '';
@@ -5134,28 +5270,449 @@
         let expandedHistoryChannels = new Set();
         let historyChannelVideoFilter = {};
 
+        let accountCheckResults = [];
+        let accountCheckFilter = 'all';
+        let accountCheckLoading = false;
+
         function switchMainWorkspaceTab(tabName) {
-            const targetTab = (!currentVipUser || tabName !== 'history') ? 'checker' : 'history';
+            let targetTab = 'checker';
+            if (tabName === 'account_check') {
+                targetTab = 'account_check';
+            } else if (tabName === 'history' && currentVipUser) {
+                targetTab = 'history';
+            }
             activeMainWorkspaceTab = targetTab;
 
             const checkerWs = document.getElementById('checkerWorkspace');
+            const accountWs = document.getElementById('accountCheckWorkspace');
             const historySec = document.getElementById('checkHistorySection');
             const tabChecker = document.getElementById('tabMainChecker');
+            const tabAccount = document.getElementById('tabMainAccountCheck');
             const tabHistory = document.getElementById('tabMainHistory');
 
             if (checkerWs) checkerWs.classList.toggle('hidden', targetTab !== 'checker');
+            if (accountWs) accountWs.classList.toggle('hidden', targetTab !== 'account_check');
             if (historySec) historySec.classList.toggle('hidden', targetTab !== 'history');
 
             const activeCls = 'px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition whitespace-nowrap';
             const inactiveCls = 'px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap';
             if (tabChecker) tabChecker.className = (targetTab === 'checker') ? activeCls : inactiveCls;
-            if (tabHistory) tabHistory.className = (targetTab === 'history') ? activeCls : inactiveCls;
+            if (tabAccount) tabAccount.className = (targetTab === 'account_check') ? activeCls : inactiveCls;
+            if (tabHistory) {
+                tabHistory.className = (targetTab === 'history') ? activeCls : inactiveCls;
+                tabHistory.classList.toggle('hidden', !currentVipUser);
+            }
 
-            if (targetTab === 'history') {
+            if (targetTab === 'account_check') {
+                setTimeout(() => {
+                    try { document.getElementById('accountCheckInput')?.focus({ preventScroll: true }); } catch (e) {}
+                }, 40);
+            } else if (targetTab === 'history') {
                 renderCheckHistory();
                 loadCheckHistory(false);
                 try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
             }
+        }
+
+        function handleAccountCheckSmartPaste(e) {
+            const el = e?.target;
+            const clip = e?.clipboardData || window.clipboardData;
+            if (!el || !clip) return;
+            const raw = String(clip.getData('text') || '');
+            const tokens = raw.split(/[\r\n,\t ]+/).map(s => s.trim()).filter(Boolean);
+            if (!tokens.length) return;
+            e.preventDefault();
+
+            const start = typeof el.selectionStart === 'number' ? el.selectionStart : el.value.length;
+            const end = typeof el.selectionEnd === 'number' ? el.selectionEnd : start;
+            const before = el.value.slice(0, start);
+            const after = el.value.slice(end);
+
+            const prefix = (before.length > 0 && !before.endsWith('\n')) ? '\n' : '';
+            const body = tokens.join('\n');
+            const suffix = (!after || !after.startsWith('\n')) ? '\n' : '';
+            const inserted = prefix + body + suffix;
+
+            el.value = before + inserted + after;
+            const newPos = before.length + inserted.length;
+            try { el.setSelectionRange(newPos, newPos); } catch (err) {}
+            if (!after.trim()) {
+                el.scrollTop = el.scrollHeight;
+            }
+            updateAccountCheckInputCount();
+        }
+
+        function parseAccountCheckTokens() {
+            const raw = String(document.getElementById('accountCheckInput')?.value || '');
+            const parts = raw.split(/[\r\n,\t ]+/).map(s => s.trim()).filter(Boolean);
+            const seen = new Set();
+            const unique = [];
+            let dupCount = 0;
+            for (const p of parts) {
+                const m = p.match(/tiktok\.com\/@([^/?#&\s]+)/i);
+                let normKey = 'r:' + p.toLowerCase();
+                if (m) {
+                    normKey = 'h:' + m[1].toLowerCase();
+                } else if (!/^https?:\/\//i.test(p) && !/tiktok\.com\//i.test(p)) {
+                    const h = p.split('?')[0].split('#')[0].split('/')[0].replace(/^@+/, '').toLowerCase();
+                    if (/^[a-z0-9._-]{2,36}$/.test(h)) normKey = 'h:' + h;
+                }
+                if (seen.has(normKey)) {
+                    dupCount++;
+                    continue;
+                }
+                seen.add(normKey);
+                unique.push(p);
+            }
+            return { unique, dupCount };
+        }
+
+        function updateAccountCheckInputCount() {
+            const { unique, dupCount } = parseAccountCheckTokens();
+            const rawEmpty = !String(document.getElementById('accountCheckInput')?.value || '').trim();
+            const cntEl = document.getElementById('accountCheckInputCount');
+            const dupEl = document.getElementById('accountCheckDupHint');
+            const clrBtn = document.getElementById('btnClearAccountCheckInput');
+            if (cntEl) {
+                cntEl.innerText = `${unique.length} tài khoản`;
+                cntEl.className = unique.length > 50
+                    ? 'px-3 py-1 rounded-xl bg-rose-950/80 border border-rose-500/70 text-rose-200 font-bold tabular-nums'
+                    : 'px-3 py-1 rounded-xl bg-slate-900/90 border border-slate-700/80 text-cyan-300 font-bold tabular-nums';
+            }
+            if (dupEl) {
+                if (dupCount > 0) {
+                    dupEl.innerText = `Tự bỏ ${dupCount} dòng trùng`;
+                    dupEl.classList.remove('hidden');
+                } else {
+                    dupEl.classList.add('hidden');
+                }
+            }
+            if (clrBtn) clrBtn.classList.toggle('hidden', rawEmpty);
+        }
+
+        function clearAccountCheckInput() {
+            const el = document.getElementById('accountCheckInput');
+            if (el) {
+                el.value = '';
+                try { el.focus(); } catch (e) {}
+            }
+            document.getElementById('accountCheckError')?.classList.add('hidden');
+            updateAccountCheckInputCount();
+        }
+
+        function clearAccountCheckResults() {
+            accountCheckResults = [];
+            accountCheckFilter = 'all';
+            document.getElementById('accountCheckSummaryBar')?.classList.add('hidden');
+            document.getElementById('accountCheckCostInfo')?.classList.add('hidden');
+            const listEl = document.getElementById('accountCheckResultsList');
+            if (listEl) listEl.innerHTML = '';
+            const navBadge = document.getElementById('accountCheckNavCount');
+            if (navBadge) {
+                navBadge.innerText = '0';
+                navBadge.classList.add('hidden');
+            }
+        }
+
+        function setAccountCheckFilter(mode) {
+            accountCheckFilter = mode || 'all';
+            renderAccountCheckResults();
+        }
+
+        function copyAccountCheckHandles(mode) {
+            const matches = accountCheckResults.filter(it => {
+                if (!it || !it.ok) return false;
+                if (mode === 'not_recommended') return it.recommend_status === 'not_recommended' || it.recommend_status === 'warning';
+                if (mode === 'ok') return it.recommend_status === 'ok';
+                return true;
+            });
+            if (!matches.length) {
+                showToast(mode === 'not_recommended' ? 'Không có tài khoản bị đỏ nào để copy.' : 'Không có tài khoản sạch nào để copy.');
+                return;
+            }
+            const txt = matches.map(it => '@' + String(it.unique_id || '').replace(/^@+/, '')).join('\n');
+            navigator.clipboard.writeText(txt).then(() => {
+                showToast(`📋 Đã copy ${matches.length} tài khoản (${mode === 'not_recommended' ? 'bị đỏ' : 'sạch'}).`);
+            }).catch(() => {
+                prompt('Sao chép danh sách:', txt);
+            });
+        }
+
+        function jumpToChannelCheckFromAccount(username) {
+            const clean = String(username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+            if (!clean) return;
+            const inputEl = document.getElementById('channelInput');
+            if (inputEl) inputEl.value = '@' + clean;
+            switchMainWorkspaceTab('checker');
+            handleCheck();
+        }
+
+        async function runBulkAccountCheck() {
+            if (accountCheckLoading) return;
+            const errBox = document.getElementById('accountCheckError');
+            const errMsg = document.getElementById('accountCheckErrorMsg');
+            const showAccErr = (msg) => {
+                if (errMsg) errMsg.innerText = msg;
+                if (errBox) errBox.classList.remove('hidden');
+            };
+            if (errBox) errBox.classList.add('hidden');
+
+            const { unique } = parseAccountCheckTokens();
+            if (!unique.length) {
+                showAccErr('Vui lòng dán ít nhất 1 @username hoặc link TikTok!');
+                return;
+            }
+            if (unique.length > 50) {
+                showAccErr(`Bạn đã nhập ${unique.length} tài khoản. Mỗi lần chỉ kiểm tra tối đa 50 tài khoản!`);
+                return;
+            }
+
+            accountCheckLoading = true;
+            const btn = document.getElementById('btnRunAccountCheck');
+            const btnIcon = document.getElementById('btnRunAccountCheckIcon');
+            const btnText = document.getElementById('btnRunAccountCheckText');
+            if (btn) btn.disabled = true;
+            if (btnIcon) btnIcon.className = 'fa-solid fa-spinner fa-spin text-white';
+            if (btnText) btnText.innerText = `Đang check ${unique.length} acc...`;
+
+            try {
+                const tok = getVipToken();
+                const resp = await fetch('/api/check-accounts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getDeviceHeaders(Boolean(tok)) },
+                    body: JSON.stringify({
+                        inputs: unique,
+                        vip_token: tok,
+                        device_id: getHardwareDeviceId(),
+                        device_label: getDeviceLabel(),
+                    }),
+                });
+                const data = await safeParseJson(resp);
+                if (data && data.free_quota) {
+                    updateFreeQuotaBannerUI(data.free_quota);
+                }
+                if (data && data.admin_billing) {
+                    updateAdminBillingUI(data.admin_billing, false);
+                }
+                if (!data || !data.success) {
+                    if (data && data.device_blocked) {
+                        localStorage.removeItem('tikflow_vip_token');
+                        currentVipUser = null;
+                        renderVipNav();
+                    }
+                    showAccErr((data && data.error) || 'Không thể kiểm tra danh sách tài khoản.');
+                    if (data && data.quota_exceeded) {
+                        showToast('⛔ Hết lượt Miễn Phí hôm nay trên thiết bị này! Nâng cấp VIP để check hàng loạt.');
+                        openVipModal(true);
+                    }
+                    return;
+                }
+
+                accountCheckResults = Array.isArray(data.results) ? data.results : [];
+                accountCheckFilter = 'all';
+
+                const costEl = document.getElementById('accountCheckCostInfo');
+                if (costEl) {
+                    if (data.vip_mode && data.admin_billing && canCurrentUserSeeBilling()) {
+                        const cUsd = Number(data.admin_billing.scan_cost_usd || 0);
+                        const cVnd = Number(data.admin_billing.scan_cost_vnd || 0);
+                        costEl.innerText = `Chi phí: $${cUsd.toFixed(4)} (~${cVnd.toLocaleString('vi-VN')}đ)`;
+                        costEl.classList.remove('hidden');
+                    } else {
+                        costEl.classList.add('hidden');
+                    }
+                }
+
+                renderAccountCheckResults();
+                const sum = data.summary || {};
+                showToast(`✅ Đã check ${sum.total || accountCheckResults.length} tài khoản (Đề xuất BT: ${sum.ok_count || 0} · Bị đỏ: ${sum.not_recommended_count || 0}).`);
+            } catch (err) {
+                showAccErr('Lỗi kết nối máy chủ: ' + (err?.message || 'Unknown error'));
+            } finally {
+                accountCheckLoading = false;
+                if (btn) btn.disabled = false;
+                if (btnIcon) btnIcon.className = 'fa-solid fa-bolt text-amber-300';
+                if (btnText) btnText.innerText = 'Check Ngay';
+            }
+        }
+
+        function renderAccountCheckResults() {
+            const listEl = document.getElementById('accountCheckResultsList');
+            const barEl = document.getElementById('accountCheckSummaryBar');
+            const navBadge = document.getElementById('accountCheckNavCount');
+            if (!listEl || !barEl) return;
+
+            if (!accountCheckResults.length) {
+                barEl.classList.add('hidden');
+                listEl.innerHTML = '';
+                if (navBadge) {
+                    navBadge.innerText = '0';
+                    navBadge.classList.add('hidden');
+                }
+                return;
+            }
+
+            const totalCnt = accountCheckResults.length;
+            const notRecCnt = accountCheckResults.filter(it => it && it.ok && (it.recommend_status === 'not_recommended' || it.recommend_status === 'warning')).length;
+            const okCnt = accountCheckResults.filter(it => it && it.ok && it.recommend_status === 'ok').length;
+            const errCnt = accountCheckResults.filter(it => !it || !it.ok).length;
+
+            if (navBadge) {
+                navBadge.innerText = String(totalCnt);
+                navBadge.classList.remove('hidden');
+            }
+
+            barEl.classList.remove('hidden');
+            const setPill = (id, label, active, baseStyle) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerText = label;
+                el.className = active
+                    ? 'px-3 py-1.5 rounded-xl font-extrabold bg-cyan-500 text-dark-950 transition shadow'
+                    : `px-3 py-1.5 rounded-xl font-bold transition ${baseStyle}`;
+            };
+            setPill('btnAccFilterAll', `Tất cả (${totalCnt})`, accountCheckFilter === 'all', 'bg-slate-800/90 border border-slate-600/70 text-slate-200 hover:bg-slate-700');
+            setPill('btnAccFilterNotRec', `⚠️ Không được đề xuất (${notRecCnt})`, accountCheckFilter === 'not_recommended', 'bg-slate-800/90 border border-rose-600/50 text-rose-300 hover:bg-rose-950/80');
+            setPill('btnAccFilterOk', `✅ Đề xuất bình thường (${okCnt})`, accountCheckFilter === 'ok', 'bg-slate-800/90 border border-emerald-600/50 text-emerald-300 hover:bg-emerald-950/80');
+            const errBtn = document.getElementById('btnAccFilterErr');
+            if (errBtn) {
+                setPill('btnAccFilterErr', `❌ Lỗi (${errCnt})`, accountCheckFilter === 'error', 'bg-slate-800/90 border border-slate-600 text-slate-300 hover:bg-slate-700');
+                errBtn.classList.toggle('hidden', errCnt === 0);
+            }
+
+            const visible = accountCheckResults.filter(it => {
+                if (accountCheckFilter === 'not_recommended') return it && it.ok && (it.recommend_status === 'not_recommended' || it.recommend_status === 'warning');
+                if (accountCheckFilter === 'ok') return it && it.ok && it.recommend_status === 'ok';
+                if (accountCheckFilter === 'error') return !it || !it.ok;
+                return true;
+            });
+
+            if (!visible.length) {
+                listEl.innerHTML = `<div class="glass-panel rounded-2xl p-8 text-center text-slate-400 text-sm border border-slate-800">Không có tài khoản nào trong bộ lọc này.</div>`;
+                return;
+            }
+
+            listEl.innerHTML = visible.map(item => {
+                if (!item || !item.ok) {
+                    const dispIn = escapeHtml((item && (item.unique_id ? '@' + item.unique_id : item.input)) || 'Không rõ');
+                    const errTxt = escapeHtml((item && item.error) || 'Không tìm thấy tài khoản.');
+                    return `
+                        <div class="glass-panel rounded-2xl p-4 border border-slate-700/70 bg-slate-900/70 flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-11 h-11 rounded-xl bg-rose-950/80 border border-rose-600/50 flex items-center justify-center text-rose-400">
+                                    <i class="fa-solid fa-user-xmark"></i>
+                                </div>
+                                <div>
+                                    <div class="font-mono font-bold text-white text-sm">${dispIn}</div>
+                                    <div class="text-xs text-rose-300 font-semibold">${errTxt}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const rawUidClean = String(item.unique_id || '').replace(/[^a-zA-Z0-9._-]/g, '');
+                const cleanHandle = '@' + rawUidClean;
+                const nickSafe = escapeHtml(item.nickname || rawUidClean || 'TikTok User');
+                const avatarSrc = getProxiedImage(item.avatar || '', item.nickname || rawUidClean || 'User');
+                const regCode = item.region ? formatCountryCode(item.region) : '';
+                const regFull = regCode ? formatCountryFull(regCode, item.region_display) : 'Không rõ';
+                const flagHtml = getCountryFlag(regCode);
+                const folFmt = escapeHtml(item.followers_fmt || Number(item.followers || 0).toLocaleString('en-US'));
+                const createDate = escapeHtml(item.create_date || '—');
+
+                const st = String(item.recommend_status || 'ok');
+                let cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-slate-700/75 hover:border-emerald-500/45 transition';
+                let statusBadgeHtml = `
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/85 border border-emerald-500/60 text-emerald-300 font-extrabold">
+                        <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                        <span>Đề xuất bình thường</span>
+                    </div>
+                `;
+                if (st === 'not_recommended') {
+                    cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-rose-500/75 bg-gradient-to-br from-rose-950/35 via-slate-900/90 to-dark-900/95 shadow-lg shadow-rose-950/30 transition';
+                    statusBadgeHtml = `
+                        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/95 border border-rose-500/85 text-rose-200 font-extrabold shadow-sm shadow-rose-950/60">
+                            <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
+                            <span>${escapeHtml(item.recommend_label || 'Tài khoản không được đề xuất')}</span>
+                        </div>
+                    `;
+                } else if (st === 'warning') {
+                    cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-amber-500/65 bg-amber-950/15 transition';
+                    statusBadgeHtml = `
+                        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/75 text-amber-200 font-extrabold">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+                            <span>${escapeHtml(item.recommend_label || 'Cảnh báo tài khoản')}</span>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="${cardCls}">
+                        <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-5">
+                            <div class="relative group flex-shrink-0">
+                                <img
+                                    src="${avatarSrc}"
+                                    alt="${nickSafe}"
+                                    class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 ${st === 'not_recommended' ? 'border-rose-500/70' : 'border-cyan-500/50'} shadow-xl group-hover:scale-105 transition duration-300"
+                                    onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(rawUidClean || 'TikTok')}&background=0d111a&color=38bdf8&size=128'"
+                                />
+                                <div class="absolute -bottom-2 -right-2 px-2 py-0.5 rounded-md bg-dark-900 border border-slate-700 text-[10px] font-bold text-cyan-400 shadow">
+                                    HD
+                                </div>
+                            </div>
+
+                            <div class="space-y-1.5 flex-grow min-w-0 w-full">
+                                <div class="flex flex-wrap items-center justify-center sm:justify-between gap-2">
+                                    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+                                        <h3 class="text-xl sm:text-2xl font-black text-white tracking-tight">${nickSafe}</h3>
+                                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-900/80 border border-blue-600/80 text-blue-200 font-bold inline-flex items-center gap-1.5">${flagHtml} <span>${escapeHtml(regFull)}</span></span>
+                                        ${item.is_private ? `<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-600 text-slate-300 font-bold">🔒 Riêng tư</span>` : ''}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onclick="jumpToChannelCheckFromAccount('${rawUidClean}')"
+                                        class="px-3 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-800 border border-cyan-500/50 text-cyan-200 hover:text-white text-xs font-extrabold transition inline-flex items-center gap-1.5 whitespace-nowrap"
+                                        title="Chuyển sang tab Kiểm Tra Kênh để quét trùng lặp & video của kênh này"
+                                    >
+                                        <i class="fa-solid fa-bolt text-amber-300"></i>
+                                        <span>Quét video</span>
+                                    </button>
+                                </div>
+
+                                <div class="flex items-center justify-center sm:justify-start gap-2 text-amber-400 font-mono text-sm font-bold">
+                                    <span>${escapeHtml(cleanHandle)}</span>
+                                    <button type="button" onclick="copyText('${escapeHtml(cleanHandle)}')" title="Copy username" class="text-slate-400 hover:text-white transition">
+                                        <i class="fa-regular fa-copy text-xs"></i>
+                                    </button>
+                                    <a href="https://www.tiktok.com/@${encodeURIComponent(rawUidClean)}" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-cyan-400 ml-1 transition" title="Mở trang cá nhân trên TikTok">
+                                        <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                                    </a>
+                                </div>
+
+                                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1.5 text-xs font-semibold">
+                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-emerald-400">
+                                        <i class="fa-regular fa-calendar-check text-emerald-400"></i>
+                                        <span>Ngày tạo:</span>
+                                        <span class="text-white font-mono font-bold">${createDate}</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-sky-400">
+                                        <i class="fa-solid fa-globe text-sky-400"></i>
+                                        <span>Quốc gia:</span>
+                                        <span class="text-white font-medium inline-flex items-center gap-1.5">${flagHtml} <span>${escapeHtml(regFull)}</span></span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-purple-400">
+                                        <i class="fa-solid fa-user-group text-purple-400"></i>
+                                        <span class="text-white font-bold">${folFmt}</span>
+                                        <span>followers</span>
+                                    </div>
+                                    ${statusBadgeHtml}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function handleCheckHistorySearchInput(el) {
@@ -5184,6 +5741,8 @@
 
         function syncCheckHistoryAuthUI() {
             const tabsBar = document.getElementById('mainWorkspaceTabs');
+            const histTab = document.getElementById('tabMainHistory');
+            if (tabsBar) tabsBar.classList.remove('hidden');
             if (!currentVipUser) {
                 checkHistoryItems = [];
                 checkHistoryLoadedForUser = '';
@@ -5196,15 +5755,15 @@
                     sEl.setAttribute('readonly', 'readonly');
                 }
                 document.getElementById('btnClearHistorySearch')?.classList.add('hidden');
-                if (tabsBar) tabsBar.classList.add('hidden');
+                if (histTab) histTab.classList.add('hidden');
                 const navCnt = document.getElementById('checkHistoryNavCount');
                 if (navCnt) navCnt.innerText = '0';
                 const badgeCnt = document.getElementById('checkHistoryCountBadge');
                 if (badgeCnt) badgeCnt.innerText = '0 kênh';
-                switchMainWorkspaceTab('checker');
+                switchMainWorkspaceTab(activeMainWorkspaceTab === 'history' ? 'checker' : activeMainWorkspaceTab);
                 return;
             }
-            if (tabsBar) tabsBar.classList.remove('hidden');
+            if (histTab) histTab.classList.remove('hidden');
             const curU = String(currentVipUser.username || '').trim().toLowerCase();
             if (curU && checkHistoryLoadedForUser !== curU) {
                 clearCheckHistorySearch();
