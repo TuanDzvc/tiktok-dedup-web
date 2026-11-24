@@ -907,11 +907,95 @@ def _cache_and_collect_awemes(raw_awemes: List[Dict[str, Any]], results: Dict[st
         _save_persistent_groupid_cache()
 
 
+_TIKHUB_CHANNEL_MOBILE_CACHE: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
+_TIKHUB_CHANNEL_MOBILE_CACHE_LOCK = threading.Lock()
+
+
+def _normalize_tikhub_aweme_to_raw_item(aw: Dict[str, Any], default_username: str = "") -> Dict[str, Any]:
+    """Chuẩn hóa item aweme từ TikHub Mobile v3 sang định dạng raw_item của bộ phân tích."""
+    aid = str(aw.get("aweme_id") or aw.get("id") or "").strip()
+    aw_au = aw.get("author") if isinstance(aw.get("author"), dict) else {}
+    aw_stat = aw.get("statistics") if isinstance(aw.get("statistics"), dict) else {}
+    aw_vid = aw.get("video") if isinstance(aw.get("video"), dict) else {}
+    aw_status = aw.get("status") if isinstance(aw.get("status"), dict) else {}
+    aw_music = aw.get("music") if isinstance(aw.get("music"), dict) else {}
+
+    cover_urls: List[str] = []
+    for cov_key in ("origin_cover", "cover"):
+        cov_obj = aw_vid.get(cov_key)
+        if isinstance(cov_obj, dict):
+            for u in (cov_obj.get("url_list") or []):
+                if isinstance(u, str) and u.startswith("http") and u not in cover_urls:
+                    cover_urls.append(u)
+    cover_url = cover_urls[0] if cover_urls else ""
+
+    play_addr = aw_vid.get("play_addr") if isinstance(aw_vid.get("play_addr"), dict) else {}
+    vid_uri = str(aw_vid.get("vid") or play_addr.get("uri") or "").strip()
+
+    au_avatar = ""
+    for av_key in ("avatar_larger", "avatar_medium", "avatar_thumb"):
+        av_obj = aw_au.get(av_key)
+        if isinstance(av_obj, dict):
+            for u in (av_obj.get("url_list") or []):
+                if isinstance(u, str) and u.startswith("http"):
+                    au_avatar = u
+                    break
+        if au_avatar:
+            break
+
+    au_reg = normalize_country_code(aw_au.get("region") or aw_au.get("account_region") or "")
+    if au_reg in ("NONE", "AUTO", "EU") or len(au_reg) != 2:
+        au_reg = ""
+
+    uname = str(aw_au.get("unique_id") or default_username or "").lstrip("@").strip()
+    ct = int(aw.get("create_time") or 0)
+    is_top_val = int(aw.get("is_top") or 0)
+    priv_status = aw_status.get("private_status")
+
+    return {
+        "id": aid,
+        "aweme_id": aid,
+        "group_id": str(aw.get("group_id") or aw.get("groupId") or "").strip(),
+        "desc": aw.get("desc") or "",
+        "createTime": ct,
+        "create_time": ct,
+        "is_top": is_top_val,
+        "isPinnedItem": bool(is_top_val > 0),
+        "duration": int(aw_vid.get("duration") or 0),
+        "quality": _extract_aweme_quality_label(aw_vid),
+        "region": normalize_country_code(aw.get("region")),
+        "author_region": au_reg,
+        "is_nff_or_nr": bool(aw.get("is_nff_or_nr")),
+        "video": aw_vid,
+        "video_id": vid_uri,
+        "music": aw_music,
+        "status": aw_status,
+        "isProhibited": bool(aw_status.get("is_prohibited")),
+        "privateItem": bool((priv_status not in (None, 0)) or aw_status.get("is_private")),
+        "cover_url": cover_url,
+        "cover_urls": cover_urls,
+        "statistics": aw_stat,
+        "play_count": int(aw_stat.get("play_count") or 0),
+        "digg_count": int(aw_stat.get("digg_count") or 0),
+        "comment_count": int(aw_stat.get("comment_count") or 0),
+        "share_count": int(aw_stat.get("share_count") or 0),
+        "collect_count": int(aw_stat.get("collect_count") or 0),
+        "author": {
+            "id": str(aw_au.get("uid") or ""),
+            "uid": str(aw_au.get("uid") or ""),
+            "uniqueId": uname,
+            "nickname": str(aw_au.get("nickname") or uname),
+            "avatarLarger": au_avatar,
+        },
+    }
+
+
 def _fetch_tikhub_multi_awemes(
     video_ids: List[str],
     sec_uid: str = "",
     unique_id: str = "",
     start_cursor_ms: int = 0,
+    force_channel_fetch: bool = False,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Lấy group_id, region & NFF chuẩn Mobile với khóa trần chi phí cứng (~26đ = $0.001 / lượt quét kênh 18 video):
@@ -920,7 +1004,9 @@ def _fetch_tikhub_multi_awemes(
     """
     api_key = _get_tikhub_api_key()
     clean_ids = [str(v).strip() for v in video_ids if str(v).strip().isdigit()]
-    if not api_key or not clean_ids:
+    clean_uname = str(unique_id or "").lstrip("@").strip()
+    is_channel_scan = bool(sec_uid or clean_uname)
+    if not api_key or (not clean_ids and not (force_channel_fetch and is_channel_scan)):
         return {}
 
     results: Dict[str, Dict[str, Any]] = {}
@@ -933,9 +1019,6 @@ def _fetch_tikhub_multi_awemes(
                 cost_ctx["cost_usd"] = round(float(cost_ctx.get("cost_usd") or 0.0) + usd_val, 6)
                 cost_ctx["api_calls"] = int(cost_ctx.get("api_calls") or 0) + 1
 
-    clean_uname = str(unique_id or "").lstrip("@").strip()
-    is_channel_scan = bool(sec_uid or clean_uname)
-
     # 1. Quét kênh (>= 1 video): gọi fetch_user_post_videos_v3 ($0.001 / 20 video ~ 26 VNĐ cho cả kênh 18 video!)
     if is_channel_scan:
         clean_id_set = set(clean_ids)
@@ -943,7 +1026,7 @@ def _fetch_tikhub_multi_awemes(
         # Lượt đầu cố định 1 trang (20 video = $0.001 ~ 26đ); chỉ cho tối đa 2 trang nếu lật trang sâu
         max_pages = 1 if cur_val == 0 else 2
         for _page_idx in range(max_pages):
-            if all(vid in results for vid in clean_ids):
+            if clean_ids and all(vid in results for vid in clean_ids):
                 break
             req_params: Dict[str, Any] = {"count": 20, "max_cursor": cur_val, "sort_type": 0}
             if sec_uid:
@@ -955,7 +1038,7 @@ def _fetch_tikhub_multi_awemes(
                     "https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos_v3",
                     params=req_params,
                     headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-                    timeout=9,
+                    timeout=14,
                 )
                 if r_post.status_code == 200:
                     _add_api_cost(0.001)
@@ -964,6 +1047,13 @@ def _fetch_tikhub_multi_awemes(
                     before_hits = sum(1 for vid in clean_id_set if vid in results)
                     if aw_list:
                         _cache_and_collect_awemes(aw_list, results)
+                        if cur_val == 0:
+                            c_key = sec_uid or clean_uname.lower()
+                            with _TIKHUB_CHANNEL_MOBILE_CACHE_LOCK:
+                                if len(_TIKHUB_CHANNEL_MOBILE_CACHE) >= 150:
+                                    oldest_k = min(_TIKHUB_CHANNEL_MOBILE_CACHE.items(), key=lambda kv: kv[1][0])[0]
+                                    _TIKHUB_CHANNEL_MOBILE_CACHE.pop(oldest_k, None)
+                                _TIKHUB_CHANNEL_MOBILE_CACHE[c_key] = (time.time(), list(aw_list))
                     after_hits = sum(1 for vid in clean_id_set if vid in results)
                     has_more_p = bool(p_data.get("has_more")) if isinstance(p_data, dict) else False
                     next_cur_p = int(p_data.get("max_cursor") or 0) if isinstance(p_data, dict) else 0
@@ -1006,6 +1096,13 @@ def sync_items_tikhub_groupid(
     sec_uid: str = "",
     unique_id: str = "",
     is_load_more: bool = False,
+    *,
+    merge_missing_from_mobile: bool = False,
+    max_merged_items: int = 0,
+    expected_total_videos: int = 0,
+    web_total_fetched: int = 0,
+    web_reached_end: bool = False,
+    author_uid: str = "",
 ) -> None:
     """Đồng bộ trực tiếp group_id, region và cờ is_nff_or_nr cho danh sách video (ưu tiên cache 0đ trước)."""
     if not raw_items:
@@ -1056,9 +1153,6 @@ def sync_items_tikhub_groupid(
             seen_missing.add(aid)
             missing_ids.append(aid)
 
-    if not missing_ids or not _get_tikhub_api_key():
-        return
-
     start_cur_ms = 0
     if is_load_more and sec_uid:
         saved_cur = int(_TIKHUB_SECUID_NEXT_CURSOR.get(sec_uid) or 0)
@@ -1072,7 +1166,67 @@ def sync_items_tikhub_groupid(
             if newest_ct > 1_000_000_000:
                 start_cur_ms = (newest_ct + 1) * 1000
 
-    fetched_awemes = _fetch_tikhub_multi_awemes(missing_ids, sec_uid=sec_uid, unique_id=unique_id, start_cursor_ms=start_cur_ms)
+    fetched_awemes: Dict[str, Dict[str, Any]] = {}
+    has_tikhub_key = bool(_get_tikhub_api_key())
+    cached_mobile_map: Dict[str, Dict[str, Any]] = {}
+    cached_min_id = 0
+    if not is_load_more and (sec_uid or unique_id):
+        c_key = sec_uid or str(unique_id or "").lstrip("@").strip().lower()
+        with _TIKHUB_CHANNEL_MOBILE_CACHE_LOCK:
+            cached_pair = _TIKHUB_CHANNEL_MOBILE_CACHE.get(c_key)
+        if cached_pair and (time.time() - float(cached_pair[0])) < 600:
+            for aw in cached_pair[1]:
+                if isinstance(aw, dict):
+                    aw_id = str(aw.get("aweme_id") or aw.get("id") or "").strip()
+                    if aw_id:
+                        cached_mobile_map[aw_id] = aw
+            nums = [int(k) for k in cached_mobile_map if k.isdigit()]
+            if nums:
+                cached_min_id = min(nums)
+
+    need_live_for_missing = bool(missing_ids) and (
+        not cached_mobile_map
+        or any(
+            m_id not in cached_mobile_map
+            and (not m_id.isdigit() or cached_min_id == 0 or int(m_id) >= cached_min_id)
+            for m_id in missing_ids
+        )
+    )
+    if need_live_for_missing and has_tikhub_key:
+        fetched_awemes = _fetch_tikhub_multi_awemes(missing_ids, sec_uid=sec_uid, unique_id=unique_id, start_cursor_ms=start_cur_ms)
+    elif cached_mobile_map:
+        fetched_awemes = cached_mobile_map
+    elif merge_missing_from_mobile and not is_load_more and (sec_uid or unique_id) and has_tikhub_key:
+        web_incomplete = bool(web_reached_end and expected_total_videos > 0 and web_total_fetched < expected_total_videos)
+        cached_missing_for_uid = False
+        clean_au_uid = str(author_uid or "").strip()
+        if clean_au_uid and clean_au_uid != "---":
+            existing_id_set = {
+                str(x.get("id") or x.get("aweme_id") or x.get("item_id") or "").strip()
+                for x in raw_items
+                if isinstance(x, dict)
+            }
+            min_existing_id = min((int(x) for x in existing_id_set if x.isdigit()), default=0)
+            if min_existing_id > 0:
+                for k_cache, v_cache in p_cache.items():
+                    if (
+                        isinstance(v_cache, dict)
+                        and str(v_cache.get("author_uid") or "") == clean_au_uid
+                        and k_cache not in existing_id_set
+                        and k_cache.isdigit()
+                        and int(k_cache) >= min_existing_id
+                    ):
+                        cached_missing_for_uid = True
+                        break
+        if web_incomplete or cached_missing_for_uid:
+            fetched_awemes = _fetch_tikhub_multi_awemes(
+                [],
+                sec_uid=sec_uid,
+                unique_id=unique_id,
+                start_cursor_ms=0,
+                force_channel_fetch=True,
+            )
+
     if not fetched_awemes:
         return
 
@@ -1099,6 +1253,38 @@ def sync_items_tikhub_groupid(
             it["quality"] = q_lbl
         if not it.get("duration") and int(aw_vid.get("duration") or 0) > 0:
             it["duration"] = int(aw_vid["duration"])
+
+    if merge_missing_from_mobile and fetched_awemes:
+        existing_ids = {
+            str(x.get("id") or x.get("aweme_id") or x.get("item_id") or "").strip()
+            for x in raw_items
+            if isinstance(x, dict)
+        }
+        newest_existing_ct = max(
+            (int(x.get("createTime") or x.get("create_time") or x.get("post_time") or 0) for x in raw_items if isinstance(x, dict)),
+            default=0,
+        )
+        added_count = 0
+        for aid, aw in fetched_awemes.items():
+            if not aid or aid in existing_ids or not isinstance(aw, dict):
+                continue
+            aw_ct = int(aw.get("create_time") or 0)
+            if is_load_more and newest_existing_ct > 0 and aw_ct > newest_existing_ct:
+                continue
+            raw_items.append(_normalize_tikhub_aweme_to_raw_item(aw, default_username=unique_id))
+            existing_ids.add(aid)
+            added_count += 1
+        if added_count > 0:
+            def _sort_key_raw(x: Dict[str, Any]) -> Tuple[int, int, int]:
+                pinned = 0 if (x.get("isPinnedItem") or int(x.get("is_top") or 0) > 0) else 1
+                ct_v = int(x.get("createTime") or x.get("create_time") or x.get("post_time") or 0)
+                id_s = str(x.get("id") or x.get("aweme_id") or x.get("item_id") or "").strip()
+                id_n = int(id_s) if id_s.isdigit() else 0
+                return (pinned, -ct_v, -id_n)
+
+            raw_items.sort(key=_sort_key_raw)
+            if max_merged_items > 0 and len(raw_items) > max_merged_items:
+                del raw_items[max_merged_items:]
 
 class TikTokPlaywrightWorker:
     """
@@ -1456,11 +1642,15 @@ def fetch_external_channel_videos_creator_api(
                             and str(data.get("statusCode", data.get("status_code", ""))) == "0"
                             and result_meta is not None):
                         result_meta["confirmed_empty"] = True
+                    if result_meta is not None:
+                        result_meta["reached_end"] = True
                     break
                 for it in items:
                     iid = str(it.get("id") or "")
                     if iid and not any(str(x.get("id")) == iid for x in all_items):
                         all_items.append(it)
+                if result_meta is not None and (not data.get("hasMore") or len(items) < 15):
+                    result_meta["reached_end"] = True
                 if len(all_items) >= max_videos:
                     break
                 last_ts = items[-1].get("createTime")
@@ -2443,6 +2633,12 @@ def fetch_channel_info_and_posts(
             sec_uid=sec_uid,
             unique_id=str(channel_info.get("uniqueId") or username or ""),
             is_load_more=(max_cursor > 0),
+            merge_missing_from_mobile=(not is_self_account and not target_vid),
+            max_merged_items=max_videos,
+            expected_total_videos=int(channel_info.get("videoCount") or 0),
+            web_total_fetched=len(all_fetched_api_items or raw_items),
+            web_reached_end=bool(creator_meta.get("reached_end")),
+            author_uid=str(check_user_info.get("uid") or "").strip(),
         )
     else:
         tkm_cache = {}
