@@ -301,8 +301,8 @@
                         </div>
                     </div>
 
-                    <!-- DÒNG 2: Nút Kiểm Tra Ngay căn chính giữa (mặc định ngầm 18 video) -->
-                    <div class="flex items-center justify-center pt-1.5">
+                    <!-- DÒNG 2: Nút Kiểm Tra Ngay & Nút Lịch Sử Check căn giữa (mặc định ngầm 18 video) -->
+                    <div class="flex flex-wrap items-center justify-center gap-3 pt-1.5">
                         <input type="hidden" id="scanLimitSelect" value="18" />
                         <button 
                             type="button" 
@@ -312,6 +312,17 @@
                         >
                             <i class="fa-solid fa-bolt text-amber-300"></i>
                             <span>Kiểm Tra Ngay</span>
+                        </button>
+                        <button
+                            type="button"
+                            id="btnToggleCheckHistory"
+                            onclick="toggleCheckHistoryPanel()"
+                            class="hidden w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95"
+                            title="Xem lại các kênh đã check gần đây (chỉ dành cho tài khoản đã đăng nhập, tự xóa sau 7 ngày)"
+                        >
+                            <i class="fa-solid fa-clock-rotate-left text-cyan-400"></i>
+                            <span>Lịch sử check</span>
+                            <span id="checkHistoryNavCount" class="px-1.5 py-0.5 rounded-md bg-cyan-950 border border-cyan-500/40 text-cyan-300 font-mono text-[11px] font-extrabold tabular-nums">0</span>
                         </button>
                     </div>
                 </form>
@@ -357,6 +368,71 @@
             <i class="fa-solid fa-triangle-exclamation text-xl text-rose-400"></i>
             <span id="errorMessage" class="text-sm font-medium"></span>
         </div>
+
+        <!-- Check History Section (Logged-in users only, hidden for guests) -->
+        <section id="checkHistorySection" class="hidden glass-panel rounded-3xl p-4 sm:p-6 border border-slate-700/80 shadow-2xl space-y-4">
+            <div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 pb-3 border-b border-slate-800/90">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-cyan-950/90 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h2 class="text-base sm:text-lg font-extrabold text-white tracking-tight">Lịch sử check</h2>
+                            <span id="checkHistoryCountBadge" class="px-2 py-0.5 rounded-lg bg-cyan-950/90 border border-cyan-500/40 text-cyan-300 font-mono text-xs font-extrabold">0 kênh</span>
+                            <span class="px-2 py-0.5 rounded-lg bg-slate-800/90 border border-slate-700 text-[11px] font-semibold text-slate-300">
+                                <i class="fa-solid fa-rotate text-amber-400 mr-1 text-[10px]"></i>Ghi đè lần mới nhất · Tự xóa sau 7 ngày
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
+                    <div class="flex items-center gap-1.5 text-xs font-bold">
+                        <button type="button" id="histFilterAll" onclick="setCheckHistoryFilter('all')" class="px-3 py-1.5 rounded-xl bg-cyan-600 text-white transition whitespace-nowrap">Tất cả</button>
+                        <button type="button" id="histFilterDup" onclick="setCheckHistoryFilter('dup')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 transition whitespace-nowrap">🔴 Có trùng</button>
+                        <button type="button" id="histFilterFyp" onclick="setCheckHistoryFilter('fyp')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition whitespace-nowrap">🚨 Có mất FYP</button>
+                    </div>
+                    <div class="relative flex-grow sm:flex-grow-0 sm:w-52">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                        <input
+                            type="text"
+                            id="checkHistorySearchInput"
+                            oninput="renderCheckHistory()"
+                            placeholder="Tìm @username..."
+                            class="w-full pl-8 pr-3 py-1.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onclick="clearAllCheckHistory()"
+                        class="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-700/70 text-rose-200 text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        title="Xóa toàn bộ lịch sử check của tài khoản này"
+                    >
+                        <i class="fa-solid fa-trash-can text-[11px]"></i>
+                        <span>Xóa tất cả</span>
+                    </button>
+                    <button
+                        type="button"
+                        onclick="toggleCheckHistoryPanel(false)"
+                        class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        title="Thu gọn bảng Lịch sử check"
+                    >
+                        <i class="fa-solid fa-chevron-up text-[10px]"></i>
+                        <span>Thu gọn</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="checkHistoryList" class="space-y-2.5">
+                <!-- Accordion channel cards injected by JS -->
+            </div>
+
+            <div id="checkHistoryEmpty" class="hidden py-10 px-4 text-center space-y-2 text-slate-400">
+                <i class="fa-solid fa-clock-rotate-left text-3xl text-slate-600"></i>
+                <p id="checkHistoryEmptyText" class="text-sm font-semibold text-slate-300">Chưa có lịch sử check nào trong 7 ngày gần nhất.</p>
+                <p class="text-xs text-slate-500">Hãy kiểm tra một kênh TikTok — hệ thống sẽ tự lưu kết quả mới nhất tại đây.</p>
+            </div>
+        </section>
 
         <!-- Result Section (Hidden until search succeeds) -->
         <section id="resultSection" class="hidden">
@@ -2267,6 +2343,7 @@
                         <span>Đăng Ký/Đăng Nhập VIP</span>
                     </button>
                 `;
+                syncCheckHistoryAuthUI();
                 return;
             }
             const isAdmin = currentVipUser.role === 'admin';
@@ -2360,6 +2437,7 @@
                 window._adminBalFetchedOnce = true;
                 refreshAdminApiBalance(false);
             }
+            syncCheckHistoryAuthUI();
         }
 
         function canCurrentUserSeeBilling() {
@@ -3906,6 +3984,8 @@
 
             document.getElementById('errorBanner').classList.add('hidden');
             document.getElementById('resultSection').classList.add('hidden');
+            document.getElementById('checkHistorySection')?.classList.add('hidden');
+            updateCheckHistoryToggleBtnState();
             document.getElementById('scanningSection').classList.remove('hidden');
             document.getElementById('btnSubmit').disabled = true;
             document.getElementById('btnSubmit').classList.add('opacity-70');
@@ -4022,6 +4102,9 @@
                 currentVideoNotice = data.video_notice || '';
 
                 renderResults(data);
+                if (currentVipUser && !data.dedup_locked) {
+                    loadCheckHistory(false);
+                }
 
             } catch (err) {
                 if (scanStepTimer) {
@@ -4091,6 +4174,9 @@
                     filterVideos();
                     if (data.admin_billing) {
                         updateAdminBillingUI(data.admin_billing, true);
+                    }
+                    if (currentVipUser && !data.dedup_locked) {
+                        loadCheckHistory(false);
                     }
                     showToast(`Đã tải thêm ${data.list.length} video mới!`);
                 } else {
@@ -4466,6 +4552,237 @@
             }
         }
 
+        function buildVideoTableRowHtml(v, index, allVideosRef, imgCookie = '', historyChannelKey = '') {
+            const safeAweme = String(v.aweme_id || v.id || '').replace(/[^0-9a-zA-Z_-]/g, '');
+            const safeHistKey = String(historyChannelKey || '').replace(/[^a-zA-Z0-9._-]/g, '');
+            const listRef = Array.isArray(allVideosRef) ? allVideosRef : [];
+            const penTitle = (v.penalty_details || v.shadowReason || '').replace(/"/g, '&quot;');
+            const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
+            const isSameChDup = Boolean(v.is_same_channel_dup || (isThisDup && v.group_id && String(v.group_id) !== String(v.aweme_id) && listRef.some(x => String(x.aweme_id) === String(v.group_id))));
+            const origLink = v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : '');
+            const safeOrigLink = String(origLink || '').replace(/'/g, '%27');
+            const origTip = isSameChDup
+                ? 'Bấm để mở xem Video Gốc (bài đăng trước đó trên CHÍNH KÊNH NÀY)&#10;💡 Cùng kênh nhưng khác ID bài đăng &amp; lượt xem'
+                : 'Bấm để mở xem Video Gốc trên TikTok&#10;💡 Nếu hiện &quot;Video hiện không khả dụng&quot; tức là video gốc đã bị xóa hoặc ẩn riêng tư';
+            let origBtn = '';
+            if (origLink) {
+                origBtn = `
+                    <div class="relative inline-flex items-center justify-center">
+                        <a href="${escapeHtml(origLink)}" target="_blank" rel="noopener noreferrer" 
+                           data-tip="${origTip}"
+                           class="w-[84px] h-7 px-2.5 rounded-lg bg-sky-950/95 hover:bg-sky-900 border border-sky-500/75 text-sky-300 hover:text-white text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 transition shadow-sm">
+                            <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Gốc ↗
+                        </a>
+                        <button onclick="copyText('${safeOrigLink}')" data-tip="Sao chép link video gốc" 
+                           class="absolute left-full ml-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-300 transition text-xs">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                `;
+            }
+
+            const isCopyright = Boolean(v.is_copyright || v.status_code === 141 || (v.penalty_details && v.penalty_details.toLowerCase().includes('bản quyền')));
+            let dupBadge = '';
+            if (v._dedup_locked) {
+                dupBadge = `
+                    <div class="relative inline-flex items-center justify-center h-7">
+                        <button
+                            type="button"
+                            onclick="openVipModal(true, 'register')"
+                            data-tip="🔒 Đã hết 10 lượt Miễn Phí hôm nay&#10;Phải đăng ký VIP mới xem được Trùng lặp &amp; Án phạt"
+                            class="h-7 px-3 rounded-lg bg-gradient-to-r from-amber-500/25 via-yellow-500/20 to-orange-500/25 hover:from-amber-500/45 hover:to-orange-500/45 border border-amber-400/75 text-amber-200 hover:text-white font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-amber-500/15 transition active:scale-95"
+                        >
+                            <i class="fa-solid fa-crown text-yellow-300 text-[10px]"></i>
+                            <span>VIP</span>
+                        </button>
+                    </div>
+                `;
+            } else if (isCopyright) {
+                dupBadge = `
+                    <div class="inline-flex flex-col items-center justify-center gap-1.5">
+                        <span data-tip="${penTitle || 'Vi phạm bản quyền âm thanh / hình ảnh (Bị TikTok khóa Riêng tư & ngừng đề xuất FYP)'}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-copyright text-rose-400"></i> Bản quyền</span>
+                    </div>
+                `;
+            } else if (v.is_crp_punished && (v.is_fyp_restricted || v.shadow)) {
+                const crpFypTip = (penTitle ? penTitle.replace(/\s*\(/g, '&#10;(') : 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT&#10;(Đang bị chặn đề xuất Xu hướng FYP)');
+                dupBadge = `
+                    <div class="inline-flex flex-col items-center justify-center gap-1.5">
+                        <span data-tip="${crpFypTip}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-ban text-rose-400"></i> Không nguyên tác & Mất FYP</span>
+                        ${origBtn}
+                    </div>
+                `;
+            } else if (v.is_crp_punished) {
+                dupBadge = `
+                    <div class="inline-flex flex-col items-center justify-center gap-1.5">
+                        <span data-tip="Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT&#10;(Hiện KHÔNG bị mất đề xuất FYP)" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> Không nguyên tác</span>
+                        ${origBtn}
+                    </div>
+                `;
+            } else if (v.is_fyp_restricted && isThisDup) {
+                dupBadge = `
+                    <div class="inline-flex flex-col items-center justify-center gap-1.5">
+                        <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị trùng nội dung với video gốc&#10;Vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> ${isSameChDup ? 'Trùng chính kênh & Mất FYP' : 'Trùng & Mất FYP'}</span>
+                        ${origBtn}
+                    </div>
+                `;
+            } else if (isThisDup) {
+                dupBadge = isSameChDup ? `
+                    <div class="inline-flex flex-col items-center justify-center gap-1.5">
+                        <span data-tip="Video đăng đúp giống hệt 1 video đã đăng trước đó trên CHÍNH KÊNH NÀY&#10;Hiện KHÔNG bị mất đề xuất FYP" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng chính kênh</span>
+                        ${origBtn}
+                    </div>
+                ` : `
+                    <div class="inline-flex flex-col items-center justify-center gap-1.5">
+                        <span data-tip="Chỉ bị trùng nội dung với video gốc&#10;Hiện KHÔNG bị mất đề xuất FYP" class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng</span>
+                        ${origBtn}
+                    </div>
+                `;
+            } else if (v.is_fyp_restricted) {
+                dupBadge = `
+                    <div class="relative inline-flex items-center justify-center h-7">
+                        <span data-tip="${penTitle || 'Bị TikTok chặn đề xuất lên trang Xu hướng (Mất FYP)'}" class="h-7 px-2.5 rounded-lg bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">🚨 Mất FYP</span>
+                    </div>
+                `;
+            } else {
+                dupBadge = `
+                    <div class="relative inline-flex items-center justify-center h-7">
+                        <span data-tip="Video sạch an toàn — Không trùng lặp & Đủ điều kiện lên Xu hướng FYP" class="h-7 px-2.5 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-check"></i> Sạch</span>
+                    </div>
+                `;
+            }
+
+            let sbBadge = '';
+            if (isCopyright) {
+                sbBadge = `
+                    <div class="relative inline-flex items-center justify-center h-7">
+                        <span data-tip="${penTitle || 'Vi phạm bản quyền — Bị gỡ khỏi Bảng tin Xu hướng (FYP)'}" class="h-7 px-2.5 rounded-lg bg-rose-950/90 text-rose-400 border border-rose-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-ban text-[9px] text-rose-400"></i> Mất FYP</span>
+                    </div>
+                `;
+            } else if (v.shadow) {
+                sbBadge = `
+                    <div class="relative inline-flex items-center justify-center h-7">
+                        <span data-tip="${penTitle || 'Đang bị hạn chế phân phối lên Bảng tin Xu hướng (Shadowban / Mất FYP)'}" class="h-7 px-2.5 rounded-lg bg-red-950/90 text-red-400 border border-red-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">⛔ Có</span>
+                    </div>
+                `;
+            } else {
+                sbBadge = `
+                    <div class="relative inline-flex items-center justify-center h-7">
+                        <span data-tip="Không bị Shadowban — Phân phối đề xuất FYP bình thường" class="h-7 px-2.5 rounded-lg bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">✅ Không</span>
+                    </div>
+                `;
+            }
+
+            const coverProxied = getProxiedImage(v.cover_url, 'Video', imgCookie || '');
+            const safeRawCover = String(v.cover_url || '').replace(/'/g, '%27');
+            const cookieArgExpr = historyChannelKey ? "''" : "currentCheckCookie";
+            const playCountNum = Number(v.play_count || 0);
+
+            return `
+                <td class="p-3 text-center text-slate-500 font-mono font-bold w-11">${index + 1}</td>
+                <td class="p-2.5 text-center w-[78px] min-w-[78px]">
+                    <div onclick="openModal('${safeAweme}', '${safeHistKey}')" class="relative group cursor-pointer inline-block w-12 h-16 min-w-[48px] rounded-lg overflow-hidden border border-slate-700">
+                        <img src="${coverProxied}" alt="Thumb" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-12 h-16 min-w-[48px] max-w-none object-cover group-hover:scale-110 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = getProxiedImage('${safeRawCover}', 'Video', ${cookieArgExpr}); } else { this.src='https://placehold.co/120x160/111726/38bdf8?text=TikTok'; }" />
+                        ${isCopyright ? `
+                            <div class="absolute inset-x-0 bottom-0 py-0.5 bg-rose-950/95 border-t border-rose-700/80 text-[8px] font-black text-rose-200 text-center tracking-tighter leading-none shadow">
+                                Bản quyền
+                            </div>
+                        ` : (v.duration_str ? `<span class="absolute bottom-1 right-1 px-1 rounded bg-black/80 text-[9px] text-white font-mono">${v.duration_str}</span>` : '')}
+                        <div class="absolute inset-0 bg-black/30 group-hover:bg-black/10 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition">
+                            <i class="fa-solid fa-play text-xs"></i>
+                        </div>
+                    </div>
+                </td>
+                <td class="p-3 min-w-[260px] max-w-[420px]">
+                    <p
+                        title="${escapeHtml((v.desc && v.desc.trim()) ? v.desc.trim() : '')}"
+                        style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word;"
+                        class="font-semibold leading-snug text-[13px] ${(v.desc && v.desc.trim()) ? 'text-white' : 'text-slate-500 italic'}"
+                    >
+                        ${escapeHtml((v.desc && v.desc.trim()) ? v.desc.trim() : (v.desc_clean && v.desc_clean !== '(không mô tả)' ? v.desc_clean : '(không có mô tả)'))}
+                    </p>
+                    <div class="flex items-center gap-2 mt-1 text-[11px] text-sky-400 font-mono">
+                        <i class="fa-regular fa-clock"></i>
+                        <span>${v.date_local || v.date_utc || '—'}</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
+                        ${isCopyright ? `
+                            <span class="px-1.5 py-0.5 rounded font-bold bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1 shadow-sm" title="Video bị khiếu nại bản quyền âm thanh / hình ảnh">
+                                <i class="fa-solid fa-copyright text-rose-400"></i> Khiếu nại bản quyền
+                            </span>
+                        ` : ''}
+                        <span class="px-1.5 py-0.5 rounded font-medium bg-slate-800/90 text-slate-200 border border-slate-700/80 flex items-center gap-1 cursor-help" data-tip="Thiết bị / nguồn tải video lên">
+                            <i class="fa-solid ${v.source_icon || 'fa-mobile-screen'} text-cyan-400 text-[10px]"></i>
+                            <span>${escapeHtml(v.source || 'Mobile')}</span>
+                        </span>
+                        ${v.quality ? `<span class="px-1.5 py-0.5 rounded font-mono font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-700/70 cursor-help" data-tip="Độ phân giải video">${escapeHtml(v.quality)}</span>` : ''}
+                        ${v.is_muted ? `
+                            <span class="px-1.5 py-0.5 rounded font-medium bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1 cursor-help" data-tip="Âm thanh bị tắt do bản quyền nhạc">
+                                <i class="fa-solid fa-volume-xmark text-rose-400"></i> Tắt âm: Có
+                            </span>
+                        ` : `
+                            <span class="px-1.5 py-0.5 rounded font-medium bg-emerald-950/70 text-emerald-400 border border-emerald-800/60 flex items-center gap-1 cursor-help" data-tip="Âm thanh bình thường">
+                                <i class="fa-solid fa-volume-high text-emerald-400"></i> Tắt âm: Không
+                            </span>
+                        `}
+                        ${v.is_prohibited ? `
+                            <span class="px-1.5 py-0.5 rounded font-medium bg-red-950 text-red-300 border border-red-700 flex items-center gap-1" title="Video bị ẩn hoặc cấm hiển thị">
+                                <i class="fa-solid fa-ban text-red-400"></i> Cấm hiển thị: Có
+                            </span>
+                        ` : ''}
+                    </div>
+                </td>
+                <td class="p-2.5 text-center font-mono">
+                    <div class="flex flex-col items-center justify-center leading-tight" title="Lượt xem: ${playCountNum.toLocaleString()}">
+                        <i class="fa-regular fa-eye text-cyan-400 text-[14px]"></i>
+                        <span class="text-white font-bold text-xs mt-1">${playCountNum.toLocaleString()}</span>
+                    </div>
+                </td>
+                <td class="p-2 text-center">
+                    <div class="inline-grid grid-cols-2 gap-x-3.5 gap-y-1.5 text-center font-mono">
+                        <div class="flex flex-col items-center justify-center leading-tight" title="Lượt thích">
+                            <i class="fa-solid fa-heart text-rose-500 text-[14px]"></i>
+                            <span class="text-[11px] font-bold text-slate-100 mt-0.5">${escapeHtml(v.digg_count_fmt || '0')}</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center leading-tight" title="Bình luận">
+                            <i class="fa-solid fa-comment text-sky-400 text-[14px]"></i>
+                            <span class="text-[11px] font-bold text-slate-100 mt-0.5">${escapeHtml(v.comment_count_fmt || '0')}</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center leading-tight" title="Chia sẻ">
+                            <i class="fa-solid fa-arrow-trend-up text-emerald-400 text-[14px]"></i>
+                            <span class="text-[11px] font-bold text-slate-100 mt-0.5">${escapeHtml(v.share_count_fmt || '0')}</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center leading-tight" title="Lưu bookmark">
+                            <i class="fa-solid fa-bookmark text-amber-400 text-[14px]"></i>
+                            <span class="text-[11px] font-bold text-slate-100 mt-0.5">${escapeHtml(v.collect_count_fmt || '0')}</span>
+                        </div>
+                    </div>
+                </td>
+                <td class="p-2.5 text-center">
+                    <div class="flex flex-col items-center justify-center leading-tight gap-1 cursor-help" data-tip="Quốc gia đăng video: ${escapeHtml(formatCountryFull(v.region, v.region_display))}">
+                        ${getCountryFlag(v.region)}
+                        <span class="text-[11px] font-bold text-slate-200 mt-0.5">${formatCountryCode(v.region)}</span>
+                    </div>
+                </td>
+                <td class="p-3 text-center align-middle whitespace-nowrap">
+                    ${sbBadge}
+                </td>
+                <td class="p-3 text-center align-middle whitespace-nowrap">
+                    ${dupBadge}
+                </td>
+                <td class="p-3 text-center font-mono whitespace-nowrap">
+                    <div class="flex items-center justify-center gap-2">
+                        <span class="text-xs text-slate-300 font-bold select-all tracking-tight">${safeAweme}</span>
+                        <button onclick="copyText('${safeAweme}')" title="Sao chép Aweme ID" class="text-slate-400 hover:text-white transition p-1">
+                            <i class="fa-regular fa-copy text-xs"></i>
+                        </button>
+                        <a href="${escapeHtml(v.share_url || '#')}" target="_blank" title="Mở trên TikTok" class="text-cyan-400 hover:text-cyan-300 transition p-1">
+                            <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                        </a>
+                    </div>
+                </td>
+            `;
+        }
+
         function renderTable() {
             const tbody = document.getElementById('videoTableBody');
             tbody.innerHTML = '';
@@ -4490,243 +4807,7 @@
             filteredVideos.forEach((v, index) => {
                 const tr = document.createElement('tr');
                 tr.className = `hover:bg-slate-800/40 transition duration-150 ${v.is_dup ? 'bg-rose-950/15' : ''}`;
-
-                // Status badges matching tool
-                const penTitle = (v.penalty_details || v.shadowReason || '').replace(/"/g, '&quot;');
-                const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
-                const isSameChDup = Boolean(v.is_same_channel_dup || (isThisDup && v.group_id && String(v.group_id) !== String(v.aweme_id) && currentVideos.some(x => String(x.aweme_id) === String(v.group_id))));
-                const origLink = v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : '');
-                const origTip = isSameChDup
-                    ? 'Bấm để mở xem Video Gốc (bài đăng trước đó trên CHÍNH KÊNH NÀY)&#10;💡 Cùng kênh nhưng khác ID bài đăng &amp; lượt xem'
-                    : 'Bấm để mở xem Video Gốc trên TikTok&#10;💡 Nếu hiện &quot;Video hiện không khả dụng&quot; tức là video gốc đã bị xóa hoặc ẩn riêng tư';
-                let origBtn = '';
-                if (origLink) {
-                    origBtn = `
-                        <div class="relative inline-flex items-center justify-center">
-                            <a href="${origLink}" target="_blank" rel="noopener noreferrer" 
-                               data-tip="${origTip}"
-                               class="w-[84px] h-7 px-2.5 rounded-lg bg-sky-950/95 hover:bg-sky-900 border border-sky-500/75 text-sky-300 hover:text-white text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 transition shadow-sm">
-                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Gốc ↗
-                            </a>
-                            <button onclick="copyText('${origLink}')" data-tip="Sao chép link video gốc" 
-                               class="absolute left-full ml-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-300 transition text-xs">
-                                <i class="fa-regular fa-copy"></i>
-                            </button>
-                        </div>
-                    `;
-                }
-
-                const lockedOrigBtn = `
-                    <div class="relative inline-flex items-center justify-center">
-                        <span data-tip="🔒 Phải đăng nhập tài khoản VIP mới check ra được video gốc!"
-                              class="w-[84px] h-7 px-2.5 rounded-lg bg-slate-900/95 border border-slate-600/80 text-slate-400 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-not-allowed select-none opacity-85 shadow-inner">
-                            <i class="fa-solid fa-lock text-[9px] text-amber-400"></i> Gốc ↗
-                        </span>
-                    </div>
-                `;
-
-                const isCopyright = Boolean(v.is_copyright || v.status_code === 141 || (v.penalty_details && v.penalty_details.toLowerCase().includes('bản quyền')));
-                let dupBadge = '';
-                if (v._dedup_locked) {
-                    dupBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
-                            <button
-                                type="button"
-                                onclick="openVipModal(true, 'register')"
-                                data-tip="🔒 Đã hết 10 lượt Miễn Phí hôm nay&#10;Phải đăng ký VIP mới xem được Trùng lặp &amp; Án phạt"
-                                class="h-7 px-3 rounded-lg bg-gradient-to-r from-amber-500/25 via-yellow-500/20 to-orange-500/25 hover:from-amber-500/45 hover:to-orange-500/45 border border-amber-400/75 text-amber-200 hover:text-white font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-amber-500/15 transition active:scale-95"
-                            >
-                                <i class="fa-solid fa-crown text-yellow-300 text-[10px]"></i>
-                                <span>VIP</span>
-                            </button>
-                        </div>
-                    `;
-                } else if (isCopyright) {
-                    dupBadge = `
-                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="${penTitle || 'Vi phạm bản quyền âm thanh / hình ảnh (Bị TikTok khóa Riêng tư & ngừng đề xuất FYP)'}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-extrabold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-copyright text-rose-400"></i> Bản quyền</span>
-                        </div>
-                    `;
-                } else if (v.is_crp_punished && (v.is_fyp_restricted || v.shadow)) {
-                    const crpFypTip = (penTitle ? penTitle.replace(/\s*\(/g, '&#10;(') : 'Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT&#10;(Đang bị chặn đề xuất Xu hướng FYP)');
-                    dupBadge = `
-                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="${crpFypTip}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-ban text-rose-400"></i> Không nguyên tác & Mất FYP</span>
-                            ${origBtn}
-                        </div>
-                    `;
-                } else if (v.is_crp_punished) {
-                    dupBadge = `
-                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="Bị đánh gậy Không nguyên tác · Loại khỏi Quỹ BKT&#10;(Hiện KHÔNG bị mất đề xuất FYP)" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal shadow-sm"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> Không nguyên tác</span>
-                            ${origBtn}
-                        </div>
-                    `;
-                } else if (v.is_fyp_restricted && isThisDup) {
-                    dupBadge = `
-                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="${(v.shadowReason || penTitle || 'Vừa bị trùng nội dung với video gốc&#10;Vừa bị TikTok chặn đề xuất Xu hướng (Mất FYP)').replace(/"/g, '&quot;')}" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-triangle-exclamation"></i> ${isSameChDup ? 'Trùng chính kênh & Mất FYP' : 'Trùng & Mất FYP'}</span>
-                            ${origBtn}
-                        </div>
-                    `;
-                } else if (isThisDup) {
-                    dupBadge = isSameChDup ? `
-                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="Video đăng đúp giống hệt 1 video đã đăng trước đó trên CHÍNH KÊNH NÀY&#10;Hiện KHÔNG bị mất đề xuất FYP" class="h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng chính kênh</span>
-                            ${origBtn}
-                        </div>
-                    ` : `
-                        <div class="inline-flex flex-col items-center justify-center gap-1.5">
-                            <span data-tip="Chỉ bị trùng nội dung với video gốc&#10;Hiện KHÔNG bị mất đề xuất FYP" class="w-[84px] h-7 px-2.5 rounded-lg bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-repeat"></i> Trùng</span>
-                            ${origBtn}
-                        </div>
-                    `;
-                } else if (v.is_fyp_restricted) {
-                    dupBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
-                            <span data-tip="${penTitle || 'Bị TikTok chặn đề xuất lên trang Xu hướng (Mất FYP)'}" class="h-7 px-2.5 rounded-lg bg-amber-950 border border-amber-700 text-amber-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">🚨 Mất FYP</span>
-                        </div>
-                    `;
-                } else {
-                    dupBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
-                            <span data-tip="Video sạch an toàn — Không trùng lặp & Đủ điều kiện lên Xu hướng FYP" class="h-7 px-2.5 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-check"></i> Sạch</span>
-                        </div>
-                    `;
-                }
-
-                let sbBadge = '';
-                if (isCopyright) {
-                    sbBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
-                            <span data-tip="${penTitle || 'Vi phạm bản quyền — Bị gỡ khỏi Bảng tin Xu hướng (FYP)'}" class="h-7 px-2.5 rounded-lg bg-rose-950/90 text-rose-400 border border-rose-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-ban text-[9px] text-rose-400"></i> Mất FYP</span>
-                        </div>
-                    `;
-                } else if (v.shadow) {
-                    sbBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
-                            <span data-tip="${penTitle || 'Đang bị hạn chế phân phối lên Bảng tin Xu hướng (Shadowban / Mất FYP)'}" class="h-7 px-2.5 rounded-lg bg-red-950/90 text-red-400 border border-red-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">⛔ Có</span>
-                        </div>
-                    `;
-                } else {
-                    sbBadge = `
-                        <div class="relative inline-flex items-center justify-center h-7">
-                            <span data-tip="Không bị Shadowban — Phân phối đề xuất FYP bình thường" class="h-7 px-2.5 rounded-lg bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">✅ Không</span>
-                        </div>
-                    `;
-                }
-
-                const coverProxied = getProxiedImage(v.cover_url, 'Video', currentCheckCookie);
-
-                tr.innerHTML = `
-                    <td class="p-3 text-center text-slate-500 font-mono font-bold w-11">${index + 1}</td>
-                    <td class="p-2.5 text-center w-[78px] min-w-[78px]">
-                        <div onclick="openModal('${v.aweme_id}')" class="relative group cursor-pointer inline-block w-12 h-16 min-w-[48px] rounded-lg overflow-hidden border border-slate-700">
-                            <img src="${coverProxied}" alt="Thumb" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="w-12 h-16 min-w-[48px] max-w-none object-cover group-hover:scale-110 transition duration-300" onerror="if (!this.dataset.retried) { this.dataset.retried = '1'; this.src = getProxiedImage('${v.cover_url}', 'Video', currentCheckCookie); } else { this.src='https://placehold.co/120x160/111726/38bdf8?text=TikTok'; }" />
-                            ${isCopyright ? `
-                                <div class="absolute inset-x-0 bottom-0 py-0.5 bg-rose-950/95 border-t border-rose-700/80 text-[8px] font-black text-rose-200 text-center tracking-tighter leading-none shadow">
-                                    Bản quyền
-                                </div>
-                            ` : (v.duration_str ? `<span class="absolute bottom-1 right-1 px-1 rounded bg-black/80 text-[9px] text-white font-mono">${v.duration_str}</span>` : '')}
-                            <div class="absolute inset-0 bg-black/30 group-hover:bg-black/10 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition">
-                                <i class="fa-solid fa-play text-xs"></i>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="p-3 min-w-[260px] max-w-[420px]">
-                        <p
-                            title="${escapeHtml((v.desc && v.desc.trim()) ? v.desc.trim() : '')}"
-                            style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word;"
-                            class="font-semibold leading-snug text-[13px] ${(v.desc && v.desc.trim()) ? 'text-white' : 'text-slate-500 italic'}"
-                        >
-                            ${escapeHtml((v.desc && v.desc.trim()) ? v.desc.trim() : (v.desc_clean && v.desc_clean !== '(không mô tả)' ? v.desc_clean : '(không có mô tả)'))}
-                        </p>
-                        <div class="flex items-center gap-2 mt-1 text-[11px] text-sky-400 font-mono">
-                            <i class="fa-regular fa-clock"></i>
-                            <span>${v.date_local || v.date_utc || '—'}</span>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
-                            ${isCopyright ? `
-                                <span class="px-1.5 py-0.5 rounded font-bold bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1 shadow-sm" title="Video bị khiếu nại bản quyền âm thanh / hình ảnh">
-                                    <i class="fa-solid fa-copyright text-rose-400"></i> Khiếu nại bản quyền
-                                </span>
-                            ` : ''}
-                            <span class="px-1.5 py-0.5 rounded font-medium bg-slate-800/90 text-slate-200 border border-slate-700/80 flex items-center gap-1 cursor-help" data-tip="Thiết bị / nguồn tải video lên">
-                                <i class="fa-solid ${v.source_icon || 'fa-mobile-screen'} text-cyan-400 text-[10px]"></i>
-                                <span>${v.source || 'Mobile'}</span>
-                            </span>
-                            ${v.quality ? `<span class="px-1.5 py-0.5 rounded font-mono font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-700/70 cursor-help" data-tip="Độ phân giải video">${v.quality}</span>` : ''}
-                            ${v.is_muted ? `
-                                <span class="px-1.5 py-0.5 rounded font-medium bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1 cursor-help" data-tip="Âm thanh bị tắt do bản quyền nhạc">
-                                    <i class="fa-solid fa-volume-xmark text-rose-400"></i> Tắt âm: Có
-                                </span>
-                            ` : `
-                                <span class="px-1.5 py-0.5 rounded font-medium bg-emerald-950/70 text-emerald-400 border border-emerald-800/60 flex items-center gap-1 cursor-help" data-tip="Âm thanh bình thường">
-                                    <i class="fa-solid fa-volume-high text-emerald-400"></i> Tắt âm: Không
-                                </span>
-                            `}
-                            ${v.is_prohibited ? `
-                                <span class="px-1.5 py-0.5 rounded font-medium bg-red-950 text-red-300 border border-red-700 flex items-center gap-1" title="Video bị ẩn hoặc cấm hiển thị">
-                                    <i class="fa-solid fa-ban text-red-400"></i> Cấm hiển thị: Có
-                                </span>
-                            ` : ''}
-                        </div>
-                    </td>
-                    <td class="p-2.5 text-center font-mono">
-                        <div class="flex flex-col items-center justify-center leading-tight" title="Lượt xem: ${v.play_count.toLocaleString()}">
-                            <i class="fa-regular fa-eye text-cyan-400 text-[14px]"></i>
-                            <span class="text-white font-bold text-xs mt-1">${v.play_count.toLocaleString()}</span>
-                        </div>
-                    </td>
-                    <td class="p-2 text-center">
-                        <div class="inline-grid grid-cols-2 gap-x-3.5 gap-y-1.5 text-center font-mono">
-                            <!-- Tim (Heart) -->
-                            <div class="flex flex-col items-center justify-center leading-tight" title="Lượt thích">
-                                <i class="fa-solid fa-heart text-rose-500 text-[14px]"></i>
-                                <span class="text-[11px] font-bold text-slate-100 mt-0.5">${v.digg_count_fmt}</span>
-                            </div>
-                            <!-- Bình luận (Comment) -->
-                            <div class="flex flex-col items-center justify-center leading-tight" title="Bình luận">
-                                <i class="fa-solid fa-comment text-sky-400 text-[14px]"></i>
-                                <span class="text-[11px] font-bold text-slate-100 mt-0.5">${v.comment_count_fmt}</span>
-                            </div>
-                            <!-- Chia sẻ (Share - mũi tên chéo lên góc phải chuẩn theo Tool) -->
-                            <div class="flex flex-col items-center justify-center leading-tight" title="Chia sẻ">
-                                <i class="fa-solid fa-arrow-trend-up text-emerald-400 text-[14px]"></i>
-                                <span class="text-[11px] font-bold text-slate-100 mt-0.5">${v.share_count_fmt}</span>
-                            </div>
-                            <!-- Bookmark (Lưu) -->
-                            <div class="flex flex-col items-center justify-center leading-tight" title="Lưu bookmark">
-                                <i class="fa-solid fa-bookmark text-amber-400 text-[14px]"></i>
-                                <span class="text-[11px] font-bold text-slate-100 mt-0.5">${v.collect_count_fmt}</span>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="p-2.5 text-center">
-                        <div class="flex flex-col items-center justify-center leading-tight gap-1 cursor-help" data-tip="Quốc gia đăng video: ${escapeHtml(formatCountryFull(v.region, v.region_display))}">
-                            ${getCountryFlag(v.region)}
-                            <span class="text-[11px] font-bold text-slate-200 mt-0.5">${formatCountryCode(v.region)}</span>
-                        </div>
-                    </td>
-                    <td class="p-3 text-center align-middle whitespace-nowrap">
-                        ${sbBadge}
-                    </td>
-                    <td class="p-3 text-center align-middle whitespace-nowrap">
-                        ${dupBadge}
-                    </td>
-                    <td class="p-3 text-center font-mono whitespace-nowrap">
-                        <div class="flex items-center justify-center gap-2">
-                            <span class="text-xs text-slate-300 font-bold select-all tracking-tight">${v.aweme_id}</span>
-                            <button onclick="copyText('${v.aweme_id}')" title="Sao chép Aweme ID" class="text-slate-400 hover:text-white transition p-1">
-                                <i class="fa-regular fa-copy text-xs"></i>
-                            </button>
-                            <a href="${v.share_url}" target="_blank" title="Mở trên TikTok" class="text-cyan-400 hover:text-cyan-300 transition p-1">
-                                <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
-                            </a>
-                        </div>
-                    </td>
-                `;
-
+                tr.innerHTML = buildVideoTableRowHtml(v, index, currentVideos, currentCheckCookie, '');
                 tbody.appendChild(tr);
             });
         }
@@ -4859,8 +4940,19 @@
             });
         }
 
-        function openModal(awemeId) {
-            let video = currentVideos.find(v => String(v.aweme_id) === String(awemeId));
+        function openModal(awemeId, historyChannelKey = '') {
+            let video = null;
+            let histChannelVideos = [];
+            if (historyChannelKey && Array.isArray(checkHistoryItems)) {
+                const hItem = checkHistoryItems.find(h => String(h.username || '').toLowerCase() === String(historyChannelKey).toLowerCase());
+                if (hItem && Array.isArray(hItem.videos)) {
+                    histChannelVideos = hItem.videos;
+                    video = hItem.videos.find(v => String(v.aweme_id) === String(awemeId)) || null;
+                }
+            }
+            if (!video) {
+                video = currentVideos.find(v => String(v.aweme_id) === String(awemeId));
+            }
             if (!video && studioPosts && studioPosts.length > 0) {
                 const sItem = studioPosts.find(v => String(v.item_id) === String(awemeId) || String(v.aweme_id) === String(awemeId));
                 if (sItem) {
@@ -4882,6 +4974,16 @@
                         penalty_details: sItem.penalty_details,
                         shadowReason: sItem.has_penalty ? 'Video có dấu hiệu án phạt hoặc vi phạm chính sách' : ''
                     };
+                }
+            }
+            if (!video && Array.isArray(checkHistoryItems)) {
+                for (const hItem of checkHistoryItems) {
+                    const foundV = (hItem.videos || []).find(v => String(v.aweme_id) === String(awemeId));
+                    if (foundV) {
+                        histChannelVideos = hItem.videos || [];
+                        video = foundV;
+                        break;
+                    }
                 }
             }
             if (!video) return;
@@ -4912,7 +5014,14 @@
             const origTitle = document.getElementById('modalOriginTitle');
             const origNote = document.getElementById('modalOriginNote');
             const origUrl = video.origin_url || (video.group_id && String(video.group_id) !== String(video.aweme_id) && String(video.group_id) !== '0' && String(video.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${video.group_id}` : '');
-            const isSameChDup = Boolean(video.is_same_channel_dup || (video.group_id && String(video.group_id) !== String(video.aweme_id) && (currentVideos.some(x => String(x.aweme_id) === String(video.group_id)) || (studioPosts || []).some(x => String(x.item_id || x.aweme_id) === String(video.group_id)))));
+            const isSameChDup = Boolean(
+                video.is_same_channel_dup
+                || (video.group_id && String(video.group_id) !== String(video.aweme_id) && (
+                    currentVideos.some(x => String(x.aweme_id) === String(video.group_id))
+                    || (studioPosts || []).some(x => String(x.item_id || x.aweme_id) === String(video.group_id))
+                    || histChannelVideos.some(x => String(x.aweme_id) === String(video.group_id))
+                ))
+            );
             if (video._dedup_locked) {
                 if (origBox) origBox.classList.add('hidden');
                 if (origLockedBox) origLockedBox.classList.remove('hidden');
@@ -4938,6 +5047,462 @@
             }
 
             document.getElementById('videoModal').classList.remove('hidden');
+        }
+
+        // ==================== CHECK HISTORY (LỊCH SỬ CHECK) ====================
+        let checkHistoryItems = [];
+        let checkHistoryLoadedForUser = '';
+        let checkHistoryFilter = 'all';
+        let expandedHistoryChannels = new Set();
+        let historyChannelVideoFilter = {};
+
+        function updateCheckHistoryToggleBtnState() {
+            const btn = document.getElementById('btnToggleCheckHistory');
+            const sec = document.getElementById('checkHistorySection');
+            if (!btn || !sec) return;
+            const isOpen = !sec.classList.contains('hidden');
+            btn.className = currentVipUser
+                ? (isOpen
+                    ? 'inline-flex w-full sm:w-auto px-5 py-3 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border-2 border-cyan-400 text-cyan-200 font-bold text-sm shadow-lg shadow-cyan-500/20 transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95'
+                    : 'inline-flex w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95')
+                : 'hidden w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-600/80 hover:border-cyan-400/70 text-slate-100 font-bold text-sm shadow-lg transition duration-200 items-center justify-center gap-2 whitespace-nowrap active:scale-95';
+        }
+
+        function syncCheckHistoryAuthUI() {
+            const btn = document.getElementById('btnToggleCheckHistory');
+            const sec = document.getElementById('checkHistorySection');
+            if (!currentVipUser) {
+                checkHistoryItems = [];
+                checkHistoryLoadedForUser = '';
+                expandedHistoryChannels.clear();
+                historyChannelVideoFilter = {};
+                if (btn) {
+                    btn.classList.add('hidden');
+                    btn.classList.remove('inline-flex');
+                }
+                if (sec) sec.classList.add('hidden');
+                const navCnt = document.getElementById('checkHistoryNavCount');
+                if (navCnt) navCnt.innerText = '0';
+                const badgeCnt = document.getElementById('checkHistoryCountBadge');
+                if (badgeCnt) badgeCnt.innerText = '0 kênh';
+                updateCheckHistoryToggleBtnState();
+                return;
+            }
+            if (btn) {
+                btn.classList.remove('hidden');
+                btn.classList.add('inline-flex');
+            }
+            updateCheckHistoryToggleBtnState();
+            const curU = String(currentVipUser.username || '').trim().toLowerCase();
+            if (curU && checkHistoryLoadedForUser !== curU) {
+                loadCheckHistory(true);
+            }
+        }
+
+        async function loadCheckHistory(autoOpenIfIdle = false) {
+            if (!currentVipUser) return;
+            try {
+                const resp = await fetch('/api/check-history', { headers: getDeviceHeaders(true) });
+                if (resp.status === 401) {
+                    checkHistoryItems = [];
+                    renderCheckHistory();
+                    return;
+                }
+                const data = await safeParseJson(resp);
+                if (!data || !data.success) return;
+                checkHistoryLoadedForUser = String(currentVipUser.username || '').trim().toLowerCase();
+                checkHistoryItems = Array.isArray(data.items) ? data.items : [];
+                renderCheckHistory();
+                const resHidden = document.getElementById('resultSection')?.classList.contains('hidden');
+                if (autoOpenIfIdle && checkHistoryItems.length > 0 && resHidden) {
+                    toggleCheckHistoryPanel(true, false);
+                }
+            } catch (e) {
+                console.warn('Lỗi tải Lịch sử check:', e);
+            }
+        }
+
+        function toggleCheckHistoryPanel(forceState = null, shouldScroll = true) {
+            if (!currentVipUser) return;
+            const sec = document.getElementById('checkHistorySection');
+            if (!sec) return;
+            const currentlyOpen = !sec.classList.contains('hidden');
+            const targetOpen = forceState === null ? !currentlyOpen : Boolean(forceState);
+            if (targetOpen) {
+                sec.classList.remove('hidden');
+                renderCheckHistory();
+                loadCheckHistory(false);
+                if (shouldScroll) {
+                    sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            } else {
+                sec.classList.add('hidden');
+            }
+            updateCheckHistoryToggleBtnState();
+        }
+
+        function setCheckHistoryFilter(mode) {
+            checkHistoryFilter = mode || 'all';
+            const btns = {
+                all: document.getElementById('histFilterAll'),
+                dup: document.getElementById('histFilterDup'),
+                fyp: document.getElementById('histFilterFyp'),
+            };
+            const activeCls = {
+                all: 'px-3 py-1.5 rounded-xl bg-cyan-600 text-white transition whitespace-nowrap',
+                dup: 'px-3 py-1.5 rounded-xl bg-rose-600 text-white transition whitespace-nowrap',
+                fyp: 'px-3 py-1.5 rounded-xl bg-amber-600 text-white transition whitespace-nowrap',
+            };
+            const inactiveCls = {
+                all: 'px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition whitespace-nowrap',
+                dup: 'px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 transition whitespace-nowrap',
+                fyp: 'px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition whitespace-nowrap',
+            };
+            for (const k of ['all', 'dup', 'fyp']) {
+                if (btns[k]) btns[k].className = (k === checkHistoryFilter) ? activeCls[k] : inactiveCls[k];
+            }
+            renderCheckHistory();
+        }
+
+        function toggleHistoryChannelExpand(username) {
+            const key = String(username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+            if (!key) return;
+            if (expandedHistoryChannels.has(key)) {
+                expandedHistoryChannels.delete(key);
+            } else {
+                expandedHistoryChannels.add(key);
+            }
+            renderCheckHistory();
+        }
+
+        function setHistoryChannelSubFilter(username, mode) {
+            const key = String(username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+            if (!key) return;
+            historyChannelVideoFilter[key] = mode || 'all';
+            renderCheckHistory();
+        }
+
+        function _isHistoryVideoDup(v) {
+            return Boolean(v && (v.is_dup || v.is_crp_punished || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null')));
+        }
+
+        function _isHistoryVideoFyp(v) {
+            return Boolean(v && (v.is_fyp_restricted || v.shadow || (v.has_penalty && !v.is_crp_punished) || v.is_copyright || Number(v.status_code || 0) === 141));
+        }
+
+        function openHistoryChannelFullView(username) {
+            const key = String(username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+            const item = checkHistoryItems.find(h => String(h.username || '').toLowerCase() === key);
+            if (!item) return;
+
+            const fakeRes = {
+                success: true,
+                channel: item.channel || {
+                    uniqueId: item.username,
+                    nickname: item.nickname || item.username,
+                    avatar: item.avatar || '',
+                    createDate: item.create_date || '—',
+                    region: item.region || 'US',
+                    region_display: item.region_display || '',
+                    followers: item.followers || 0,
+                    followers_fmt: item.followers_fmt || '0',
+                    videoCount: item.video_count_total || (item.videos || []).length,
+                },
+                user_info: item.user_info || {
+                    username: '@' + item.username,
+                    screen_name: item.nickname || item.username,
+                    create_date: item.create_date || '—',
+                    country: item.region_display || 'Hoa Kỳ (US)',
+                },
+                list: JSON.parse(JSON.stringify(item.videos || [])),
+                hasMore: false,
+                maxCursor: (item.videos || []).length,
+            };
+
+            const cleanHandle = '@' + item.username;
+            currentQuery = cleanHandle;
+            const mIn = document.getElementById('channelInput');
+            if (mIn) mIn.value = cleanHandle;
+            const qIn = document.getElementById('quickCheckInput');
+            if (qIn) qIn.value = cleanHandle;
+
+            currentCheckCookie = '';
+            currentCheckProxy = '';
+            currentCheckSecUid = '';
+            lastScanVipMode = Boolean(currentVipUser && (currentVipUser.role === 'admin' || currentVipUser.is_vip));
+            lastScanDedupLocked = false;
+            channelData = fakeRes.channel;
+            userInfoData = fakeRes.user_info;
+            currentVideos = fakeRes.list;
+            currentMaxCursor = fakeRes.maxCursor;
+            hasMoreVideos = false;
+            currentVideoNotice = '';
+
+            document.getElementById('checkHistorySection')?.classList.add('hidden');
+            updateCheckHistoryToggleBtnState();
+            renderResults(fakeRes);
+            document.getElementById('resultSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            showToast(`⚡ Đã mở lại kết quả đã lưu của @${item.username} (0đ)`);
+        }
+
+        function rescanHistoryChannel(username) {
+            const key = String(username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+            if (!key) return;
+            const cleanHandle = '@' + key;
+            const inputEl = document.getElementById('channelInput');
+            if (inputEl) inputEl.value = cleanHandle;
+            handleCheck();
+        }
+
+        async function deleteHistoryChannel(username) {
+            const key = String(username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+            if (!key || !currentVipUser) return;
+            try {
+                const resp = await fetch(`/api/check-history/${encodeURIComponent(key)}`, {
+                    method: 'DELETE',
+                    headers: getDeviceHeaders(true),
+                });
+                const d = await safeParseJson(resp);
+                if (!d || !d.success) {
+                    showToast(d?.error || 'Không thể xóa mục lịch sử này.');
+                    return;
+                }
+                checkHistoryItems = checkHistoryItems.filter(h => String(h.username || '').toLowerCase() !== key);
+                expandedHistoryChannels.delete(key);
+                renderCheckHistory();
+                showToast(`🗑️ Đã xóa @${key} khỏi Lịch sử check.`);
+            } catch (e) {
+                showToast('Lỗi xóa lịch sử: ' + e.message);
+            }
+        }
+
+        async function clearAllCheckHistory() {
+            if (!currentVipUser || checkHistoryItems.length === 0) return;
+            if (!confirm(`Xóa toàn bộ ${checkHistoryItems.length} kênh trong Lịch sử check của tài khoản "${currentVipUser.username}"?`)) return;
+            try {
+                const resp = await fetch('/api/check-history', {
+                    method: 'DELETE',
+                    headers: getDeviceHeaders(true),
+                });
+                const d = await safeParseJson(resp);
+                if (!d || !d.success) {
+                    showToast(d?.error || 'Không thể xóa lịch sử.');
+                    return;
+                }
+                checkHistoryItems = [];
+                expandedHistoryChannels.clear();
+                renderCheckHistory();
+                showToast('🗑️ Đã xóa sạch Lịch sử check.');
+            } catch (e) {
+                showToast('Lỗi xóa lịch sử: ' + e.message);
+            }
+        }
+
+        function formatHistoryTime(ts) {
+            const num = Number(ts || 0);
+            if (!num) return '—';
+            const d = new Date(num * 1000);
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+        }
+
+        function formatHistoryExpiryTip(ts) {
+            const expAt = Number(ts || 0) + 7 * 86400;
+            const remain = Math.max(0, expAt - Math.floor(Date.now() / 1000));
+            const days = Math.floor(remain / 86400);
+            const hrs = Math.floor((remain % 86400) / 3600);
+            return `Tự động xóa sau ${days} ngày ${hrs} giờ`;
+        }
+
+        function renderCheckHistory() {
+            const listEl = document.getElementById('checkHistoryList');
+            const emptyEl = document.getElementById('checkHistoryEmpty');
+            const emptyTextEl = document.getElementById('checkHistoryEmptyText');
+            const navCnt = document.getElementById('checkHistoryNavCount');
+            const badgeCnt = document.getElementById('checkHistoryCountBadge');
+
+            const totalAll = checkHistoryItems.length;
+            if (navCnt) navCnt.innerText = String(totalAll);
+            if (badgeCnt) badgeCnt.innerText = `${totalAll} kênh`;
+            if (!listEl || !emptyEl) return;
+
+            const q = String(document.getElementById('checkHistorySearchInput')?.value || '').trim().toLowerCase().replace(/^@+/, '');
+            const filtered = checkHistoryItems.filter(item => {
+                const u = String(item.username || '').toLowerCase();
+                const nick = String(item.nickname || '').toLowerCase();
+                if (q && !u.includes(q) && !nick.includes(q)) return false;
+                const st = item.stats || {};
+                const dupN = Number(st.dup || 0);
+                const fypN = Number(st.fyp || 0);
+                if (checkHistoryFilter === 'dup' && dupN <= 0) return false;
+                if (checkHistoryFilter === 'fyp' && fypN <= 0) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = '';
+                emptyEl.classList.remove('hidden');
+                if (emptyTextEl) {
+                    emptyTextEl.innerText = totalAll > 0
+                        ? 'Không có kênh nào khớp với bộ lọc / tìm kiếm hiện tại.'
+                        : 'Chưa có lịch sử check nào trong 7 ngày gần nhất.';
+                }
+                return;
+            }
+            emptyEl.classList.add('hidden');
+
+            listEl.innerHTML = filtered.map(item => {
+                const safeKey = String(item.username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+                const isExpanded = expandedHistoryChannels.has(safeKey);
+                const chVideos = Array.isArray(item.videos) ? item.videos : [];
+                const st = item.stats || {
+                    total: chVideos.length,
+                    dup: chVideos.filter(_isHistoryVideoDup).length,
+                    fyp: chVideos.filter(_isHistoryVideoFyp).length,
+                    clean: chVideos.filter(v => !_isHistoryVideoDup(v) && !_isHistoryVideoFyp(v)).length,
+                };
+                const totalCnt = Number(st.total ?? chVideos.length);
+                const dupCnt = Number(st.dup || 0);
+                const fypCnt = Number(st.fyp || 0);
+                const cleanCnt = Number(st.clean || 0);
+                const regCode = formatCountryCode(item.region || 'US');
+                const avSrc = getProxiedImage(item.avatar || '', item.nickname || safeKey, '');
+                const expTip = formatHistoryExpiryTip(item.checked_at);
+
+                let expandedBodyHtml = '';
+                if (isExpanded) {
+                    const subF = historyChannelVideoFilter[safeKey] || 'all';
+                    const shownVideos = chVideos.filter(v => {
+                        const dFlag = _isHistoryVideoDup(v);
+                        const fFlag = _isHistoryVideoFyp(v);
+                        if (subF === 'dup') return dFlag;
+                        if (subF === 'fyp') return fFlag;
+                        if (subF === 'clean') return !dFlag && !fFlag;
+                        return true;
+                    });
+                    const subBtnCls = (m, colorActive) => (subF === m)
+                        ? `px-2.5 py-1 rounded-lg ${colorActive} text-white text-[11px] font-bold transition whitespace-nowrap`
+                        : 'px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-bold transition whitespace-nowrap';
+
+                    const rowsHtml = shownVideos.length > 0
+                        ? shownVideos.map((v, idx) => `
+                            <tr class="hover:bg-slate-800/40 transition duration-150 ${v.is_dup ? 'bg-rose-950/15' : ''}">
+                                ${buildVideoTableRowHtml(v, idx, chVideos, '', safeKey)}
+                            </tr>
+                        `).join('')
+                        : `<tr><td colspan="9" class="p-6 text-center text-slate-400 text-xs font-medium">Không có video nào khớp bộ lọc trong lịch sử kênh này.</td></tr>`;
+
+                    expandedBodyHtml = `
+                        <div class="border-t border-slate-800/90 bg-dark-950/40">
+                            <div class="px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 bg-slate-900/70 border-b border-slate-800/80">
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    <button type="button" onclick="setHistoryChannelSubFilter('${safeKey}', 'all')" class="${subBtnCls('all', 'bg-cyan-600')}">Tất cả (${chVideos.length})</button>
+                                    <button type="button" onclick="setHistoryChannelSubFilter('${safeKey}', 'dup')" class="${subBtnCls('dup', 'bg-rose-600')}">🔴 Trùng (${dupCnt})</button>
+                                    <button type="button" onclick="setHistoryChannelSubFilter('${safeKey}', 'fyp')" class="${subBtnCls('fyp', 'bg-amber-600')}">🚨 Mất FYP (${fypCnt})</button>
+                                    <button type="button" onclick="setHistoryChannelSubFilter('${safeKey}', 'clean')" class="${subBtnCls('clean', 'bg-emerald-600')}">🟢 Sạch (${cleanCnt})</button>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onclick="openHistoryChannelFullView('${safeKey}')"
+                                        class="px-3 py-1 rounded-lg bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-200 text-[11px] font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                                        title="Mở toàn bộ thông tin Check User & thẻ lưới cho kênh này (không tốn API)"
+                                    >
+                                        <i class="fa-solid fa-up-right-from-square text-[10px]"></i>
+                                        <span>Mở bảng Check User đầy đủ</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead class="bg-dark-900/95 text-slate-300 uppercase tracking-wider font-bold border-b border-slate-800 text-[11px]">
+                                        <tr>
+                                            <th class="p-3 text-center w-11 whitespace-nowrap">#</th>
+                                            <th class="p-3 text-center whitespace-nowrap w-[78px] min-w-[78px]">Ảnh bìa</th>
+                                            <th class="p-3 text-center">Mô tả & Thời gian</th>
+                                            <th class="p-3 text-center w-24">Lượt xem</th>
+                                            <th class="p-3 text-center w-36">Tương tác</th>
+                                            <th class="p-3 text-center w-20">Quốc gia</th>
+                                            <th class="p-3 text-center whitespace-nowrap px-4 min-w-[110px]">Shadowban</th>
+                                            <th class="p-3 text-center whitespace-nowrap leading-tight px-3 min-w-[110px]">TRÙNG LẶP &<br>ÁN PHẠT</th>
+                                            <th class="p-3 text-center whitespace-nowrap px-4 min-w-[130px]">Aweme ID</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-800/80 font-medium">
+                                        ${rowsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="rounded-2xl border ${isExpanded ? 'border-cyan-500/60 bg-slate-900/95 shadow-xl shadow-cyan-950/30' : 'border-slate-700/80 bg-dark-900/80 hover:border-slate-500/80'} overflow-hidden transition-all">
+                        <div onclick="toggleHistoryChannelExpand('${safeKey}')" class="px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-800/35 transition">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <span class="w-5 text-center text-slate-400 flex-shrink-0">
+                                    <i class="fa-solid ${isExpanded ? 'fa-caret-down text-cyan-400' : 'fa-caret-right'}"></i>
+                                </span>
+                                <img
+                                    src="${avSrc}"
+                                    alt="@${escapeHtml(safeKey)}"
+                                    class="w-9 h-9 rounded-xl object-cover border border-slate-700 flex-shrink-0"
+                                    onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(safeKey)}&background=0d111a&color=38bdf8&size=64'"
+                                />
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-extrabold text-sm sm:text-[15px] text-white font-mono truncate">@${escapeHtml(safeKey)}</span>
+                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800/90 border border-slate-700 text-[10px] font-bold text-slate-200">
+                                            ${getCountryFlag(regCode)}
+                                            <span>${formatCountryCode(regCode)}</span>
+                                        </span>
+                                        ${item.nickname && item.nickname.toLowerCase() !== safeKey ? `<span class="text-xs text-slate-400 truncate max-w-[180px]">(${escapeHtml(item.nickname)})</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3 lg:gap-4 justify-between lg:justify-end">
+                                <span class="text-xs font-mono font-bold text-slate-200 cursor-help whitespace-nowrap" data-tip="${escapeHtml(expTip)}">
+                                    ${formatHistoryTime(item.checked_at)}
+                                </span>
+                                <div class="flex items-center gap-3 text-xs font-mono font-extrabold whitespace-nowrap">
+                                    <span class="text-slate-300">${totalCnt} video</span>
+                                    <span class="${dupCnt > 0 ? 'text-rose-400' : 'text-slate-500'}">Trùng ${dupCnt}</span>
+                                    <span class="${fypCnt > 0 ? 'text-amber-400' : 'text-slate-500'}">Ban ${fypCnt}</span>
+                                    <span class="text-emerald-400">Sạch ${cleanCnt}</span>
+                                </div>
+                                <div class="flex items-center gap-1.5 flex-shrink-0" onclick="event.stopPropagation()">
+                                    <button
+                                        type="button"
+                                        onclick="rescanHistoryChannel('${safeKey}')"
+                                        class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500/60 text-cyan-300 text-xs font-bold transition flex items-center gap-1 whitespace-nowrap"
+                                        title="Quét lại kênh @${escapeHtml(safeKey)} và ghi đè bản mới nhất"
+                                    >
+                                        <i class="fa-solid fa-arrows-rotate text-[11px]"></i>
+                                        <span class="hidden sm:inline">Quét lại</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onclick="toggleHistoryChannelExpand('${safeKey}')"
+                                        class="${isExpanded ? 'px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold' : 'px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600/80 text-white font-bold'} text-xs transition whitespace-nowrap"
+                                    >
+                                        ${isExpanded ? 'Thu gọn' : 'Chi tiết'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onclick="deleteHistoryChannel('${safeKey}')"
+                                        class="p-1.5 px-2 rounded-xl bg-slate-800/90 hover:bg-rose-950 border border-slate-700 hover:border-rose-700 text-slate-400 hover:text-rose-300 text-xs transition"
+                                        title="Xóa @${escapeHtml(safeKey)} khỏi lịch sử"
+                                    >
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        ${expandedBodyHtml}
+                    </div>
+                `;
+            }).join('');
         }
 
         function closeModal() {

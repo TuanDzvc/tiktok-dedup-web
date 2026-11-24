@@ -39,7 +39,7 @@ import base64
 import secrets
 import threading
 import subprocess
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 
 import uvicorn
@@ -352,8 +352,13 @@ VIP_BLOCKED_DEVICES_FILE = BASE_DIR / "vip_blocked_devices.json"
 VIP_ORDERS_FILE = BASE_DIR / "vip_orders.json"
 PAYOS_CONFIG_FILE = BASE_DIR / "payos_config.json"
 VIP_SYNC_META_FILE = BASE_DIR / "vip_sync_meta.json"
+CHECK_HISTORY_FILE = BASE_DIR / "check_history.json"
+CHECK_HISTORY_TTL_SECONDS = 7 * 86400
+CHECK_HISTORY_MAX_CHANNELS = 60
+CHECK_HISTORY_MAX_VIDEOS = 100
 ENV_FILE = BASE_DIR / ".env"
 _VIP_LOCK = threading.Lock()
+_HISTORY_LOCK = threading.Lock()
 _PEER_SYNC_TIMER_LOCK = threading.Lock()
 _PEER_SYNC_TIMER: Optional[threading.Timer] = None
 _PEER_SYNC_RUN_LOCK = threading.Lock()
@@ -486,6 +491,255 @@ def _consume_free_quota(dev_id: str, username: str = "") -> Dict[str, Any]:
         "remaining": max(0, FREE_DAILY_LIMIT - new_used),
         "device_id": dev_id,
     }
+
+
+def _compute_history_video_stats(videos: List[Dict[str, Any]]) -> Dict[str, int]:
+    dup_cnt = 0
+    fyp_cnt = 0
+    clean_cnt = 0
+    for v in videos:
+        if not isinstance(v, dict):
+            continue
+        aid = str(v.get("aweme_id") or v.get("id") or "").strip()
+        gid = str(v.get("group_id") or "").strip()
+        has_gid_dup = bool(gid and gid != aid and gid not in ("0", "None", "null"))
+        is_dup = bool(v.get("is_dup") or v.get("is_crp_punished") or has_gid_dup)
+        is_fyp = bool(
+            v.get("is_fyp_restricted")
+            or v.get("shadow")
+            or (v.get("has_penalty") and not v.get("is_crp_punished"))
+            or v.get("is_copyright")
+            or int(v.get("status_code") or 0) == 141
+        )
+        if is_dup:
+            dup_cnt += 1
+        if is_fyp:
+            fyp_cnt += 1
+        if not is_dup and not is_fyp:
+            clean_cnt += 1
+    return {
+        "total": len(videos),
+        "dup": dup_cnt,
+        "fyp": fyp_cnt,
+        "clean": clean_cnt,
+    }
+
+
+def _compact_history_video(v: Dict[str, Any]) -> Dict[str, Any]:
+    aid = str(v.get("aweme_id") or v.get("id") or "").strip()
+    return {
+        "id": aid,
+        "aweme_id": aid,
+        "group_id": str(v.get("group_id") or ""),
+        "origin_url": str(v.get("origin_url") or ""),
+        "is_same_channel_dup": bool(v.get("is_same_channel_dup", False)),
+        "desc": str(v.get("desc") or "")[:600],
+        "desc_clean": str(v.get("desc_clean") or "")[:600],
+        "play_count": int(v.get("play_count") or 0),
+        "digg_count": int(v.get("digg_count") or 0),
+        "digg_count_fmt": str(v.get("digg_count_fmt") or "0"),
+        "comment_count": int(v.get("comment_count") or 0),
+        "comment_count_fmt": str(v.get("comment_count_fmt") or "0"),
+        "share_count": int(v.get("share_count") or 0),
+        "share_count_fmt": str(v.get("share_count_fmt") or "0"),
+        "collect_count": int(v.get("collect_count") or 0),
+        "collect_count_fmt": str(v.get("collect_count_fmt") or "0"),
+        "create_time": int(v.get("create_time") or 0),
+        "date_local": str(v.get("date_local") or ""),
+        "date_utc": str(v.get("date_utc") or ""),
+        "device": str(v.get("device") or "phone"),
+        "source": str(v.get("source") or ""),
+        "source_icon": str(v.get("source_icon") or ""),
+        "is_muted": bool(v.get("is_muted", False)),
+        "is_prohibited": bool(v.get("is_prohibited", False)),
+        "quality": str(v.get("quality") or ""),
+        "region": str(v.get("region") or ""),
+        "region_display": str(v.get("region_display") or ""),
+        "shadow": bool(v.get("shadow", False)),
+        "shadowReason": str(v.get("shadowReason") or ""),
+        "is_dup": bool(v.get("is_dup", False)),
+        "is_crp_punished": bool(v.get("is_crp_punished", False)),
+        "is_fyp_restricted": bool(v.get("is_fyp_restricted", False)),
+        "has_penalty": bool(v.get("has_penalty", False)),
+        "is_copyright": bool(v.get("is_copyright", False)),
+        "is_takedown": bool(v.get("is_takedown", False)),
+        "status_code": int(v.get("status_code") or 0),
+        "penalty_details": str(v.get("penalty_details") or ""),
+        "cover_url": str(v.get("cover_url") or ""),
+        "duration_str": str(v.get("duration_str") or ""),
+        "share_url": str(v.get("share_url") or ""),
+    }
+
+
+def _prune_check_history_unlocked(hmap: Dict[str, Any], now_ts: Optional[int] = None) -> bool:
+    """Dọn lịch sử check quá 7 ngày và giới hạn tối đa CHECK_HISTORY_MAX_CHANNELS kênh/tài khoản."""
+    if not isinstance(hmap, dict):
+        return False
+    cur_ts = int(now_ts if now_ts is not None else time.time())
+    cutoff = cur_ts - CHECK_HISTORY_TTL_SECONDS
+    changed = False
+
+    for acct_key in list(hmap.keys()):
+        acct_box = hmap.get(acct_key)
+        if not isinstance(acct_box, dict):
+            hmap.pop(acct_key, None)
+            changed = True
+            continue
+        entries = acct_box.get("entries")
+        if not isinstance(entries, dict):
+            entries = {}
+            acct_box["entries"] = entries
+            changed = True
+        deleted = acct_box.get("deleted")
+        if not isinstance(deleted, dict):
+            deleted = {}
+            acct_box["deleted"] = deleted
+            changed = True
+
+        for h_key in list(entries.keys()):
+            rec = entries.get(h_key)
+            chk_at = int(rec.get("checked_at") or 0) if isinstance(rec, dict) else 0
+            if not isinstance(rec, dict) or chk_at <= 0 or chk_at < cutoff:
+                entries.pop(h_key, None)
+                changed = True
+
+        for d_key in list(deleted.keys()):
+            d_ts = int(deleted.get(d_key) or 0)
+            if d_ts <= 0 or d_ts < cutoff:
+                deleted.pop(d_key, None)
+                changed = True
+
+        if len(entries) > CHECK_HISTORY_MAX_CHANNELS:
+            keep_items = sorted(entries.items(), key=lambda kv: -int((kv[1] or {}).get("checked_at") or 0))[:CHECK_HISTORY_MAX_CHANNELS]
+            acct_box["entries"] = dict(keep_items)
+            changed = True
+
+        if not acct_box["entries"] and not acct_box["deleted"]:
+            hmap.pop(acct_key, None)
+            changed = True
+
+    return changed
+
+
+def _load_check_history_unlocked() -> Dict[str, Any]:
+    if CHECK_HISTORY_FILE.exists():
+        try:
+            raw = json.loads(CHECK_HISTORY_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return raw
+        except Exception:
+            pass
+    return {}
+
+
+def _save_check_history_unlocked(hmap: Dict[str, Any], schedule_sync: bool = True) -> None:
+    try:
+        tmp_f = CHECK_HISTORY_FILE.with_suffix(".json.tmp")
+        tmp_f.write_text(json.dumps(hmap, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp_f, CHECK_HISTORY_FILE)
+        if schedule_sync:
+            _schedule_peer_sync_push(1.0)
+    except Exception as e:
+        logger.error(f"[CheckHistory] Lỗi lưu check_history.json: {e}")
+
+
+def _record_check_history_for_user(
+    account_username: str,
+    res: Dict[str, Any],
+    fallback_username: str = "",
+    append_mode: bool = False,
+) -> None:
+    """Ghi lịch sử check riêng cho tài khoản đã đăng nhập (ghi đè lần check mới nhất của kênh, tự hết hạn 7 ngày)."""
+    acct = str(account_username or "").strip().lower()
+    if not acct or not isinstance(res, dict) or not res.get("success"):
+        return
+    ch_obj = res.get("channel") if isinstance(res.get("channel"), dict) else {}
+    ui_obj = res.get("user_info") if isinstance(res.get("user_info"), dict) else {}
+    raw_target = ch_obj.get("uniqueId") or ui_obj.get("username") or fallback_username or ""
+    target_handle = re.sub(r"[^a-zA-Z0-9._-]", "", str(raw_target).lstrip("@").strip().lower())
+    if not target_handle:
+        return
+
+    new_videos = [
+        _compact_history_video(v)
+        for v in (res.get("list") or [])
+        if isinstance(v, dict) and str(v.get("aweme_id") or v.get("id") or "").strip()
+    ]
+    now_ts = int(time.time())
+
+    compact_channel = {
+        "uniqueId": target_handle,
+        "nickname": str(ch_obj.get("nickname") or target_handle),
+        "avatar": str(ch_obj.get("avatar") or ""),
+        "createDate": str(ch_obj.get("createDate") or ui_obj.get("create_date") or "—"),
+        "region": str(ch_obj.get("region") or "US"),
+        "region_display": str(ch_obj.get("region_display") or ui_obj.get("country") or ""),
+        "followers": int(ch_obj.get("followers") or 0),
+        "followers_fmt": str(ch_obj.get("followers_fmt") or "0"),
+        "videoCount": int(ch_obj.get("videoCount") or len(new_videos)),
+    }
+    compact_ui = {
+        "uid": str(ui_obj.get("uid") or "---"),
+        "username": f"@{target_handle}",
+        "screen_name": str(ui_obj.get("screen_name") or compact_channel["nickname"]),
+        "create_date": str(ui_obj.get("create_date") or compact_channel["createDate"]),
+        "mobile": str(ui_obj.get("mobile") or "—"),
+        "country": str(ui_obj.get("country") or compact_channel["region_display"] or "Hoa Kỳ (US)"),
+        "last_nickname_change": str(ui_obj.get("last_nickname_change") or "—"),
+        "is_self": bool(ui_obj.get("is_self", False)),
+        "is_private_account": bool(ui_obj.get("is_private_account", False)),
+    }
+
+    with _HISTORY_LOCK:
+        hmap = _load_check_history_unlocked()
+        _prune_check_history_unlocked(hmap, now_ts)
+        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}})
+        entries = acct_box.setdefault("entries", {})
+        deleted = acct_box.setdefault("deleted", {})
+
+        existing = entries.get(target_handle) if append_mode and isinstance(entries.get(target_handle), dict) else None
+        if existing:
+            merged_vids = list(existing.get("videos") or [])
+            seen_ids = {str(v.get("aweme_id") or v.get("id") or "") for v in merged_vids if isinstance(v, dict)}
+            for nv in new_videos:
+                naid = str(nv.get("aweme_id") or "")
+                if naid and naid not in seen_ids:
+                    seen_ids.add(naid)
+                    merged_vids.append(nv)
+            final_videos = merged_vids[:CHECK_HISTORY_MAX_VIDEOS]
+            merged_ch = dict(existing.get("channel") or {})
+            for ck, cv in compact_channel.items():
+                if cv or ck not in merged_ch:
+                    merged_ch[ck] = cv
+            merged_ui = dict(existing.get("user_info") or {})
+            for uk, uv in compact_ui.items():
+                if (uv and uv not in ("—", "---")) or uk not in merged_ui:
+                    merged_ui[uk] = uv
+        else:
+            final_videos = new_videos[:CHECK_HISTORY_MAX_VIDEOS]
+            merged_ch = compact_channel
+            merged_ui = compact_ui
+
+        stats = _compute_history_video_stats(final_videos)
+        entries[target_handle] = {
+            "username": target_handle,
+            "nickname": str(merged_ch.get("nickname") or target_handle),
+            "avatar": str(merged_ch.get("avatar") or ""),
+            "region": str(merged_ch.get("region") or "US"),
+            "region_display": str(merged_ch.get("region_display") or ""),
+            "followers": int(merged_ch.get("followers") or 0),
+            "followers_fmt": str(merged_ch.get("followers_fmt") or "0"),
+            "create_date": str(merged_ch.get("createDate") or "—"),
+            "video_count_total": int(merged_ch.get("videoCount") or len(final_videos)),
+            "checked_at": now_ts,
+            "channel": merged_ch,
+            "user_info": merged_ui,
+            "videos": final_videos,
+            "stats": stats,
+        }
+        deleted.pop(target_handle, None)
+        _prune_check_history_unlocked(hmap, now_ts)
+        _save_check_history_unlocked(hmap, schedule_sync=True)
 
 
 def _extract_device_info(req: Request, body: Optional[Dict[str, Any]] = None) -> tuple:
@@ -1006,12 +1260,17 @@ def _export_sync_snapshot_unlocked() -> Dict[str, Any]:
     meta = _load_sync_meta_unlocked()
     with _QUOTA_LOCK:
         qmap = _load_free_quota_unlocked()
+    with _HISTORY_LOCK:
+        hmap = _load_check_history_unlocked()
+        if _prune_check_history_unlocked(hmap):
+            _save_check_history_unlocked(hmap, schedule_sync=False)
     return {
         "users": users,
         "blocked_devices": bmap,
         "orders": orders,
         "payos_config": payos_cfg,
         "free_quota": qmap,
+        "check_history": hmap,
         "sync_meta": meta,
         "exported_at": int(time.time()),
     }
@@ -1030,12 +1289,15 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
     l_meta = _load_sync_meta_unlocked()
     with _QUOTA_LOCK:
         l_qmap = _load_free_quota_unlocked()
+    with _HISTORY_LOCK:
+        l_hist = _load_check_history_unlocked()
 
     r_users = remote.get("users") if isinstance(remote.get("users"), dict) else {}
     r_bmap = remote.get("blocked_devices") if isinstance(remote.get("blocked_devices"), dict) else {}
     r_orders = remote.get("orders") if isinstance(remote.get("orders"), dict) else {}
     r_pcfg = remote.get("payos_config") if isinstance(remote.get("payos_config"), dict) else {}
     r_qmap = remote.get("free_quota") if isinstance(remote.get("free_quota"), dict) else {}
+    r_hist = remote.get("check_history") if isinstance(remote.get("check_history"), dict) else {}
     r_meta = remote.get("sync_meta") if isinstance(remote.get("sync_meta"), dict) else {}
 
     # 1. Trộn sync_meta
@@ -1158,6 +1420,58 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
         m_day[kq] = max(int(m_day.get(kq) or 0), int(vq or 0))
     m_qmap = {day_k: m_day} if m_day else {}
 
+    # 7. Trộn check_history theo từng tài khoản (ưu tiên bản mới nhất, tôn trọng tombstone xóa & hết hạn 7 ngày)
+    now_hist_ts = int(time.time())
+    hist_cutoff = now_hist_ts - CHECK_HISTORY_TTL_SECONDS
+    m_hist: Dict[str, Any] = {}
+    for raw_acct in set(l_hist.keys()) | set(r_hist.keys()):
+        acct_k = str(raw_acct or "").strip().lower()
+        if not acct_k:
+            continue
+        la = l_hist.get(raw_acct) if isinstance(l_hist.get(raw_acct), dict) else {}
+        ra = r_hist.get(raw_acct) if isinstance(r_hist.get(raw_acct), dict) else {}
+        l_ent = la.get("entries") if isinstance(la.get("entries"), dict) else {}
+        r_ent = ra.get("entries") if isinstance(ra.get("entries"), dict) else {}
+        l_del_h = la.get("deleted") if isinstance(la.get("deleted"), dict) else {}
+        r_del_h = ra.get("deleted") if isinstance(ra.get("deleted"), dict) else {}
+
+        merged_del_h: Dict[str, int] = {}
+        for dk in set(l_del_h.keys()) | set(r_del_h.keys()):
+            dk_c = str(dk or "").lstrip("@").strip().lower()
+            if not dk_c:
+                continue
+            dt_val = max(int(l_del_h.get(dk) or 0), int(r_del_h.get(dk) or 0))
+            if dt_val >= hist_cutoff:
+                merged_del_h[dk_c] = dt_val
+
+        merged_ent_h: Dict[str, Any] = {}
+        for hk in set(l_ent.keys()) | set(r_ent.keys()):
+            hk_c = str(hk or "").lstrip("@").strip().lower()
+            if not hk_c:
+                continue
+            le = l_ent.get(hk) if isinstance(l_ent.get(hk), dict) else None
+            re_obj = r_ent.get(hk) if isinstance(r_ent.get(hk), dict) else None
+            if not le and not re_obj:
+                continue
+            lt = int((le or {}).get("checked_at") or 0)
+            rt = int((re_obj or {}).get("checked_at") or 0)
+            if lt != rt:
+                pick_e = le if lt > rt else re_obj
+            else:
+                lv = len((le or {}).get("videos") or [])
+                rv = len((re_obj or {}).get("videos") or [])
+                pick_e = le if lv >= rv else re_obj
+            if not isinstance(pick_e, dict):
+                continue
+            chk_ts = int(pick_e.get("checked_at") or 0)
+            if chk_ts < hist_cutoff or merged_del_h.get(hk_c, 0) >= chk_ts:
+                continue
+            merged_ent_h[hk_c] = json.loads(json.dumps(pick_e))
+
+        if merged_ent_h or merged_del_h:
+            m_hist[acct_k] = {"entries": merged_ent_h, "deleted": merged_del_h}
+    _prune_check_history_unlocked(m_hist, now_hist_ts)
+
     m_meta = {"deleted_users": m_del, "unblocked_devices": m_unblk}
 
     def _canon(obj: Any) -> str:
@@ -1185,6 +1499,11 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
             cur_q = _load_free_quota_unlocked()
             if _canon(m_qmap) != _canon(cur_q):
                 _save_free_quota_unlocked(m_qmap, day_k)
+                any_changed = True
+        with _HISTORY_LOCK:
+            cur_h = _load_check_history_unlocked()
+            if _canon(m_hist) != _canon(cur_h):
+                _save_check_history_unlocked(m_hist, schedule_sync=False)
                 any_changed = True
     finally:
         _APPLYING_REMOTE_SYNC = False
@@ -3078,12 +3397,94 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                 res["stats_summary"]["dup_count"] = 0
                 res["stats_summary"]["clean_count"] = 0
 
+        # Lưu lịch sử check riêng cho tài khoản đã đăng nhập (chỉ khi không bị khóa VIP; khách không đăng nhập sẽ không lưu)
+        if vip_user and checked_username and not dedup_locked:
+            try:
+                _record_check_history_for_user(
+                    checked_username,
+                    res,
+                    fallback_username=clean_user,
+                    append_mode=(max_cursor > 0),
+                )
+            except Exception as e_hist:
+                logger.warning(f"[CheckHistory] Lỗi ghi lịch sử check: {e_hist}")
+
     # Kích hoạt tải trước ảnh bìa vào RAM cache song song trong nền (0.001s khi trình duyệt yêu cầu)
     v_list = res.get("list", [])
     if v_list:
         background_tasks.add_task(prefetch_thumbnails, v_list)
         
     return JSONResponse(content=res)
+
+
+@app.get("/api/check-history")
+def api_get_check_history(req: Request):
+    """Lấy danh sách Lịch sử check của tài khoản đang đăng nhập (tự động xóa mục quá 7 ngày)."""
+    vip_user = _extract_vip_user(req)
+    if not vip_user:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
+    acct = str(vip_user.get("username") or "").strip().lower()
+    now_ts = int(time.time())
+    with _HISTORY_LOCK:
+        hmap = _load_check_history_unlocked()
+        if _prune_check_history_unlocked(hmap, now_ts):
+            _save_check_history_unlocked(hmap, schedule_sync=False)
+        acct_box = hmap.get(acct) if isinstance(hmap.get(acct), dict) else {}
+        entries = acct_box.get("entries") if isinstance(acct_box.get("entries"), dict) else {}
+        items = sorted(
+            (v for v in entries.values() if isinstance(v, dict)),
+            key=lambda x: -int(x.get("checked_at") or 0),
+        )
+    return JSONResponse(content={
+        "success": True,
+        "ttl_days": 7,
+        "account": acct,
+        "items": items,
+    })
+
+
+@app.delete("/api/check-history")
+def api_clear_all_check_history(req: Request):
+    """Xóa toàn bộ Lịch sử check của tài khoản đang đăng nhập."""
+    vip_user = _extract_vip_user(req)
+    if not vip_user:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
+    acct = str(vip_user.get("username") or "").strip().lower()
+    now_ts = int(time.time())
+    with _HISTORY_LOCK:
+        hmap = _load_check_history_unlocked()
+        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}})
+        entries = acct_box.get("entries") if isinstance(acct_box.get("entries"), dict) else {}
+        deleted = acct_box.setdefault("deleted", {})
+        for k in list(entries.keys()):
+            deleted[str(k).lstrip("@").strip().lower()] = now_ts
+        acct_box["entries"] = {}
+        _prune_check_history_unlocked(hmap, now_ts)
+        _save_check_history_unlocked(hmap, schedule_sync=True)
+    return JSONResponse(content={"success": True})
+
+
+@app.delete("/api/check-history/{target_username}")
+def api_delete_check_history_item(req: Request, target_username: str):
+    """Xóa 1 kênh cụ thể khỏi Lịch sử check của tài khoản đang đăng nhập."""
+    vip_user = _extract_vip_user(req)
+    if not vip_user:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
+    acct = str(vip_user.get("username") or "").strip().lower()
+    target = re.sub(r"[^a-zA-Z0-9._-]", "", str(target_username or "").lstrip("@").strip().lower())
+    if not target:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Tên kênh không hợp lệ."})
+    now_ts = int(time.time())
+    with _HISTORY_LOCK:
+        hmap = _load_check_history_unlocked()
+        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}})
+        entries = acct_box.get("entries") if isinstance(acct_box.get("entries"), dict) else {}
+        deleted = acct_box.setdefault("deleted", {})
+        entries.pop(target, None)
+        deleted[target] = now_ts
+        _prune_check_history_unlocked(hmap, now_ts)
+        _save_check_history_unlocked(hmap, schedule_sync=True)
+    return JSONResponse(content={"success": True, "deleted": target})
 
 @app.get("/api/proxy/image")
 def proxy_image(
