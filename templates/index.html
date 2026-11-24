@@ -5270,6 +5270,7 @@
             if (expandedHistoryChannels.has(key)) {
                 expandedHistoryChannels.delete(key);
             } else {
+                expandedHistoryChannels.clear();
                 expandedHistoryChannels.add(key);
             }
             renderCheckHistory();
