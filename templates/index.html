@@ -881,8 +881,26 @@
                     <span id="accountCheckCostInfo" class="hidden px-3 py-1.5 rounded-xl bg-slate-900/90 border border-amber-500/40 text-amber-300 font-bold tabular-nums"></span>
                     <button
                         type="button"
+                        onclick="exportAccountCheckCSV('current', 'not_recommended')"
+                        class="px-3 py-1.5 rounded-xl bg-rose-950/90 hover:bg-rose-900 border border-rose-500/70 text-rose-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        title="Xuất file CSV danh sách tài khoản bị đỏ (không được đề xuất)"
+                    >
+                        <i class="fa-solid fa-file-csv text-rose-400"></i>
+                        <span>CSV acc đỏ</span>
+                    </button>
+                    <button
+                        type="button"
+                        onclick="exportAccountCheckCSV('current', 'ok')"
+                        class="px-3 py-1.5 rounded-xl bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-500/70 text-emerald-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        title="Xuất file CSV danh sách tài khoản sạch (đề xuất bình thường)"
+                    >
+                        <i class="fa-solid fa-file-csv text-emerald-400"></i>
+                        <span>CSV acc sạch</span>
+                    </button>
+                    <button
+                        type="button"
                         onclick="copyAccountCheckHandles('not_recommended')"
-                        class="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-600/60 text-rose-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        class="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-600/50 text-rose-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
                         title="Sao chép danh sách tài khoản bị cảnh báo không được đề xuất"
                     >
                         <i class="fa-regular fa-copy"></i>
@@ -891,7 +909,7 @@
                     <button
                         type="button"
                         onclick="copyAccountCheckHandles('ok')"
-                        class="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        class="px-3 py-1.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-600/50 text-emerald-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
                         title="Sao chép danh sách tài khoản sạch đang đề xuất bình thường"
                     >
                         <i class="fa-regular fa-copy"></i>
@@ -916,66 +934,44 @@
 
         <!-- Tab 3: Dedicated Check History Section (Logged-in users only, hidden for guests) -->
         <section id="checkHistorySection" class="hidden glass-panel rounded-3xl p-4 sm:p-6 border border-slate-700/80 shadow-2xl space-y-4">
-            <div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 pb-3 border-b border-slate-800/90">
+            <!-- Top Header & Sub-tabs (Check Trùng vs Check Tài Khoản) -->
+            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 pb-3 border-b border-slate-800/90">
                 <div class="flex flex-wrap items-center gap-2.5">
                     <div class="w-9 h-9 rounded-xl bg-cyan-950/90 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow">
                         <i class="fa-solid fa-clock-rotate-left"></i>
                     </div>
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <h2 class="text-base sm:text-lg font-extrabold text-white tracking-tight">Lịch sử check</h2>
-                            <span id="checkHistoryCountBadge" class="px-2 py-0.5 rounded-lg bg-cyan-950/90 border border-cyan-500/40 text-cyan-300 font-mono text-xs font-extrabold">0 kênh</span>
-                            <span class="px-2 py-0.5 rounded-lg bg-slate-800/90 border border-slate-700 text-[11px] font-semibold text-slate-300">
-                                <i class="fa-solid fa-rotate text-amber-400 mr-1 text-[10px]"></i>Ghi đè lần mới nhất · Tự xóa sau 7 ngày
-                            </span>
-                        </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="text-base sm:text-lg font-extrabold text-white tracking-tight">Lịch sử check</h2>
+                        <span id="checkHistoryCountBadge" class="px-2 py-0.5 rounded-lg bg-cyan-950/90 border border-cyan-500/40 text-cyan-300 font-mono text-xs font-extrabold">0 kênh</span>
+                        <span class="px-2 py-0.5 rounded-lg bg-slate-800/90 border border-slate-700 text-[11px] font-semibold text-slate-300">
+                            <i class="fa-solid fa-rotate text-amber-400 mr-1 text-[10px]"></i>Ghi đè lần mới nhất · Tự xóa sau 7 ngày
+                        </span>
                     </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
-                    <div class="flex items-center gap-1.5 text-xs font-bold">
-                        <button type="button" id="histFilterAll" onclick="setCheckHistoryFilter('all')" class="px-3 py-1.5 rounded-xl bg-cyan-600 text-white transition whitespace-nowrap">Tất cả</button>
-                        <button type="button" id="histFilterDup" onclick="setCheckHistoryFilter('dup')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 transition whitespace-nowrap">🔴 Có trùng</button>
-                        <button type="button" id="histFilterFyp" onclick="setCheckHistoryFilter('fyp')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition whitespace-nowrap">🚨 Có mất FYP</button>
-                    </div>
-                    <div class="relative flex-grow sm:flex-grow-0 sm:w-52">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
-                        <input
-                            type="search"
-                            id="checkHistorySearchInput"
-                            name="tikflow_hist_channel_filter"
-                            value=""
-                            autocomplete="off"
-                            autocorrect="off"
-                            autocapitalize="off"
-                            spellcheck="false"
-                            data-lpignore="true"
-                            data-form-type="other"
-                            readonly
-                            onfocus="this.removeAttribute('readonly')"
-                            onblur="if(!this.value) this.setAttribute('readonly', 'readonly')"
-                            oninput="handleCheckHistorySearchInput(this)"
-                            placeholder="Lọc kênh đã check..."
-                            class="w-full pl-8 pr-7 py-1.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
-                        />
+
+                <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-between lg:justify-end">
+                    <div class="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-900/95 border border-slate-700/80">
                         <button
                             type="button"
-                            id="btnClearHistorySearch"
-                            onclick="clearCheckHistorySearch()"
-                            class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-0.5"
-                            title="Xóa từ khóa lọc"
+                            id="subTabHistDedup"
+                            onclick="switchCheckHistorySubTab('dedup')"
+                            class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-extrabold text-xs flex items-center gap-1.5 transition whitespace-nowrap"
                         >
-                            <i class="fa-solid fa-xmark"></i>
+                            <i class="fa-solid fa-bolt text-amber-300 text-[11px]"></i>
+                            <span>Check Trùng</span>
+                            <span id="subTabHistDedupCount" class="px-1.5 py-0.2 rounded bg-black/30 font-mono text-[11px] tabular-nums">0</span>
+                        </button>
+                        <button
+                            type="button"
+                            id="subTabHistAccount"
+                            onclick="switchCheckHistorySubTab('account')"
+                            class="px-3.5 py-1.5 rounded-lg bg-transparent hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition whitespace-nowrap"
+                        >
+                            <i class="fa-solid fa-user-shield text-rose-400 text-[11px]"></i>
+                            <span>Check Tài Khoản</span>
+                            <span id="subTabHistAccountCount" class="px-1.5 py-0.2 rounded bg-slate-800 border border-slate-600/60 text-cyan-300 font-mono text-[11px] tabular-nums">0</span>
                         </button>
                     </div>
-                    <button
-                        type="button"
-                        onclick="clearAllCheckHistory()"
-                        class="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-700/70 text-rose-200 text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
-                        title="Xóa toàn bộ lịch sử check của tài khoản này"
-                    >
-                        <i class="fa-solid fa-trash-can text-[11px]"></i>
-                        <span>Xóa tất cả</span>
-                    </button>
                     <button
                         type="button"
                         onclick="switchMainWorkspaceTab('checker')"
@@ -988,14 +984,162 @@
                 </div>
             </div>
 
-            <div id="checkHistoryList" class="space-y-2.5">
-                <!-- Accordion channel cards injected by JS -->
+            <!-- Sub-tab 1: Lịch sử Check Trùng -->
+            <div id="checkHistoryDedupPanel" class="space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+                        <button type="button" id="histFilterAll" onclick="setCheckHistoryFilter('all')" class="px-3 py-1.5 rounded-xl bg-cyan-600 text-white transition whitespace-nowrap">Tất cả</button>
+                        <button type="button" id="histFilterDup" onclick="setCheckHistoryFilter('dup')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 transition whitespace-nowrap">🔴 Có trùng</button>
+                        <button type="button" id="histFilterFyp" onclick="setCheckHistoryFilter('fyp')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition whitespace-nowrap">🚨 Có mất FYP</button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
+                        <div class="relative flex-grow sm:flex-grow-0 sm:w-56">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                            <input
+                                type="search"
+                                id="checkHistorySearchInput"
+                                name="tikflow_hist_channel_filter"
+                                value=""
+                                autocomplete="off"
+                                autocorrect="off"
+                                autocapitalize="off"
+                                spellcheck="false"
+                                data-lpignore="true"
+                                data-form-type="other"
+                                readonly
+                                onfocus="this.removeAttribute('readonly')"
+                                onblur="if(!this.value) this.setAttribute('readonly', 'readonly')"
+                                oninput="handleCheckHistorySearchInput(this)"
+                                placeholder="Lọc kênh đã check..."
+                                class="w-full pl-8 pr-7 py-1.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+                            />
+                            <button
+                                type="button"
+                                id="btnClearHistorySearch"
+                                onclick="clearCheckHistorySearch()"
+                                class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-0.5"
+                                title="Xóa từ khóa lọc"
+                            >
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            onclick="clearAllCheckHistory()"
+                            class="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-700/70 text-rose-200 text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                            title="Xóa toàn bộ lịch sử Check Trùng của tài khoản này"
+                        >
+                            <i class="fa-solid fa-trash-can text-[11px]"></i>
+                            <span>Xóa tất cả</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="checkHistoryList" class="space-y-2.5">
+                    <!-- Accordion channel cards injected by JS -->
+                </div>
+
+                <div id="checkHistoryEmpty" class="hidden py-10 px-4 text-center space-y-2 text-slate-400">
+                    <i class="fa-solid fa-clock-rotate-left text-3xl text-slate-600"></i>
+                    <p id="checkHistoryEmptyText" class="text-sm font-semibold text-slate-300">Chưa có lịch sử Check Trùng nào trong 7 ngày gần nhất.</p>
+                    <p class="text-xs text-slate-500">Hãy sang tab Kiểm Tra Kênh để quét một kênh TikTok — hệ thống sẽ tự lưu kết quả mới nhất tại đây.</p>
+                </div>
             </div>
 
-            <div id="checkHistoryEmpty" class="hidden py-10 px-4 text-center space-y-2 text-slate-400">
-                <i class="fa-solid fa-clock-rotate-left text-3xl text-slate-600"></i>
-                <p id="checkHistoryEmptyText" class="text-sm font-semibold text-slate-300">Chưa có lịch sử check nào trong 7 ngày gần nhất.</p>
-                <p class="text-xs text-slate-500">Hãy sang tab Kiểm Tra Kênh để quét một kênh TikTok — hệ thống sẽ tự lưu kết quả mới nhất tại đây.</p>
+            <!-- Sub-tab 2: Lịch sử Check Tài Khoản -->
+            <div id="checkHistoryAccountPanel" class="hidden space-y-3">
+                <div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-2.5">
+                    <div class="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+                        <button type="button" id="accHistFilterAll" onclick="setAccountCheckHistoryFilter('all')" class="px-3 py-1.5 rounded-xl bg-cyan-600 text-white transition whitespace-nowrap">Tất cả (0)</button>
+                        <button type="button" id="accHistFilterNotRec" onclick="setAccountCheckHistoryFilter('not_recommended')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 transition whitespace-nowrap">⚠️ Không được đề xuất (0)</button>
+                        <button type="button" id="accHistFilterOk" onclick="setAccountCheckHistoryFilter('ok')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition whitespace-nowrap">✅ Đề xuất bình thường (0)</button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end text-xs">
+                        <div class="relative flex-grow sm:flex-grow-0 sm:w-52">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                            <input
+                                type="search"
+                                id="accHistorySearchInput"
+                                name="tikflow_hist_account_filter"
+                                value=""
+                                autocomplete="off"
+                                autocorrect="off"
+                                autocapitalize="off"
+                                spellcheck="false"
+                                data-lpignore="true"
+                                data-form-type="other"
+                                readonly
+                                onfocus="this.removeAttribute('readonly')"
+                                onblur="if(!this.value) this.setAttribute('readonly', 'readonly')"
+                                oninput="handleAccHistorySearchInput(this)"
+                                placeholder="Lọc tài khoản đã check..."
+                                class="w-full pl-8 pr-7 py-1.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+                            />
+                            <button
+                                type="button"
+                                id="btnClearAccHistorySearch"
+                                onclick="clearAccHistorySearch()"
+                                class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-0.5"
+                                title="Xóa từ khóa lọc"
+                            >
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            onclick="exportAccountCheckCSV('history', 'not_recommended')"
+                            class="px-3 py-1.5 rounded-xl bg-rose-950/90 hover:bg-rose-900 border border-rose-500/70 text-rose-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                            title="Xuất file CSV các tài khoản bị đỏ trong lịch sử"
+                        >
+                            <i class="fa-solid fa-file-csv text-rose-400"></i>
+                            <span>CSV acc đỏ</span>
+                        </button>
+                        <button
+                            type="button"
+                            onclick="exportAccountCheckCSV('history', 'ok')"
+                            class="px-3 py-1.5 rounded-xl bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-500/70 text-emerald-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                            title="Xuất file CSV các tài khoản sạch trong lịch sử"
+                        >
+                            <i class="fa-solid fa-file-csv text-emerald-400"></i>
+                            <span>CSV acc sạch</span>
+                        </button>
+                        <button
+                            type="button"
+                            onclick="copyAccountCheckHistoryHandles('not_recommended')"
+                            class="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-600/50 text-rose-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                            <i class="fa-regular fa-copy"></i>
+                            <span>Copy acc đỏ</span>
+                        </button>
+                        <button
+                            type="button"
+                            onclick="copyAccountCheckHistoryHandles('ok')"
+                            class="px-3 py-1.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-600/50 text-emerald-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                            <i class="fa-regular fa-copy"></i>
+                            <span>Copy acc sạch</span>
+                        </button>
+                        <button
+                            type="button"
+                            onclick="clearAllAccountCheckHistory()"
+                            class="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-700/70 text-rose-200 font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                            title="Xóa toàn bộ lịch sử Check Tài Khoản"
+                        >
+                            <i class="fa-solid fa-trash-can text-[11px]"></i>
+                            <span>Xóa tất cả</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="accountCheckHistoryList" class="space-y-2.5">
+                    <!-- Saved account check cards injected by JS -->
+                </div>
+
+                <div id="accountCheckHistoryEmpty" class="hidden py-10 px-4 text-center space-y-2 text-slate-400">
+                    <i class="fa-solid fa-user-shield text-3xl text-slate-600"></i>
+                    <p id="accountCheckHistoryEmptyText" class="text-sm font-semibold text-slate-300">Chưa có lịch sử Check Tài Khoản nào trong 7 ngày gần nhất.</p>
+                    <p class="text-xs text-slate-500">Hãy sang tab Check Tài Khoản để kiểm tra tài khoản TikTok — hệ thống sẽ tự lưu kết quả mới nhất tại đây.</p>
+                </div>
             </div>
         </section>
 
@@ -5263,10 +5407,14 @@
 
         // ==================== WORKSPACE TABS & ACCOUNT CHECK ====================
         let activeMainWorkspaceTab = 'checker';
+        let activeCheckHistorySubTab = 'dedup';
         let checkHistoryItems = [];
+        let accountCheckHistoryItems = [];
         let checkHistoryLoadedForUser = '';
         let checkHistoryFilter = 'all';
         let checkHistorySearchQuery = '';
+        let accountCheckHistoryFilter = 'all';
+        let accountCheckHistorySearchQuery = '';
         let expandedHistoryChannels = new Set();
         let historyChannelVideoFilter = {};
 
@@ -5308,7 +5456,9 @@
                     try { document.getElementById('accountCheckInput')?.focus({ preventScroll: true }); } catch (e) {}
                 }, 40);
             } else if (targetTab === 'history') {
+                switchCheckHistorySubTab(activeCheckHistorySubTab, false);
                 renderCheckHistory();
+                renderAccountCheckHistory();
                 loadCheckHistory(false);
                 try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
             }
@@ -5419,23 +5569,77 @@
             renderAccountCheckResults();
         }
 
-        function copyAccountCheckHandles(mode) {
-            const matches = accountCheckResults.filter(it => {
-                if (!it || !it.ok) return false;
+        function _filterAccountsByMode(items, mode) {
+            return (Array.isArray(items) ? items : []).filter(it => {
+                if (!it || it.ok === false) return false;
                 if (mode === 'not_recommended') return it.recommend_status === 'not_recommended' || it.recommend_status === 'warning';
                 if (mode === 'ok') return it.recommend_status === 'ok';
                 return true;
             });
+        }
+
+        function _copyAccountHandlesFromList(items, mode) {
+            const matches = _filterAccountsByMode(items, mode);
             if (!matches.length) {
                 showToast(mode === 'not_recommended' ? 'Không có tài khoản bị đỏ nào để copy.' : 'Không có tài khoản sạch nào để copy.');
                 return;
             }
-            const txt = matches.map(it => '@' + String(it.unique_id || '').replace(/^@+/, '')).join('\n');
+            const txt = matches.map(it => '@' + String(it.unique_id || it.username || '').replace(/^@+/, '')).join('\n');
             navigator.clipboard.writeText(txt).then(() => {
                 showToast(`📋 Đã copy ${matches.length} tài khoản (${mode === 'not_recommended' ? 'bị đỏ' : 'sạch'}).`);
             }).catch(() => {
                 prompt('Sao chép danh sách:', txt);
             });
+        }
+
+        function copyAccountCheckHandles(mode) {
+            _copyAccountHandlesFromList(accountCheckResults, mode);
+        }
+
+        function _csvCell(val) {
+            return `"${String(val ?? '').replace(/"/g, '""')}"`;
+        }
+
+        function exportAccountCheckCSV(source, mode) {
+            const srcList = (source === 'history') ? accountCheckHistoryItems : accountCheckResults;
+            const matches = _filterAccountsByMode(srcList, mode);
+            if (!matches.length) {
+                showToast(mode === 'not_recommended' ? 'Không có tài khoản bị đỏ nào để xuất CSV.' : 'Không có tài khoản sạch nào để xuất CSV.');
+                return;
+            }
+            const headers = ["STT", "Username", "Tên hiển thị", "Trạng thái đề xuất", "Ngày tạo", "Quốc gia", "Followers", "Link TikTok", "UID", "Thời gian check"];
+            const fallbackTs = Math.floor(Date.now() / 1000);
+            const rows = matches.map((it, idx) => {
+                const rawHandle = String(it.unique_id || it.username || '').replace(/[^a-zA-Z0-9._-]/g, '');
+                const regCode = it.region ? formatCountryCode(it.region) : '';
+                const regFull = regCode ? formatCountryFull(regCode, it.region_display) : 'Không rõ';
+                const statusLabel = it.recommend_label || (it.recommend_status === 'not_recommended' ? 'Tài khoản không được đề xuất' : 'Đề xuất bình thường');
+                const chkStr = formatHistoryTime(it.checked_at || fallbackTs);
+                return [
+                    idx + 1,
+                    _csvCell(rawHandle ? '@' + rawHandle : ''),
+                    _csvCell(it.nickname || rawHandle || ''),
+                    _csvCell(statusLabel),
+                    _csvCell(it.create_date || '—'),
+                    _csvCell(regFull),
+                    Number(it.followers || 0),
+                    _csvCell(rawHandle ? `https://www.tiktok.com/@${rawHandle}` : ''),
+                    _csvCell(it.uid || ''),
+                    _csvCell(chkStr),
+                ].join(',');
+            });
+
+            const csvContent = "\uFEFF" + [headers.map(_csvCell).join(','), ...rows].join("\r\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            const prefix = (source === 'history') ? 'TikTok_LichSu_' : 'TikTok_';
+            const tag = (mode === 'ok') ? 'AccSach' : 'AccDo';
+            a.download = `${prefix}${tag}_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`📄 Đã xuất CSV ${matches.length} tài khoản (${mode === 'ok' ? 'sạch' : 'bị đỏ'})!`);
         }
 
         function jumpToChannelCheckFromAccount(username) {
@@ -5524,6 +5728,9 @@
                 }
 
                 renderAccountCheckResults();
+                if (currentVipUser) {
+                    loadCheckHistory(false);
+                }
                 const sum = data.summary || {};
                 showToast(`✅ Đã check ${sum.total || accountCheckResults.length} tài khoản (Đề xuất BT: ${sum.ok_count || 0} · Bị đỏ: ${sum.not_recommended_count || 0}).`);
             } catch (err) {
@@ -5534,6 +5741,165 @@
                 if (btnIcon) btnIcon.className = 'fa-solid fa-bolt text-amber-300';
                 if (btnText) btnText.innerText = 'Check Ngay';
             }
+        }
+
+        function buildAccountStatusCardHtml(item, opts = {}) {
+            if (!item || item.ok === false) {
+                const dispIn = escapeHtml((item && (item.unique_id ? '@' + item.unique_id : item.input)) || 'Không rõ');
+                const errTxt = escapeHtml((item && item.error) || 'Không tìm thấy tài khoản.');
+                return `
+                    <div class="glass-panel rounded-2xl p-4 border border-slate-700/70 bg-slate-900/70 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-xl bg-rose-950/80 border border-rose-600/50 flex items-center justify-center text-rose-400">
+                                <i class="fa-solid fa-user-xmark"></i>
+                            </div>
+                            <div>
+                                <div class="font-mono font-bold text-white text-sm">${dispIn}</div>
+                                <div class="text-xs text-rose-300 font-semibold">${errTxt}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const isHist = Boolean(opts.isHistory);
+            const rawUidClean = String(item.unique_id || item.username || '').replace(/[^a-zA-Z0-9._-]/g, '');
+            const cleanHandle = '@' + rawUidClean;
+            const nickSafe = escapeHtml(item.nickname || rawUidClean || 'TikTok User');
+            const avatarSrc = getProxiedImage(item.avatar || '', item.nickname || rawUidClean || 'User');
+            const regCode = item.region ? formatCountryCode(item.region) : '';
+            const regFull = regCode ? formatCountryFull(regCode, item.region_display) : 'Không rõ';
+            const flagHtml = getCountryFlag(regCode);
+            const folFmt = escapeHtml(item.followers_fmt || Number(item.followers || 0).toLocaleString('en-US'));
+            const createDate = escapeHtml(item.create_date || '—');
+
+            const st = String(item.recommend_status || 'ok');
+            let cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-slate-700/75 hover:border-emerald-500/45 transition';
+            let statusBadgeHtml = `
+                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/85 border border-emerald-500/60 text-emerald-300 font-extrabold">
+                    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                    <span>Đề xuất bình thường</span>
+                </div>
+            `;
+            if (st === 'not_recommended') {
+                cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-rose-500/75 bg-gradient-to-br from-rose-950/35 via-slate-900/90 to-dark-900/95 shadow-lg shadow-rose-950/30 transition';
+                statusBadgeHtml = `
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/95 border border-rose-500/85 text-rose-200 font-extrabold shadow-sm shadow-rose-950/60">
+                        <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
+                        <span>${escapeHtml(item.recommend_label || 'Tài khoản không được đề xuất')}</span>
+                    </div>
+                `;
+            } else if (st === 'warning') {
+                cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-amber-500/65 bg-amber-950/15 transition';
+                statusBadgeHtml = `
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/75 text-amber-200 font-extrabold">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+                        <span>${escapeHtml(item.recommend_label || 'Cảnh báo tài khoản')}</span>
+                    </div>
+                `;
+            }
+
+            const rightActionsHtml = isHist ? `
+                <div class="flex flex-wrap items-center justify-center sm:justify-end gap-1.5">
+                    <span class="text-[11px] font-mono text-slate-400 mr-1" title="${escapeHtml(formatHistoryExpiryTip(item.checked_at))}">
+                        <i class="fa-regular fa-clock text-slate-500 mr-1"></i>${escapeHtml(formatHistoryTime(item.checked_at))}
+                    </span>
+                    <button
+                        type="button"
+                        onclick="recheckAccountFromHistory('${rawUidClean}')"
+                        class="px-2.5 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-800 border border-cyan-500/50 text-cyan-200 hover:text-white text-xs font-bold transition inline-flex items-center gap-1 whitespace-nowrap"
+                        title="Check lại tài khoản này"
+                    >
+                        <i class="fa-solid fa-rotate text-[10px]"></i>
+                        <span>Check lại</span>
+                    </button>
+                    <button
+                        type="button"
+                        onclick="jumpToChannelCheckFromAccount('${rawUidClean}')"
+                        class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/80 text-slate-200 text-xs font-bold transition inline-flex items-center gap-1 whitespace-nowrap"
+                        title="Chuyển sang tab Kiểm Tra Kênh để quét video"
+                    >
+                        <i class="fa-solid fa-bolt text-amber-300 text-[10px]"></i>
+                        <span>Quét video</span>
+                    </button>
+                    <button
+                        type="button"
+                        onclick="deleteAccountCheckHistoryItem('${rawUidClean}')"
+                        class="w-7 h-7 rounded-xl bg-slate-800/90 hover:bg-rose-950 border border-slate-700 hover:border-rose-500/70 text-slate-400 hover:text-rose-300 text-xs flex items-center justify-center transition"
+                        title="Xóa khỏi lịch sử"
+                    >
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            ` : `
+                <button
+                    type="button"
+                    onclick="jumpToChannelCheckFromAccount('${rawUidClean}')"
+                    class="px-3 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-800 border border-cyan-500/50 text-cyan-200 hover:text-white text-xs font-extrabold transition inline-flex items-center gap-1.5 whitespace-nowrap"
+                    title="Chuyển sang tab Kiểm Tra Kênh để quét trùng lặp & video của kênh này"
+                >
+                    <i class="fa-solid fa-bolt text-amber-300"></i>
+                    <span>Quét video</span>
+                </button>
+            `;
+
+            return `
+                <div class="${cardCls}">
+                    <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-5">
+                        <div class="relative group flex-shrink-0">
+                            <img
+                                src="${avatarSrc}"
+                                alt="${nickSafe}"
+                                class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 ${st === 'not_recommended' ? 'border-rose-500/70' : 'border-cyan-500/50'} shadow-xl group-hover:scale-105 transition duration-300"
+                                onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(rawUidClean || 'TikTok')}&background=0d111a&color=38bdf8&size=128'"
+                            />
+                            <div class="absolute -bottom-2 -right-2 px-2 py-0.5 rounded-md bg-dark-900 border border-slate-700 text-[10px] font-bold text-cyan-400 shadow">
+                                HD
+                            </div>
+                        </div>
+
+                        <div class="space-y-1.5 flex-grow min-w-0 w-full">
+                            <div class="flex flex-wrap items-center justify-center sm:justify-between gap-2">
+                                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+                                    <h3 class="text-xl sm:text-2xl font-black text-white tracking-tight">${nickSafe}</h3>
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-900/80 border border-blue-600/80 text-blue-200 font-bold inline-flex items-center gap-1.5">${flagHtml} <span>${escapeHtml(regFull)}</span></span>
+                                    ${item.is_private ? `<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-600 text-slate-300 font-bold">🔒 Riêng tư</span>` : ''}
+                                </div>
+                                ${rightActionsHtml}
+                            </div>
+
+                            <div class="flex items-center justify-center sm:justify-start gap-2 text-amber-400 font-mono text-sm font-bold">
+                                <span>${escapeHtml(cleanHandle)}</span>
+                                <button type="button" onclick="copyText('${escapeHtml(cleanHandle)}')" title="Copy username" class="text-slate-400 hover:text-white transition">
+                                    <i class="fa-regular fa-copy text-xs"></i>
+                                </button>
+                                <a href="https://www.tiktok.com/@${encodeURIComponent(rawUidClean)}" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-cyan-400 ml-1 transition" title="Mở trang cá nhân trên TikTok">
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                                </a>
+                            </div>
+
+                            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1.5 text-xs font-semibold">
+                                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-emerald-400">
+                                    <i class="fa-regular fa-calendar-check text-emerald-400"></i>
+                                    <span>Ngày tạo:</span>
+                                    <span class="text-white font-mono font-bold">${createDate}</span>
+                                </div>
+                                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-sky-400">
+                                    <i class="fa-solid fa-globe text-sky-400"></i>
+                                    <span>Quốc gia:</span>
+                                    <span class="text-white font-medium inline-flex items-center gap-1.5">${flagHtml} <span>${escapeHtml(regFull)}</span></span>
+                                </div>
+                                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-purple-400">
+                                    <i class="fa-solid fa-user-group text-purple-400"></i>
+                                    <span class="text-white font-bold">${folFmt}</span>
+                                    <span>followers</span>
+                                </div>
+                                ${statusBadgeHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         function renderAccountCheckResults() {
@@ -5553,8 +5919,8 @@
             }
 
             const totalCnt = accountCheckResults.length;
-            const notRecCnt = accountCheckResults.filter(it => it && it.ok && (it.recommend_status === 'not_recommended' || it.recommend_status === 'warning')).length;
-            const okCnt = accountCheckResults.filter(it => it && it.ok && it.recommend_status === 'ok').length;
+            const notRecCnt = _filterAccountsByMode(accountCheckResults, 'not_recommended').length;
+            const okCnt = _filterAccountsByMode(accountCheckResults, 'ok').length;
             const errCnt = accountCheckResults.filter(it => !it || !it.ok).length;
 
             if (navBadge) {
@@ -5592,127 +5958,7 @@
                 return;
             }
 
-            listEl.innerHTML = visible.map(item => {
-                if (!item || !item.ok) {
-                    const dispIn = escapeHtml((item && (item.unique_id ? '@' + item.unique_id : item.input)) || 'Không rõ');
-                    const errTxt = escapeHtml((item && item.error) || 'Không tìm thấy tài khoản.');
-                    return `
-                        <div class="glass-panel rounded-2xl p-4 border border-slate-700/70 bg-slate-900/70 flex flex-wrap items-center justify-between gap-3">
-                            <div class="flex items-center gap-3">
-                                <div class="w-11 h-11 rounded-xl bg-rose-950/80 border border-rose-600/50 flex items-center justify-center text-rose-400">
-                                    <i class="fa-solid fa-user-xmark"></i>
-                                </div>
-                                <div>
-                                    <div class="font-mono font-bold text-white text-sm">${dispIn}</div>
-                                    <div class="text-xs text-rose-300 font-semibold">${errTxt}</div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                const rawUidClean = String(item.unique_id || '').replace(/[^a-zA-Z0-9._-]/g, '');
-                const cleanHandle = '@' + rawUidClean;
-                const nickSafe = escapeHtml(item.nickname || rawUidClean || 'TikTok User');
-                const avatarSrc = getProxiedImage(item.avatar || '', item.nickname || rawUidClean || 'User');
-                const regCode = item.region ? formatCountryCode(item.region) : '';
-                const regFull = regCode ? formatCountryFull(regCode, item.region_display) : 'Không rõ';
-                const flagHtml = getCountryFlag(regCode);
-                const folFmt = escapeHtml(item.followers_fmt || Number(item.followers || 0).toLocaleString('en-US'));
-                const createDate = escapeHtml(item.create_date || '—');
-
-                const st = String(item.recommend_status || 'ok');
-                let cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-slate-700/75 hover:border-emerald-500/45 transition';
-                let statusBadgeHtml = `
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/85 border border-emerald-500/60 text-emerald-300 font-extrabold">
-                        <i class="fa-solid fa-circle-check text-emerald-400"></i>
-                        <span>Đề xuất bình thường</span>
-                    </div>
-                `;
-                if (st === 'not_recommended') {
-                    cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-rose-500/75 bg-gradient-to-br from-rose-950/35 via-slate-900/90 to-dark-900/95 shadow-lg shadow-rose-950/30 transition';
-                    statusBadgeHtml = `
-                        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/95 border border-rose-500/85 text-rose-200 font-extrabold shadow-sm shadow-rose-950/60">
-                            <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
-                            <span>${escapeHtml(item.recommend_label || 'Tài khoản không được đề xuất')}</span>
-                        </div>
-                    `;
-                } else if (st === 'warning') {
-                    cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-amber-500/65 bg-amber-950/15 transition';
-                    statusBadgeHtml = `
-                        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/75 text-amber-200 font-extrabold">
-                            <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
-                            <span>${escapeHtml(item.recommend_label || 'Cảnh báo tài khoản')}</span>
-                        </div>
-                    `;
-                }
-
-                return `
-                    <div class="${cardCls}">
-                        <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-5">
-                            <div class="relative group flex-shrink-0">
-                                <img
-                                    src="${avatarSrc}"
-                                    alt="${nickSafe}"
-                                    class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 ${st === 'not_recommended' ? 'border-rose-500/70' : 'border-cyan-500/50'} shadow-xl group-hover:scale-105 transition duration-300"
-                                    onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(rawUidClean || 'TikTok')}&background=0d111a&color=38bdf8&size=128'"
-                                />
-                                <div class="absolute -bottom-2 -right-2 px-2 py-0.5 rounded-md bg-dark-900 border border-slate-700 text-[10px] font-bold text-cyan-400 shadow">
-                                    HD
-                                </div>
-                            </div>
-
-                            <div class="space-y-1.5 flex-grow min-w-0 w-full">
-                                <div class="flex flex-wrap items-center justify-center sm:justify-between gap-2">
-                                    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-                                        <h3 class="text-xl sm:text-2xl font-black text-white tracking-tight">${nickSafe}</h3>
-                                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-900/80 border border-blue-600/80 text-blue-200 font-bold inline-flex items-center gap-1.5">${flagHtml} <span>${escapeHtml(regFull)}</span></span>
-                                        ${item.is_private ? `<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-600 text-slate-300 font-bold">🔒 Riêng tư</span>` : ''}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onclick="jumpToChannelCheckFromAccount('${rawUidClean}')"
-                                        class="px-3 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-800 border border-cyan-500/50 text-cyan-200 hover:text-white text-xs font-extrabold transition inline-flex items-center gap-1.5 whitespace-nowrap"
-                                        title="Chuyển sang tab Kiểm Tra Kênh để quét trùng lặp & video của kênh này"
-                                    >
-                                        <i class="fa-solid fa-bolt text-amber-300"></i>
-                                        <span>Quét video</span>
-                                    </button>
-                                </div>
-
-                                <div class="flex items-center justify-center sm:justify-start gap-2 text-amber-400 font-mono text-sm font-bold">
-                                    <span>${escapeHtml(cleanHandle)}</span>
-                                    <button type="button" onclick="copyText('${escapeHtml(cleanHandle)}')" title="Copy username" class="text-slate-400 hover:text-white transition">
-                                        <i class="fa-regular fa-copy text-xs"></i>
-                                    </button>
-                                    <a href="https://www.tiktok.com/@${encodeURIComponent(rawUidClean)}" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-cyan-400 ml-1 transition" title="Mở trang cá nhân trên TikTok">
-                                        <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
-                                    </a>
-                                </div>
-
-                                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1.5 text-xs font-semibold">
-                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-emerald-400">
-                                        <i class="fa-regular fa-calendar-check text-emerald-400"></i>
-                                        <span>Ngày tạo:</span>
-                                        <span class="text-white font-mono font-bold">${createDate}</span>
-                                    </div>
-                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-sky-400">
-                                        <i class="fa-solid fa-globe text-sky-400"></i>
-                                        <span>Quốc gia:</span>
-                                        <span class="text-white font-medium inline-flex items-center gap-1.5">${flagHtml} <span>${escapeHtml(regFull)}</span></span>
-                                    </div>
-                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-purple-400">
-                                        <i class="fa-solid fa-user-group text-purple-400"></i>
-                                        <span class="text-white font-bold">${folFmt}</span>
-                                        <span>followers</span>
-                                    </div>
-                                    ${statusBadgeHtml}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            listEl.innerHTML = visible.map(item => buildAccountStatusCardHtml(item, { isHistory: false })).join('');
         }
 
         function handleCheckHistorySearchInput(el) {
@@ -5745,21 +5991,22 @@
             if (tabsBar) tabsBar.classList.remove('hidden');
             if (!currentVipUser) {
                 checkHistoryItems = [];
+                accountCheckHistoryItems = [];
                 checkHistoryLoadedForUser = '';
                 checkHistorySearchQuery = '';
+                accountCheckHistorySearchQuery = '';
                 expandedHistoryChannels.clear();
                 historyChannelVideoFilter = {};
-                const sEl = document.getElementById('checkHistorySearchInput');
-                if (sEl) {
-                    sEl.value = '';
-                    sEl.setAttribute('readonly', 'readonly');
+                for (const [id, clrId] of [['checkHistorySearchInput', 'btnClearHistorySearch'], ['accHistorySearchInput', 'btnClearAccHistorySearch']]) {
+                    const sEl = document.getElementById(id);
+                    if (sEl) {
+                        sEl.value = '';
+                        sEl.setAttribute('readonly', 'readonly');
+                    }
+                    document.getElementById(clrId)?.classList.add('hidden');
                 }
-                document.getElementById('btnClearHistorySearch')?.classList.add('hidden');
                 if (histTab) histTab.classList.add('hidden');
-                const navCnt = document.getElementById('checkHistoryNavCount');
-                if (navCnt) navCnt.innerText = '0';
-                const badgeCnt = document.getElementById('checkHistoryCountBadge');
-                if (badgeCnt) badgeCnt.innerText = '0 kênh';
+                updateCheckHistoryCounts();
                 switchMainWorkspaceTab(activeMainWorkspaceTab === 'history' ? 'checker' : activeMainWorkspaceTab);
                 return;
             }
@@ -5767,6 +6014,7 @@
             const curU = String(currentVipUser.username || '').trim().toLowerCase();
             if (curU && checkHistoryLoadedForUser !== curU) {
                 clearCheckHistorySearch();
+                clearAccHistorySearch();
                 loadCheckHistory(false);
             }
             switchMainWorkspaceTab(activeMainWorkspaceTab);
@@ -5778,17 +6026,201 @@
                 const resp = await fetch('/api/check-history', { headers: getDeviceHeaders(true) });
                 if (resp.status === 401) {
                     checkHistoryItems = [];
+                    accountCheckHistoryItems = [];
                     renderCheckHistory();
+                    renderAccountCheckHistory();
                     return;
                 }
                 const data = await safeParseJson(resp);
                 if (!data || !data.success) return;
                 checkHistoryLoadedForUser = String(currentVipUser.username || '').trim().toLowerCase();
                 checkHistoryItems = Array.isArray(data.items) ? data.items : [];
+                accountCheckHistoryItems = Array.isArray(data.account_items) ? data.account_items : [];
                 renderCheckHistory();
+                renderAccountCheckHistory();
             } catch (e) {
                 console.warn('Lỗi tải Lịch sử check:', e);
             }
+        }
+
+        function updateCheckHistoryCounts() {
+            const dedupCnt = checkHistoryItems.length;
+            const accCnt = accountCheckHistoryItems.length;
+            const navCnt = document.getElementById('checkHistoryNavCount');
+            const dBadge = document.getElementById('subTabHistDedupCount');
+            const aBadge = document.getElementById('subTabHistAccountCount');
+            const hdrBadge = document.getElementById('checkHistoryCountBadge');
+            if (navCnt) navCnt.innerText = String(dedupCnt + accCnt);
+            if (dBadge) dBadge.innerText = String(dedupCnt);
+            if (aBadge) aBadge.innerText = String(accCnt);
+            if (hdrBadge) {
+                hdrBadge.innerText = (activeCheckHistorySubTab === 'account') ? `${accCnt} tài khoản` : `${dedupCnt} kênh`;
+            }
+        }
+
+        function switchCheckHistorySubTab(subTab) {
+            activeCheckHistorySubTab = (subTab === 'account') ? 'account' : 'dedup';
+            const dedupPanel = document.getElementById('checkHistoryDedupPanel');
+            const accPanel = document.getElementById('checkHistoryAccountPanel');
+            const dedupBtn = document.getElementById('subTabHistDedup');
+            const accBtn = document.getElementById('subTabHistAccount');
+
+            if (dedupPanel) dedupPanel.classList.toggle('hidden', activeCheckHistorySubTab !== 'dedup');
+            if (accPanel) accPanel.classList.toggle('hidden', activeCheckHistorySubTab !== 'account');
+
+            const onCls = 'px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-extrabold text-xs flex items-center gap-1.5 transition whitespace-nowrap shadow';
+            const offCls = 'px-3.5 py-1.5 rounded-lg bg-transparent hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition whitespace-nowrap';
+            if (dedupBtn) dedupBtn.className = (activeCheckHistorySubTab === 'dedup') ? onCls : offCls;
+            if (accBtn) accBtn.className = (activeCheckHistorySubTab === 'account') ? onCls : offCls;
+
+            updateCheckHistoryCounts();
+            if (activeCheckHistorySubTab === 'account') {
+                renderAccountCheckHistory();
+            } else {
+                renderCheckHistory();
+            }
+        }
+
+        function handleAccHistorySearchInput(el) {
+            if (!el) return;
+            if (document.activeElement !== el) {
+                el.value = accountCheckHistorySearchQuery;
+                if (!accountCheckHistorySearchQuery) el.setAttribute('readonly', 'readonly');
+                return;
+            }
+            accountCheckHistorySearchQuery = String(el.value || '');
+            document.getElementById('btnClearAccHistorySearch')?.classList.toggle('hidden', !accountCheckHistorySearchQuery.trim());
+            renderAccountCheckHistory();
+        }
+
+        function clearAccHistorySearch() {
+            accountCheckHistorySearchQuery = '';
+            const el = document.getElementById('accHistorySearchInput');
+            if (el) {
+                el.value = '';
+                el.setAttribute('readonly', 'readonly');
+            }
+            document.getElementById('btnClearAccHistorySearch')?.classList.add('hidden');
+            renderAccountCheckHistory();
+        }
+
+        function setAccountCheckHistoryFilter(mode) {
+            accountCheckHistoryFilter = mode || 'all';
+            renderAccountCheckHistory();
+        }
+
+        function copyAccountCheckHistoryHandles(mode) {
+            _copyAccountHandlesFromList(accountCheckHistoryItems, mode);
+        }
+
+        function recheckAccountFromHistory(username) {
+            const clean = String(username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+            if (!clean) return;
+            const el = document.getElementById('accountCheckInput');
+            if (el) el.value = `@${clean}\n`;
+            updateAccountCheckInputCount();
+            switchMainWorkspaceTab('account_check');
+            runBulkAccountCheck();
+        }
+
+        async function deleteAccountCheckHistoryItem(username) {
+            const key = String(username || '').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+            if (!key || !currentVipUser) return;
+            try {
+                const resp = await fetch(`/api/account-check-history/${encodeURIComponent(key)}`, {
+                    method: 'DELETE',
+                    headers: getDeviceHeaders(true),
+                });
+                const d = await safeParseJson(resp);
+                if (!d || !d.success) {
+                    showToast(d?.error || 'Không thể xóa tài khoản khỏi lịch sử.');
+                    return;
+                }
+                accountCheckHistoryItems = accountCheckHistoryItems.filter(it => String(it.username || it.unique_id || '').toLowerCase() !== key);
+                renderAccountCheckHistory();
+                showToast(`🗑️ Đã xóa @${key} khỏi Lịch sử Check Tài Khoản.`);
+            } catch (e) {
+                showToast('Lỗi xóa lịch sử: ' + e.message);
+            }
+        }
+
+        async function clearAllAccountCheckHistory() {
+            if (!currentVipUser || accountCheckHistoryItems.length === 0) return;
+            if (!confirm(`Xóa toàn bộ ${accountCheckHistoryItems.length} tài khoản trong Lịch sử Check Tài Khoản của "${currentVipUser.username}"?`)) return;
+            try {
+                const resp = await fetch('/api/account-check-history', {
+                    method: 'DELETE',
+                    headers: getDeviceHeaders(true),
+                });
+                const d = await safeParseJson(resp);
+                if (!d || !d.success) {
+                    showToast(d?.error || 'Không thể xóa lịch sử.');
+                    return;
+                }
+                accountCheckHistoryItems = [];
+                renderAccountCheckHistory();
+                showToast('🗑️ Đã xóa sạch Lịch sử Check Tài Khoản.');
+            } catch (e) {
+                showToast('Lỗi xóa lịch sử: ' + e.message);
+            }
+        }
+
+        function renderAccountCheckHistory() {
+            updateCheckHistoryCounts();
+            const listEl = document.getElementById('accountCheckHistoryList');
+            const emptyEl = document.getElementById('accountCheckHistoryEmpty');
+            const emptyTextEl = document.getElementById('accountCheckHistoryEmptyText');
+            if (!listEl || !emptyEl) return;
+
+            const searchEl = document.getElementById('accHistorySearchInput');
+            if (searchEl && document.activeElement !== searchEl && searchEl.value !== accountCheckHistorySearchQuery) {
+                searchEl.value = accountCheckHistorySearchQuery;
+                if (!accountCheckHistorySearchQuery) searchEl.setAttribute('readonly', 'readonly');
+            }
+            document.getElementById('btnClearAccHistorySearch')?.classList.toggle('hidden', !accountCheckHistorySearchQuery.trim());
+
+            const totalAll = accountCheckHistoryItems.length;
+            const notRecCnt = _filterAccountsByMode(accountCheckHistoryItems, 'not_recommended').length;
+            const okCnt = _filterAccountsByMode(accountCheckHistoryItems, 'ok').length;
+
+            const setAccHistPill = (id, label, active, activeCls, baseCls) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerText = label;
+                el.className = active
+                    ? `px-3 py-1.5 rounded-xl ${activeCls} text-white transition whitespace-nowrap`
+                    : `px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 ${baseCls} border border-slate-700 transition whitespace-nowrap`;
+            };
+            setAccHistPill('accHistFilterAll', `Tất cả (${totalAll})`, accountCheckHistoryFilter === 'all', 'bg-cyan-600', 'text-slate-300');
+            setAccHistPill('accHistFilterNotRec', `⚠️ Không được đề xuất (${notRecCnt})`, accountCheckHistoryFilter === 'not_recommended', 'bg-rose-600', 'text-rose-300');
+            setAccHistPill('accHistFilterOk', `✅ Đề xuất bình thường (${okCnt})`, accountCheckHistoryFilter === 'ok', 'bg-emerald-600', 'text-emerald-300');
+
+            const q = String(accountCheckHistorySearchQuery || '').trim().toLowerCase().replace(/^@+/, '');
+            const filtered = accountCheckHistoryItems.filter(item => {
+                const u = String(item.username || item.unique_id || '').toLowerCase();
+                const nick = String(item.nickname || '').toLowerCase();
+                if (q && !u.includes(q) && !nick.includes(q)) return false;
+                if (accountCheckHistoryFilter === 'not_recommended') {
+                    return item.recommend_status === 'not_recommended' || item.recommend_status === 'warning';
+                }
+                if (accountCheckHistoryFilter === 'ok') {
+                    return item.recommend_status === 'ok';
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = '';
+                emptyEl.classList.remove('hidden');
+                if (emptyTextEl) {
+                    emptyTextEl.innerText = totalAll > 0
+                        ? 'Không có tài khoản nào khớp với bộ lọc / tìm kiếm hiện tại.'
+                        : 'Chưa có lịch sử Check Tài Khoản nào trong 7 ngày gần nhất.';
+                }
+                return;
+            }
+            emptyEl.classList.add('hidden');
+            listEl.innerHTML = filtered.map(item => buildAccountStatusCardHtml(item, { isHistory: true })).join('');
         }
 
         function toggleCheckHistoryPanel(forceState = null, _shouldScroll = true) {
@@ -5978,12 +6410,9 @@
             const listEl = document.getElementById('checkHistoryList');
             const emptyEl = document.getElementById('checkHistoryEmpty');
             const emptyTextEl = document.getElementById('checkHistoryEmptyText');
-            const navCnt = document.getElementById('checkHistoryNavCount');
-            const badgeCnt = document.getElementById('checkHistoryCountBadge');
 
+            updateCheckHistoryCounts();
             const totalAll = checkHistoryItems.length;
-            if (navCnt) navCnt.innerText = String(totalAll);
-            if (badgeCnt) badgeCnt.innerText = `${totalAll} kênh`;
             if (!listEl || !emptyEl) return;
 
             const searchEl = document.getElementById('checkHistorySearchInput');

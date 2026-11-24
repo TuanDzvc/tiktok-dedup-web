@@ -355,6 +355,7 @@ VIP_SYNC_META_FILE = BASE_DIR / "vip_sync_meta.json"
 CHECK_HISTORY_FILE = BASE_DIR / "check_history.json"
 CHECK_HISTORY_TTL_SECONDS = 7 * 86400
 CHECK_HISTORY_MAX_CHANNELS = 60
+CHECK_HISTORY_MAX_ACCOUNTS = 300
 CHECK_HISTORY_MAX_VIDEOS = 100
 ENV_FILE = BASE_DIR / ".env"
 _VIP_LOCK = threading.Lock()
@@ -572,8 +573,81 @@ def _compact_history_video(v: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _prune_history_bucket_unlocked(
+    entries: Dict[str, Any],
+    deleted: Dict[str, Any],
+    cutoff: int,
+    max_items: int,
+) -> bool:
+    """Dọn các mục hết hạn (>7 ngày) và giới hạn số lượng tối đa trong 1 ngăn lịch sử."""
+    changed = False
+    for h_key in list(entries.keys()):
+        rec = entries.get(h_key)
+        chk_at = int(rec.get("checked_at") or 0) if isinstance(rec, dict) else 0
+        if not isinstance(rec, dict) or chk_at <= 0 or chk_at < cutoff:
+            entries.pop(h_key, None)
+            changed = True
+
+    for d_key in list(deleted.keys()):
+        d_ts = int(deleted.get(d_key) or 0)
+        if d_ts <= 0 or d_ts < cutoff:
+            deleted.pop(d_key, None)
+            changed = True
+
+    if len(entries) > max_items:
+        keep_items = sorted(entries.items(), key=lambda kv: -int((kv[1] or {}).get("checked_at") or 0))[:max_items]
+        entries.clear()
+        entries.update(keep_items)
+        changed = True
+    return changed
+
+
+def _merge_history_bucket(
+    l_ent: Dict[str, Any],
+    r_ent: Dict[str, Any],
+    l_del: Dict[str, Any],
+    r_del: Dict[str, Any],
+    cutoff: int,
+    tie_score_fn=None,
+) -> tuple:
+    """Trộn 2 chiều 1 ngăn lịch sử theo timestamp mới nhất và tôn trọng tombstone xóa."""
+    merged_del: Dict[str, int] = {}
+    for dk in set(l_del.keys()) | set(r_del.keys()):
+        dk_c = str(dk or "").lstrip("@").strip().lower()
+        if not dk_c:
+            continue
+        dt_val = max(int(l_del.get(dk) or 0), int(r_del.get(dk) or 0))
+        if dt_val >= cutoff:
+            merged_del[dk_c] = dt_val
+
+    merged_ent: Dict[str, Any] = {}
+    for hk in set(l_ent.keys()) | set(r_ent.keys()):
+        hk_c = str(hk or "").lstrip("@").strip().lower()
+        if not hk_c:
+            continue
+        le = l_ent.get(hk) if isinstance(l_ent.get(hk), dict) else None
+        re_obj = r_ent.get(hk) if isinstance(r_ent.get(hk), dict) else None
+        if not le and not re_obj:
+            continue
+        lt = int((le or {}).get("checked_at") or 0)
+        rt = int((re_obj or {}).get("checked_at") or 0)
+        if lt != rt:
+            pick_e = le if lt > rt else re_obj
+        elif tie_score_fn is not None:
+            pick_e = le if tie_score_fn(le) >= tie_score_fn(re_obj) else re_obj
+        else:
+            pick_e = le or re_obj
+        if not isinstance(pick_e, dict):
+            continue
+        chk_ts = int(pick_e.get("checked_at") or 0)
+        if chk_ts < cutoff or merged_del.get(hk_c, 0) >= chk_ts:
+            continue
+        merged_ent[hk_c] = json.loads(json.dumps(pick_e))
+    return merged_ent, merged_del
+
+
 def _prune_check_history_unlocked(hmap: Dict[str, Any], now_ts: Optional[int] = None) -> bool:
-    """Dọn lịch sử check quá 7 ngày và giới hạn tối đa CHECK_HISTORY_MAX_CHANNELS kênh/tài khoản."""
+    """Dọn lịch sử check quá 7 ngày (cả Check Trùng & Check Tài Khoản) cho từng user."""
     if not isinstance(hmap, dict):
         return False
     cur_ts = int(now_ts if now_ts is not None else time.time())
@@ -596,26 +670,23 @@ def _prune_check_history_unlocked(hmap: Dict[str, Any], now_ts: Optional[int] = 
             deleted = {}
             acct_box["deleted"] = deleted
             changed = True
-
-        for h_key in list(entries.keys()):
-            rec = entries.get(h_key)
-            chk_at = int(rec.get("checked_at") or 0) if isinstance(rec, dict) else 0
-            if not isinstance(rec, dict) or chk_at <= 0 or chk_at < cutoff:
-                entries.pop(h_key, None)
-                changed = True
-
-        for d_key in list(deleted.keys()):
-            d_ts = int(deleted.get(d_key) or 0)
-            if d_ts <= 0 or d_ts < cutoff:
-                deleted.pop(d_key, None)
-                changed = True
-
-        if len(entries) > CHECK_HISTORY_MAX_CHANNELS:
-            keep_items = sorted(entries.items(), key=lambda kv: -int((kv[1] or {}).get("checked_at") or 0))[:CHECK_HISTORY_MAX_CHANNELS]
-            acct_box["entries"] = dict(keep_items)
+        acc_entries = acct_box.get("account_entries")
+        if not isinstance(acc_entries, dict):
+            acc_entries = {}
+            acct_box["account_entries"] = acc_entries
+            changed = True
+        acc_deleted = acct_box.get("account_deleted")
+        if not isinstance(acc_deleted, dict):
+            acc_deleted = {}
+            acct_box["account_deleted"] = acc_deleted
             changed = True
 
-        if not acct_box["entries"] and not acct_box["deleted"]:
+        if _prune_history_bucket_unlocked(entries, deleted, cutoff, CHECK_HISTORY_MAX_CHANNELS):
+            changed = True
+        if _prune_history_bucket_unlocked(acc_entries, acc_deleted, cutoff, CHECK_HISTORY_MAX_ACCOUNTS):
+            changed = True
+
+        if not entries and not deleted and not acc_entries and not acc_deleted:
             hmap.pop(acct_key, None)
             changed = True
 
@@ -694,7 +765,7 @@ def _record_check_history_for_user(
     with _HISTORY_LOCK:
         hmap = _load_check_history_unlocked()
         _prune_check_history_unlocked(hmap, now_ts)
-        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}})
+        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}, "account_entries": {}, "account_deleted": {}})
         entries = acct_box.setdefault("entries", {})
         deleted = acct_box.setdefault("deleted", {})
 
@@ -739,6 +810,59 @@ def _record_check_history_for_user(
             "stats": stats,
         }
         deleted.pop(target_handle, None)
+        _prune_check_history_unlocked(hmap, now_ts)
+        _save_check_history_unlocked(hmap, schedule_sync=True)
+
+
+def _record_account_check_history_for_user(
+    account_username: str,
+    results: List[Dict[str, Any]],
+) -> None:
+    """Ghi lịch sử Check Tài Khoản cho tài khoản đã đăng nhập (ghi đè lần mới nhất, tự hết hạn 7 ngày)."""
+    acct = str(account_username or "").strip().lower()
+    if not acct or not isinstance(results, list) or not results:
+        return
+
+    now_ts = int(time.time())
+    compact_items: List[Dict[str, Any]] = []
+    for item in results:
+        if not isinstance(item, dict) or not item.get("ok"):
+            continue
+        raw_h = item.get("unique_id") or item.get("username") or ""
+        target_handle = re.sub(r"[^a-zA-Z0-9._-]", "", str(raw_h).lstrip("@").strip().lower())
+        if not target_handle:
+            continue
+        compact_items.append({
+            "username": target_handle,
+            "unique_id": target_handle,
+            "nickname": str(item.get("nickname") or target_handle),
+            "uid": str(item.get("uid") or ""),
+            "avatar": str(item.get("avatar") or ""),
+            "create_date": str(item.get("create_date") or "—"),
+            "region": str(item.get("region") or ""),
+            "region_display": str(item.get("region_display") or "Không rõ"),
+            "followers": int(item.get("followers") or 0),
+            "followers_fmt": str(item.get("followers_fmt") or "0"),
+            "is_private": bool(item.get("is_private", False)),
+            "recommend_status": str(item.get("recommend_status") or "ok"),
+            "recommend_label": str(item.get("recommend_label") or "Đề xuất bình thường"),
+            "is_not_recommended": bool(item.get("is_not_recommended", False)),
+            "checked_at": now_ts,
+        })
+
+    if not compact_items:
+        return
+
+    with _HISTORY_LOCK:
+        hmap = _load_check_history_unlocked()
+        _prune_check_history_unlocked(hmap, now_ts)
+        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}, "account_entries": {}, "account_deleted": {}})
+        acc_entries = acct_box.setdefault("account_entries", {})
+        acc_deleted = acct_box.setdefault("account_deleted", {})
+        for rec in compact_items:
+            hk = rec["username"]
+            acc_entries[hk] = rec
+            acc_deleted.pop(hk, None)
         _prune_check_history_unlocked(hmap, now_ts)
         _save_check_history_unlocked(hmap, schedule_sync=True)
 
@@ -1421,7 +1545,7 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
         m_day[kq] = max(int(m_day.get(kq) or 0), int(vq or 0))
     m_qmap = {day_k: m_day} if m_day else {}
 
-    # 7. Trộn check_history theo từng tài khoản (ưu tiên bản mới nhất, tôn trọng tombstone xóa & hết hạn 7 ngày)
+    # 7. Trộn check_history (Check Trùng + Check Tài Khoản) theo từng tài khoản
     now_hist_ts = int(time.time())
     hist_cutoff = now_hist_ts - CHECK_HISTORY_TTL_SECONDS
     m_hist: Dict[str, Any] = {}
@@ -1431,46 +1555,30 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
             continue
         la = l_hist.get(raw_acct) if isinstance(l_hist.get(raw_acct), dict) else {}
         ra = r_hist.get(raw_acct) if isinstance(r_hist.get(raw_acct), dict) else {}
-        l_ent = la.get("entries") if isinstance(la.get("entries"), dict) else {}
-        r_ent = ra.get("entries") if isinstance(ra.get("entries"), dict) else {}
-        l_del_h = la.get("deleted") if isinstance(la.get("deleted"), dict) else {}
-        r_del_h = ra.get("deleted") if isinstance(ra.get("deleted"), dict) else {}
 
-        merged_del_h: Dict[str, int] = {}
-        for dk in set(l_del_h.keys()) | set(r_del_h.keys()):
-            dk_c = str(dk or "").lstrip("@").strip().lower()
-            if not dk_c:
-                continue
-            dt_val = max(int(l_del_h.get(dk) or 0), int(r_del_h.get(dk) or 0))
-            if dt_val >= hist_cutoff:
-                merged_del_h[dk_c] = dt_val
+        merged_ent_h, merged_del_h = _merge_history_bucket(
+            la.get("entries") if isinstance(la.get("entries"), dict) else {},
+            ra.get("entries") if isinstance(ra.get("entries"), dict) else {},
+            la.get("deleted") if isinstance(la.get("deleted"), dict) else {},
+            ra.get("deleted") if isinstance(ra.get("deleted"), dict) else {},
+            hist_cutoff,
+            tie_score_fn=lambda e: len((e or {}).get("videos") or []),
+        )
+        merged_acc_ent, merged_acc_del = _merge_history_bucket(
+            la.get("account_entries") if isinstance(la.get("account_entries"), dict) else {},
+            ra.get("account_entries") if isinstance(ra.get("account_entries"), dict) else {},
+            la.get("account_deleted") if isinstance(la.get("account_deleted"), dict) else {},
+            ra.get("account_deleted") if isinstance(ra.get("account_deleted"), dict) else {},
+            hist_cutoff,
+        )
 
-        merged_ent_h: Dict[str, Any] = {}
-        for hk in set(l_ent.keys()) | set(r_ent.keys()):
-            hk_c = str(hk or "").lstrip("@").strip().lower()
-            if not hk_c:
-                continue
-            le = l_ent.get(hk) if isinstance(l_ent.get(hk), dict) else None
-            re_obj = r_ent.get(hk) if isinstance(r_ent.get(hk), dict) else None
-            if not le and not re_obj:
-                continue
-            lt = int((le or {}).get("checked_at") or 0)
-            rt = int((re_obj or {}).get("checked_at") or 0)
-            if lt != rt:
-                pick_e = le if lt > rt else re_obj
-            else:
-                lv = len((le or {}).get("videos") or [])
-                rv = len((re_obj or {}).get("videos") or [])
-                pick_e = le if lv >= rv else re_obj
-            if not isinstance(pick_e, dict):
-                continue
-            chk_ts = int(pick_e.get("checked_at") or 0)
-            if chk_ts < hist_cutoff or merged_del_h.get(hk_c, 0) >= chk_ts:
-                continue
-            merged_ent_h[hk_c] = json.loads(json.dumps(pick_e))
-
-        if merged_ent_h or merged_del_h:
-            m_hist[acct_k] = {"entries": merged_ent_h, "deleted": merged_del_h}
+        if merged_ent_h or merged_del_h or merged_acc_ent or merged_acc_del:
+            m_hist[acct_k] = {
+                "entries": merged_ent_h,
+                "deleted": merged_del_h,
+                "account_entries": merged_acc_ent,
+                "account_deleted": merged_acc_del,
+            }
     _prune_check_history_unlocked(m_hist, now_hist_ts)
 
     m_meta = {"deleted_users": m_del, "unblocked_devices": m_unblk}
@@ -3549,6 +3657,12 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
         if not has_vip_access:
             batch_res["free_quota"] = _consume_free_quota(dev_id, checked_username, amount=checked_total)
 
+    if vip_user and checked_username:
+        try:
+            _record_account_check_history_for_user(checked_username, batch_res.get("results") or [])
+        except Exception as e_ahist:
+            logger.warning(f"[CheckHistory] Lỗi ghi lịch sử Check Tài Khoản: {e_ahist}")
+
     av_items = [{"cover_url": it["avatar"]} for it in (batch_res.get("results") or []) if isinstance(it, dict) and it.get("avatar")]
     if av_items:
         background_tasks.add_task(prefetch_thumbnails, av_items)
@@ -3556,9 +3670,49 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
     return JSONResponse(content=batch_res)
 
 
+def _clear_history_bucket_response(req: Request, entries_key: str, deleted_key: str):
+    vip_user = _extract_vip_user(req)
+    if not vip_user:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
+    acct = str(vip_user.get("username") or "").strip().lower()
+    now_ts = int(time.time())
+    with _HISTORY_LOCK:
+        hmap = _load_check_history_unlocked()
+        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}, "account_entries": {}, "account_deleted": {}})
+        entries = acct_box.get(entries_key) if isinstance(acct_box.get(entries_key), dict) else {}
+        deleted = acct_box.setdefault(deleted_key, {})
+        for k in list(entries.keys()):
+            deleted[str(k).lstrip("@").strip().lower()] = now_ts
+        acct_box[entries_key] = {}
+        _prune_check_history_unlocked(hmap, now_ts)
+        _save_check_history_unlocked(hmap, schedule_sync=True)
+    return JSONResponse(content={"success": True})
+
+
+def _delete_history_item_response(req: Request, target_username: str, entries_key: str, deleted_key: str, invalid_msg: str):
+    vip_user = _extract_vip_user(req)
+    if not vip_user:
+        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
+    acct = str(vip_user.get("username") or "").strip().lower()
+    target = re.sub(r"[^a-zA-Z0-9._-]", "", str(target_username or "").lstrip("@").strip().lower())
+    if not target:
+        return JSONResponse(status_code=400, content={"success": False, "error": invalid_msg})
+    now_ts = int(time.time())
+    with _HISTORY_LOCK:
+        hmap = _load_check_history_unlocked()
+        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}, "account_entries": {}, "account_deleted": {}})
+        entries = acct_box.get(entries_key) if isinstance(acct_box.get(entries_key), dict) else {}
+        deleted = acct_box.setdefault(deleted_key, {})
+        entries.pop(target, None)
+        deleted[target] = now_ts
+        _prune_check_history_unlocked(hmap, now_ts)
+        _save_check_history_unlocked(hmap, schedule_sync=True)
+    return JSONResponse(content={"success": True, "deleted": target})
+
+
 @app.get("/api/check-history")
 def api_get_check_history(req: Request):
-    """Lấy danh sách Lịch sử check của tài khoản đang đăng nhập (tự động xóa mục quá 7 ngày)."""
+    """Lấy danh sách Lịch sử check (Check Trùng + Check Tài Khoản) của tài khoản đang đăng nhập (tự động xóa sau 7 ngày)."""
     vip_user = _extract_vip_user(req)
     if not vip_user:
         return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
@@ -3570,8 +3724,13 @@ def api_get_check_history(req: Request):
             _save_check_history_unlocked(hmap, schedule_sync=False)
         acct_box = hmap.get(acct) if isinstance(hmap.get(acct), dict) else {}
         entries = acct_box.get("entries") if isinstance(acct_box.get("entries"), dict) else {}
+        acc_entries = acct_box.get("account_entries") if isinstance(acct_box.get("account_entries"), dict) else {}
         items = sorted(
             (v for v in entries.values() if isinstance(v, dict)),
+            key=lambda x: -int(x.get("checked_at") or 0),
+        )
+        account_items = sorted(
+            (v for v in acc_entries.values() if isinstance(v, dict)),
             key=lambda x: -int(x.get("checked_at") or 0),
         )
     return JSONResponse(content={
@@ -3579,51 +3738,32 @@ def api_get_check_history(req: Request):
         "ttl_days": 7,
         "account": acct,
         "items": items,
+        "account_items": account_items,
     })
 
 
 @app.delete("/api/check-history")
 def api_clear_all_check_history(req: Request):
-    """Xóa toàn bộ Lịch sử check của tài khoản đang đăng nhập."""
-    vip_user = _extract_vip_user(req)
-    if not vip_user:
-        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
-    acct = str(vip_user.get("username") or "").strip().lower()
-    now_ts = int(time.time())
-    with _HISTORY_LOCK:
-        hmap = _load_check_history_unlocked()
-        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}})
-        entries = acct_box.get("entries") if isinstance(acct_box.get("entries"), dict) else {}
-        deleted = acct_box.setdefault("deleted", {})
-        for k in list(entries.keys()):
-            deleted[str(k).lstrip("@").strip().lower()] = now_ts
-        acct_box["entries"] = {}
-        _prune_check_history_unlocked(hmap, now_ts)
-        _save_check_history_unlocked(hmap, schedule_sync=True)
-    return JSONResponse(content={"success": True})
+    """Xóa toàn bộ Lịch sử Check Trùng của tài khoản đang đăng nhập."""
+    return _clear_history_bucket_response(req, "entries", "deleted")
 
 
 @app.delete("/api/check-history/{target_username}")
 def api_delete_check_history_item(req: Request, target_username: str):
-    """Xóa 1 kênh cụ thể khỏi Lịch sử check của tài khoản đang đăng nhập."""
-    vip_user = _extract_vip_user(req)
-    if not vip_user:
-        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
-    acct = str(vip_user.get("username") or "").strip().lower()
-    target = re.sub(r"[^a-zA-Z0-9._-]", "", str(target_username or "").lstrip("@").strip().lower())
-    if not target:
-        return JSONResponse(status_code=400, content={"success": False, "error": "Tên kênh không hợp lệ."})
-    now_ts = int(time.time())
-    with _HISTORY_LOCK:
-        hmap = _load_check_history_unlocked()
-        acct_box = hmap.setdefault(acct, {"entries": {}, "deleted": {}})
-        entries = acct_box.get("entries") if isinstance(acct_box.get("entries"), dict) else {}
-        deleted = acct_box.setdefault("deleted", {})
-        entries.pop(target, None)
-        deleted[target] = now_ts
-        _prune_check_history_unlocked(hmap, now_ts)
-        _save_check_history_unlocked(hmap, schedule_sync=True)
-    return JSONResponse(content={"success": True, "deleted": target})
+    """Xóa 1 kênh cụ thể khỏi Lịch sử Check Trùng của tài khoản đang đăng nhập."""
+    return _delete_history_item_response(req, target_username, "entries", "deleted", "Tên kênh không hợp lệ.")
+
+
+@app.delete("/api/account-check-history")
+def api_clear_all_account_check_history(req: Request):
+    """Xóa toàn bộ Lịch sử Check Tài Khoản của tài khoản đang đăng nhập."""
+    return _clear_history_bucket_response(req, "account_entries", "account_deleted")
+
+
+@app.delete("/api/account-check-history/{target_username}")
+def api_delete_account_check_history_item(req: Request, target_username: str):
+    """Xóa 1 tài khoản khỏi Lịch sử Check Tài Khoản của tài khoản đang đăng nhập."""
+    return _delete_history_item_response(req, target_username, "account_entries", "account_deleted", "Tên tài khoản không hợp lệ.")
 
 @app.get("/api/proxy/image")
 def proxy_image(
