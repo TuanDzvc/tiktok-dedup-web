@@ -8,6 +8,8 @@ Trạng thái triển khai: PC đã cập nhật và domain trả `X-Served-By: 
 
 Hiển thị chi phí cho Admin: tab Check trùng không hiện số dư API hoặc số lượt check trùng quy đổi. Reader riêng không hiện banner chi phí hay nhãn giá Quét thêm. Chỉ khi kết quả thật dùng API dự phòng mới hiện chi phí lượt quét; số dư API chỉ xuất hiện ở tab Check tài khoản. Backend không gọi API tra số dư cho lượt đọc bằng reader riêng. Giá/quota/ví khách hàng không thay đổi.
 
+Ví header của VIP/khách cũng chỉ hiện ở tab Check tài khoản, gồm số dư và lượt check tài khoản; ẩn ở Kiểm tra kênh và Lịch sử. Thanh ví kênh/lịch sử được ẩn; banner chi phí khách không hiện số dư/lượt check trùng và chỉ hiện khi dùng API dự phòng. Đã test bằng fixture role user/VIP: kênh ẩn → tài khoản hiện 199.870đ / 799 lượt check tài khoản → trở lại kênh ẩn.
+
 Đăng nhập Admin → Quản Lý Tài Khoản → Phiên TikTok. Có trạng thái reader, lần đọc thành công/nạp phiên, kết nối MuMu, lịch sử nguồn đọc và số lượt dự phòng; bật/tắt ưu tiên reader/API dự phòng; nút kiểm tra và nạp phiên.
 
 Reader tốt → lấy aweme_list/group_id/cờ FYP trực tiếp, không gọi TikHub cho dữ liệu check. Reader lỗi/thiếu group_id/không kết nối được → dùng engine API cũ nếu bật dự phòng, có cảnh báo riêng cho Admin. Nếu API cũng lỗi, kết quả vẫn lỗi và luồng ví cũ không thu phí thành công giả.

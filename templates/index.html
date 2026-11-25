@@ -258,7 +258,7 @@
                 </p>
 
                 <!-- Thanh Ví Tab Kiểm Tra Kênh (chỉ hiện số lượt Check Trùng · Ẩn với Admin) -->
-                <div id="dedupWalletBar" class="rounded-2xl p-3 sm:px-4 sm:py-2.5 bg-gradient-to-r from-slate-950/95 via-cyan-950/30 to-emerald-950/30 border border-cyan-500/35 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-2.5 text-left">
+                <div id="dedupWalletBar" class="hidden rounded-2xl p-3 sm:px-4 sm:py-2.5 bg-gradient-to-r from-slate-950/95 via-cyan-950/30 to-emerald-950/30 border border-cyan-500/35 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-2.5 text-left">
                     <div class="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
                         <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 border border-cyan-400/40 flex items-center justify-center flex-shrink-0">
                             <i class="fa-solid fa-wallet text-emerald-400 text-sm"></i>
@@ -3070,8 +3070,8 @@
                     type="button"
                     id="userBalNavBtn"
                     onclick="openVipQrModal()"
-                    class="group px-2.5 sm:px-3 py-1 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-emerald-500/45 hover:border-emerald-400/80 shadow-lg shadow-emerald-950/35 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
-                    title="Ví chung: ${userBalVndNav.toLocaleString('vi-VN')}đ (~${userDedupLeftNav.toLocaleString('vi-VN')} lượt check trùng · ~${userChecksLeftNav.toLocaleString('vi-VN')} lượt check tài khoản) — bấm để nạp tiền"
+                    class="hidden group px-2.5 sm:px-3 py-1 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-emerald-500/45 hover:border-emerald-400/80 shadow-lg shadow-emerald-950/35 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
+                    title="Ví Check Tài Khoản: ${userBalVndNav.toLocaleString('vi-VN')}đ (~${userChecksLeftNav.toLocaleString('vi-VN')} lượt check tài khoản) — bấm để nạp tiền"
                 >
                     <span class="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 border border-emerald-400/40 flex items-center justify-center flex-shrink-0">
                         <i class="fa-solid fa-wallet text-emerald-400 text-xs"></i>
@@ -3145,6 +3145,9 @@
         function syncAdminBillingVisibility() {
             const admin = canCurrentUserSeeBilling();
             const accountTab = activeMainWorkspaceTab === 'account_check';
+            document.getElementById('userBalNavBtn')?.classList.toggle('hidden', !currentVipUser || admin || !accountTab);
+            document.getElementById('dedupWalletBar')?.classList.add('hidden');
+            document.getElementById('historyWalletBar')?.classList.add('hidden');
             document.getElementById('adminApiBalanceNav')?.classList.toggle('hidden', !admin || !accountTab);
             document.getElementById('vipApiBalanceCard')?.classList.toggle('hidden', !admin || !accountTab);
             document.getElementById('adminScanCostBanner')?.classList.toggle('hidden', !admin || activeMainWorkspaceTab !== 'checker' || !lastDedupUsedApi || !lastDedupBilling);
@@ -3247,7 +3250,7 @@
             }
 
             walletBar?.classList.remove('hidden');
-            dedupWalletBar?.classList.remove('hidden');
+            dedupWalletBar?.classList.add('hidden');
             tabBadge?.classList.remove('hidden');
             heroBr?.classList.remove('hidden');
             heroPricing?.classList.remove('hidden');
@@ -3287,7 +3290,7 @@
             if (dedupBarDedupEl) dedupBarDedupEl.innerText = `~${dedupChecks.toLocaleString('vi-VN')} lượt check trùng`;
 
             const isAccHistSubTab = (typeof activeCheckHistorySubTab !== 'undefined' && activeCheckHistorySubTab === 'account');
-            historyWalletBar?.classList.remove('hidden');
+            historyWalletBar?.classList.add('hidden');
             if (histUserEl) histUserEl.innerText = `@${currentVipUser.username || ''}`;
             if (histBalEl) histBalEl.innerText = `${bal.toLocaleString('vi-VN')}đ`;
             if (histDedupEl) {
@@ -3313,7 +3316,8 @@
                 navB.classList.toggle('leading-[1.15]', isHistoryTabNow);
             }
             if (navC) navC.innerHTML = getNavChecksHtmlForActiveTab(bal);
-            if (navBtn) navBtn.title = `Ví chung: ${bal.toLocaleString('vi-VN')}đ (~${dedupChecks.toLocaleString('vi-VN')} lượt check trùng · ~${checks.toLocaleString('vi-VN')} lượt check tài khoản) — bấm để nạp tiền`;
+            if (navBtn) navBtn.title = `Ví Check Tài Khoản: ${bal.toLocaleString('vi-VN')}đ (~${checks.toLocaleString('vi-VN')} lượt check tài khoản) — bấm để nạp tiền`;
+            syncAdminBillingVisibility();
         }
 
         function canCurrentUserLoadMore() {
@@ -5541,9 +5545,8 @@
                     const chD = Number(ubD.charged_vnd || 0);
                     userDedupBanner.innerHTML = `
                         <span class="flex items-center gap-2"><i class="fa-solid fa-coins text-amber-300"></i> Đã trừ <b>${chD.toLocaleString('vi-VN')}đ</b> (Check Trùng)</span>
-                        <span class="text-cyan-200">Còn: <b class="text-white">${remBalD.toLocaleString('vi-VN')}đ</b> (<b class="text-cyan-300">~${remDedupD.toLocaleString('vi-VN')} lượt check trùng</b>)</span>
                     `;
-                    userDedupBanner.classList.remove('hidden');
+                    userDedupBanner.classList.toggle('hidden', !lastDedupUsedApi);
                 }
             } else {
                 userDedupBanner?.classList.add('hidden');
