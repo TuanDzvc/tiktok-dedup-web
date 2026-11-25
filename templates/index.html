@@ -2944,7 +2944,7 @@
                 document.getElementById('readerStatusBadge').textContent = healthy ? '🟢 Reader riêng đang hoạt động' : fallback ? '🟠 API dự phòng' : '🔴 Tạm ngừng đọc';
                 document.getElementById('readerStatusMessage').textContent = healthy ? (engine.message || 'Phiên TikTok đang đọc được dữ liệu.') : fallback ? 'Đang dùng API dự phòng; lượt đọc qua API có chi phí nội bộ. ' + (engine.message || '') : 'Reader chưa dùng được và API dự phòng đang tắt.';
                 const mumuLabels = { connected: 'Đã kết nối', unavailable: 'Chưa kết nối (phiên lưu vẫn được giữ)', candidate_unusable: 'Phiên mới chưa qua kiểm tra', not_checked: 'Chưa kiểm tra' };
-                document.getElementById('readerSessionMeta').textContent = `Đọc thành công gần nhất: ${readerDate(engine.last_good)} · Nạp MuMu: ${readerDate(engine.last_imported)} · MuMu: ${mumuLabels[engine.mumu_state] || engine.mumu_state || '—'} · Lượt dự phòng từ lúc server chạy: ${data.fallback_count || 0}`;
+                document.getElementById('readerSessionMeta').textContent = `Đọc thành công gần nhất: ${readerDate(engine.last_good)} · Nạp MuMu: ${readerDate(engine.last_imported)} · MuMu: ${mumuLabels[engine.mumu_state] || engine.mumu_state || '—'} · Lượt dự phòng đã ghi: ${data.fallback_count || 0}`;
                 if (!readerSettingsDirty) {
                     document.getElementById('readerEnabled').checked = settings.enabled !== false;
                     document.getElementById('readerFallbackEnabled').checked = settings.fallback_enabled !== false;

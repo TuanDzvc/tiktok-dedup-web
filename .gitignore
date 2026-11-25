@@ -24,3 +24,4 @@ reader_runtime.json
 independent_reader/.private/
 independent_reader/node_modules/
 independent_reader/output/
+.playwright-cli/
