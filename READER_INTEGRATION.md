@@ -10,6 +10,8 @@ Trạng thái triển khai: PC đã cập nhật và domain trả `X-Served-By: 
 
 Reader tốt → lấy aweme_list/group_id/cờ FYP trực tiếp, không gọi TikHub cho dữ liệu check. Reader lỗi/thiếu group_id/không kết nối được → dùng engine API cũ nếu bật dự phòng, có cảnh báo riêng cho Admin. Nếu API cũng lỗi, kết quả vẫn lỗi và luồng ví cũ không thu phí thành công giả.
 
+Reader riêng nhận username/link kênh. Link một video, link rút gọn và ID video giữ engine cũ để không biến yêu cầu kiểm tra một video thành quét cả kênh. Các lượt này được ghi rõ nguồn API dự phòng, không gán nhầm phiên hỏng.
+
 Một kênh lỗi/riêng tư không được kết luận là phiên bị đình chỉ. Thông tin không có cờ FYP không bảo đảm video chắc chắn được đề xuất. Bulk Check Tài Khoản (account_labels), Studio, thanh toán và giá khách hàng không đổi.
 
 ## Khi đăng nhập lại trong MuMu
@@ -34,7 +36,7 @@ Source reader dựa trên MIT signer; LICENSE giữ nguyên trong vendor. Không
 
 ## Kiểm chứng
 
-10 test router/watcher bằng fixture, không tiêu tốn API: reader tốt không gọi fallback, fallback một lần khi lỗi, tắt fallback không gọi API, circuit phục hồi khi session khỏe, candidate xấu giữ file cũ, candidate tốt đổi file, MuMu offline giữ phiên, lỗi mục tiêu không gán nhầm phiên hết hạn.
+11 test router/watcher bằng fixture, không tiêu tốn API: reader tốt không gọi fallback, fallback một lần khi lỗi, tắt fallback không gọi API, circuit phục hồi khi session khỏe, candidate xấu giữ file cũ, candidate tốt đổi file, MuMu offline giữ phiên, lỗi mục tiêu không gán nhầm phiên hết hạn, link video giữ đúng phạm vi một video.
 
 Live adapter và route `/api/check` với lớp xác thực/dữ liệu ví fixture: seitezhm99d → 18 video, 5 trùng, 2 cờ hạn chế, source independent, 0 API trả phí và không chạy hàm fallback. MuMu đang tắt ở lượt kiểm tra này. Admin status: không token 403; fixture Admin 200, không lộ cookie/token. Chưa cố ý làm hỏng tài khoản/session thật để thử đình chỉ; việc chuyển phiên lỗi được kiểm chứng bằng fixture.
 

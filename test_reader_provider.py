@@ -66,6 +66,14 @@ class ProviderTests(unittest.TestCase):
         self.legacy.return_value={'success':False,'error':'synthetic failure'}
         self.assertTrue(self.router.check(self.legacy,'fixture')['reader_provider']['fallback'])
 
+    def test_video_link_keeps_original_single_video_scope(self):
+        self.router._bridge=Mock()
+        query='https://www.tiktok.com/@fixture/video/1234567890123456789'
+        result=self.router.check(self.legacy,query)
+        self.router._bridge.assert_not_called()
+        self.legacy.assert_called_once_with(query)
+        self.assertEqual(result['reader_provider']['reason'],'video_or_short_link')
+
 
 class SessionTests(unittest.TestCase):
     def setUp(self):

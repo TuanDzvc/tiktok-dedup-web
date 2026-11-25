@@ -5,6 +5,7 @@ This module never imports the reader's session, signer, native modules or Manage
 import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -168,7 +169,9 @@ class ReaderRouter:
 
     def check(self,legacy,query,**kwargs):
         config=self.settings();reason='reader_disabled'
-        if config['enabled']:
+        video_input=bool(re.search(r'/video/\d+|(?:vm|vt)\.tiktok\.com/',query,re.I) or re.fullmatch(r'\d{15,}',query.strip()))
+        if video_input:reason='video_or_short_link'
+        if config['enabled'] and not video_input:
             reason='reader_unavailable'
             try:
                 if self.blocked_until>self.clock():
@@ -190,7 +193,7 @@ class ReaderRouter:
                     self.last_error_at=self.clock();self.blocked_until=self.clock()+30
         if not config['fallback_enabled']:
             self._record('unavailable',reason)
-            return {'success':False,'error':'Reader TikTok chưa dùng được và API dự phòng đang tắt.',
+            return {'success':False,'error':'Link video/link rút gọn cần API dự phòng; hãy dán username hoặc link kênh.' if video_input else 'Reader TikTok chưa dùng được và API dự phòng đang tắt.',
                 'reader_provider':{'source':'unavailable','fallback':False,'reason':reason}}
         self._record('api_fallback',reason)
         result=legacy(query,**kwargs)
