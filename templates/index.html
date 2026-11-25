@@ -1089,7 +1089,7 @@
                 </div>
             </div>
 
-            <!-- Thanh Ví Tab Lịch Sử Check: hiển thị quy đổi chung cả Check Trùng & Check Tài Khoản (Ẩn với Admin & Guest) -->
+            <!-- Thanh Ví Tab Lịch Sử Check: hiển thị theo sub-tab Check Trùng hoặc Check Tài Khoản (Ẩn với Admin & Guest) -->
             <div id="historyWalletBar" class="hidden rounded-2xl p-3 sm:px-4 sm:py-2.5 bg-gradient-to-r from-slate-950/95 via-cyan-950/25 to-emerald-950/25 border border-cyan-500/35 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-2.5">
                 <div class="flex items-center gap-3 w-full sm:w-auto min-w-0">
                     <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-400/45 flex items-center justify-center flex-shrink-0">
@@ -1101,10 +1101,10 @@
                             <span id="histWalletBalanceVnd" class="font-mono font-black text-white text-sm">0đ</span>
                             <span class="text-slate-500">·</span>
                             <span id="histWalletDedupLeft" class="px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 font-extrabold text-[11px] tabular-nums">~0 lượt check trùng</span>
-                            <span id="histWalletAccLeft" class="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-extrabold text-[11px] tabular-nums">~0 lượt check tài khoản</span>
+                            <span id="histWalletAccLeft" class="hidden px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-extrabold text-[11px] tabular-nums">~0 lượt check tài khoản</span>
                         </div>
-                        <div class="text-[11px] text-slate-400">
-                            Ví dùng chung: <b class="text-cyan-300">Check Trùng 26đ/lượt</b> · <b class="text-emerald-300">Check Tài Khoản 250đ/lượt</b> · Xem lịch sử <b>0đ</b>
+                        <div id="histWalletPricingLine" class="text-[11px] text-slate-400">
+                            <b class="text-cyan-300">Check Trùng 26đ/lượt</b> · Xem lịch sử <b>0đ</b>
                         </div>
                     </div>
                 </div>
@@ -2728,7 +2728,7 @@
                         </div>
 
                         <div id="vipQrGuideText" class="px-3 py-2 rounded-xl bg-sky-950/40 border border-sky-500/35 text-[11px] text-sky-200 leading-relaxed">
-                            💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống cộng thẳng vào <b>Ví Số Dư chung</b> dùng Check Trùng (<b>26đ/lượt</b>) &amp; Check Tài Khoản (<b>250đ/lượt</b>), tự động quy đổi lượt còn lại!
+                            💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống cộng thẳng vào <b>Ví Số Dư chung</b>!
                         </div>
 
                         <div class="space-y-2">
@@ -2972,9 +2972,9 @@
             const userBalVndNav = Math.max(0, Number(currentVipUser.account_balance_vnd || 0));
             const userDedupLeftNav = Math.floor(userBalVndNav / DEDUP_CHECK_UNIT_PRICE_VND);
             const userChecksLeftNav = Math.floor(userBalVndNav / ACCOUNT_CHECK_UNIT_PRICE_VND);
-            const userNavTabLabel = (typeof getNavChecksLabelForActiveTab === 'function')
-                ? getNavChecksLabelForActiveTab(userBalVndNav)
-                : `~${userDedupLeftNav.toLocaleString('vi-VN')} lượt check trùng`;
+            const userNavTabHtml = (typeof getNavChecksHtmlForActiveTab === 'function')
+                ? getNavChecksHtmlForActiveTab(userBalVndNav)
+                : `<span class="block leading-[1.2] text-emerald-400">~${userDedupLeftNav.toLocaleString('vi-VN')} lượt check trùng</span>`;
             const userBalNavBtn = !isAdmin ? `
                 <button
                     type="button"
@@ -2987,8 +2987,8 @@
                         <i class="fa-solid fa-wallet text-emerald-400 text-xs"></i>
                     </span>
                     <div class="flex flex-col items-center justify-center leading-tight text-center">
-                        <span id="userNavBalanceVnd" class="text-xs font-black tracking-tight text-white tabular-nums">${userBalVndNav.toLocaleString('vi-VN')}đ</span>
-                        <span id="userNavChecksLeft" class="hidden sm:inline-block text-[10px] sm:text-[10.5px] font-extrabold text-emerald-400 tabular-nums whitespace-nowrap">${userNavTabLabel}</span>
+                        <span id="userNavBalanceVnd" class="text-xs font-black tracking-tight text-white tabular-nums leading-[1.15]">${userBalVndNav.toLocaleString('vi-VN')}đ</span>
+                        <span id="userNavChecksLeft" class="hidden sm:flex flex-col items-center text-[10px] font-extrabold tabular-nums whitespace-nowrap">${userNavTabHtml}</span>
                     </div>
                     <i class="fa-solid fa-circle-plus text-[11px] text-cyan-400 group-hover:text-emerald-300 transition hidden md:inline-block"></i>
                 </button>
@@ -3082,6 +3082,20 @@
             return `~${dedupChecks.toLocaleString('vi-VN')} lượt check trùng`;
         }
 
+        function getNavChecksHtmlForActiveTab(balVnd) {
+            const bal = Math.max(0, Number(balVnd || 0));
+            const dedupChecks = Math.floor(bal / DEDUP_CHECK_UNIT_PRICE_VND);
+            const accChecks = Math.floor(bal / ACCOUNT_CHECK_UNIT_PRICE_VND);
+            const tab = (typeof activeMainWorkspaceTab !== 'undefined') ? activeMainWorkspaceTab : 'checker';
+            if (tab === 'account_check') {
+                return `<span class="block leading-[1.2] text-emerald-400">~${accChecks.toLocaleString('vi-VN')} lượt check tài khoản</span>`;
+            }
+            if (tab === 'history') {
+                return `<span class="block leading-[1.15] text-cyan-300">~${dedupChecks.toLocaleString('vi-VN')} lượt check trùng</span><span class="block leading-[1.15] text-emerald-400">~${accChecks.toLocaleString('vi-VN')} lượt check tài khoản</span>`;
+            }
+            return `<span class="block leading-[1.2] text-emerald-400">~${dedupChecks.toLocaleString('vi-VN')} lượt check trùng</span>`;
+        }
+
         function syncAccountWalletUI() {
             const walletBar = document.getElementById('accountWalletBar');
             const dedupWalletBar = document.getElementById('dedupWalletBar');
@@ -3111,6 +3125,7 @@
             const histBalEl = document.getElementById('histWalletBalanceVnd');
             const histDedupEl = document.getElementById('histWalletDedupLeft');
             const histAccEl = document.getElementById('histWalletAccLeft');
+            const histPricingEl = document.getElementById('histWalletPricingLine');
 
             if (currentVipUser && currentVipUser.role === 'admin') {
                 walletBar?.classList.add('hidden');
@@ -3164,17 +3179,29 @@
             if (dedupBalEl) dedupBalEl.innerText = `${bal.toLocaleString('vi-VN')}đ`;
             if (dedupBarDedupEl) dedupBarDedupEl.innerText = `~${dedupChecks.toLocaleString('vi-VN')} lượt check trùng`;
 
+            const isAccHistSubTab = (typeof activeCheckHistorySubTab !== 'undefined' && activeCheckHistorySubTab === 'account');
             historyWalletBar?.classList.remove('hidden');
             if (histUserEl) histUserEl.innerText = `@${currentVipUser.username || ''}`;
             if (histBalEl) histBalEl.innerText = `${bal.toLocaleString('vi-VN')}đ`;
-            if (histDedupEl) histDedupEl.innerText = `~${dedupChecks.toLocaleString('vi-VN')} lượt check trùng`;
-            if (histAccEl) histAccEl.innerText = `~${checks.toLocaleString('vi-VN')} lượt check tài khoản`;
+            if (histDedupEl) {
+                histDedupEl.innerText = `~${dedupChecks.toLocaleString('vi-VN')} lượt check trùng`;
+                histDedupEl.classList.toggle('hidden', isAccHistSubTab);
+            }
+            if (histAccEl) {
+                histAccEl.innerText = `~${checks.toLocaleString('vi-VN')} lượt check tài khoản`;
+                histAccEl.classList.toggle('hidden', !isAccHistSubTab);
+            }
+            if (histPricingEl) {
+                histPricingEl.innerHTML = isAccHistSubTab
+                    ? '<b class="text-emerald-300">Check Tài Khoản 250đ/lượt</b> · Xem lịch sử <b>0đ</b>'
+                    : '<b class="text-cyan-300">Check Trùng 26đ/lượt</b> · Xem lịch sử <b>0đ</b>';
+            }
 
             const navB = document.getElementById('userNavBalanceVnd');
             const navC = document.getElementById('userNavChecksLeft');
             const navBtn = document.getElementById('userBalNavBtn');
             if (navB) navB.innerText = `${bal.toLocaleString('vi-VN')}đ`;
-            if (navC) navC.innerText = getNavChecksLabelForActiveTab(bal);
+            if (navC) navC.innerHTML = getNavChecksHtmlForActiveTab(bal);
             if (navBtn) navBtn.title = `Ví chung: ${bal.toLocaleString('vi-VN')}đ (~${dedupChecks.toLocaleString('vi-VN')} lượt check trùng · ~${checks.toLocaleString('vi-VN')} lượt check tài khoản) — bấm để nạp tiền`;
         }
 
@@ -6931,6 +6958,7 @@
             }
 
             updateCheckHistoryCounts();
+            if (typeof syncAccountWalletUI === 'function') syncAccountWalletUI();
             if (activeCheckHistorySubTab === 'account') {
                 renderAccountCheckHistory();
             } else {
