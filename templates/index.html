@@ -257,53 +257,6 @@
                     <span class="text-slate-300 font-medium">(Xóa / Ẩn Riêng Tư / Bạn Bè video).</span>
                 </p>
 
-                <!-- Thanh Ví Tab Kiểm Tra Kênh (chỉ hiện số lượt Check Trùng · Ẩn với Admin) -->
-                <div id="dedupWalletBar" class="hidden rounded-2xl p-3 sm:px-4 sm:py-2.5 bg-gradient-to-r from-slate-950/95 via-cyan-950/30 to-emerald-950/30 border border-cyan-500/35 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-2.5 text-left">
-                    <div class="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
-                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 border border-cyan-400/40 flex items-center justify-center flex-shrink-0">
-                            <i class="fa-solid fa-wallet text-emerald-400 text-sm"></i>
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <div id="dedupWalletGuestBox" class="text-[11.5px] text-slate-300 leading-snug">
-                                <span class="font-bold text-amber-300">Gói từ 50.000đ:</span>
-                                <b class="text-cyan-300">~1.923 lượt check trùng</b> (26đ/lượt) · Lỗi <b>0đ</b> · Lịch sử <b>0đ</b>
-                            </div>
-                            <div id="dedupWalletBalanceBox" class="hidden space-y-0.5">
-                                <div class="flex flex-wrap items-center gap-1.5 text-xs">
-                                    <span class="text-slate-300 font-semibold">Ví (<span id="dedupWalletUserInfo" class="font-mono text-cyan-300 font-bold">@user</span>):</span>
-                                    <span id="dedupWalletBalanceVnd" class="font-mono font-black text-white text-sm">0đ</span>
-                                    <span class="text-slate-500">·</span>
-                                    <span id="dedupWalletDedupLeft" class="px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 font-extrabold text-[11px] tabular-nums">~0 lượt check trùng</span>
-                                </div>
-                                <div class="text-[11px] text-slate-400">
-                                    Phí: <b class="text-cyan-300">26đ / lượt check trùng</b> · <b>50.000đ = ~1.923 lượt</b> · Lỗi <b>0đ</b> · Lịch sử <b>0đ</b>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2 w-full sm:w-auto justify-end flex-shrink-0">
-                        <button
-                            type="button"
-                            id="btnDedupWalletLogin"
-                            onclick="openVipModal(true, 'login')"
-                            class="w-full sm:w-auto px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-extrabold text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                        >
-                            <i class="fa-solid fa-right-to-bracket"></i>
-                            <span>Đăng Nhập / Nạp</span>
-                        </button>
-                        <button
-                            type="button"
-                            id="btnDedupWalletTopup"
-                            onclick="openVipQrModal()"
-                            class="hidden w-full sm:w-auto px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs shadow-md border border-emerald-300/40 transition active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                            title="Mở mã VietQR nạp tiền (từ 50.000đ · 26đ/lượt check trùng)"
-                        >
-                            <i class="fa-solid fa-qrcode"></i>
-                            <span>Nạp Tiền (VietQR)</span>
-                        </button>
-                    </div>
-                </div>
-
                 <!-- Input form: 2 Dòng riêng biệt rộng rãi, không bị lẹm placeholder -->
                 <form id="checkForm" action="javascript:void(0);" onsubmit="handleCheck(event); return false;" class="pt-2 space-y-3">
                     <!-- DÒNG 1: Ô nhập full-width thoải mái hiển thị đầy đủ link/username -->
