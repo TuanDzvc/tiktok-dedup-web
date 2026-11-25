@@ -113,7 +113,7 @@
 
     <!-- Top Banner -->
     <header class="border-b border-slate-800/80 bg-dark-900/90 backdrop-blur sticky top-0 z-40">
-        <div class="max-w-7xl 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
+        <div class="max-w-7xl 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-2 xl:gap-4">
             <div class="flex items-center gap-3">
                 <a href="/" class="flex items-center gap-3 group">
                     <svg class="w-11 h-11 rounded-2xl shadow-xl shadow-cyan-500/25 border border-cyan-500/40 group-hover:scale-105 transition-all duration-300" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
@@ -159,7 +159,7 @@
                 </a>
             </div>
             <div class="flex items-center gap-2 sm:gap-3">
-                <div class="hidden 2xl:flex items-center gap-2 text-xs font-semibold text-slate-400 whitespace-nowrap flex-shrink-0">
+                <div class="hidden min-[1680px]:flex items-center gap-2 text-xs font-semibold text-slate-400 whitespace-nowrap flex-shrink-0">
                     <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span>Hệ thống sẵn sàng</span>
                 </div>
@@ -2758,17 +2758,19 @@
                 <button
                     type="button"
                     onclick="refreshAdminApiBalance(true)"
-                    class="group px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-cyan-500/35 hover:border-cyan-400/75 shadow-lg shadow-cyan-950/40 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
+                    class="group px-2.5 py-1 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-cyan-500/35 hover:border-cyan-400/75 shadow-lg shadow-cyan-950/40 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
                     title="Số dư ví API hiện tại — bấm để làm mới"
                 >
                     <span class="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 border border-emerald-400/40 flex items-center justify-center flex-shrink-0">
                         <i class="fa-solid fa-wallet text-emerald-400 text-[11px]"></i>
                     </span>
-                    <div class="flex items-center gap-1.5 sm:gap-2 leading-none">
-                        <span id="adminNavBalanceUsd" class="text-xs font-black tracking-tight text-white tabular-nums">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd || 0).toFixed(4)) : 'Ví API'}</span>
-                        <span class="hidden sm:inline-block w-px h-3.5 bg-slate-700/90"></span>
-                        <span id="adminNavBalanceVnd" class="hidden sm:inline-block px-1.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/30 text-[11px] font-extrabold text-cyan-300 tabular-nums">${window._lastAdminBal ? (Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : '...'}</span>
-                        <span id="adminNavEstScans" class="hidden sm:inline-block px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-[11px] font-extrabold text-emerald-300 tabular-nums whitespace-nowrap">${window._lastAdminBal ? ('~' + Number(window._lastAdminBal.est_scans_left || 0).toLocaleString('vi-VN') + ' lượt') : '~... lượt'}</span>
+                    <div class="flex flex-col items-start justify-center leading-tight gap-0.5 text-left">
+                        <div class="flex items-center gap-1.5 leading-none">
+                            <span id="adminNavBalanceUsd" class="text-[11px] font-black tracking-tight text-white tabular-nums">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd || 0).toFixed(4)) : 'Ví API'}</span>
+                            <span class="hidden sm:inline-block w-px h-2.5 bg-slate-600/80"></span>
+                            <span id="adminNavBalanceVnd" class="hidden sm:inline-block text-[11px] font-extrabold text-cyan-300 tabular-nums">${window._lastAdminBal ? (Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : '...'}</span>
+                        </div>
+                        <span id="adminNavEstScans" class="hidden sm:inline-block text-[10px] font-extrabold text-emerald-400 tabular-nums leading-none whitespace-nowrap">${window._lastAdminBal ? ('~' + Number(window._lastAdminBal.est_scans_left || 0).toLocaleString('vi-VN') + ' lượt') : '~... lượt'}</span>
                     </div>
                     <i class="fa-solid fa-arrows-rotate text-[10px] text-slate-500 group-hover:text-cyan-300 group-hover:rotate-180 transition-all duration-300 hidden md:inline-block"></i>
                 </button>
@@ -7207,13 +7209,13 @@
 
                 container.innerHTML = `
                     <div class="flex items-center gap-2 bg-dark-900/95 border border-cyan-500/40 rounded-2xl p-1.5 pl-2.5 pr-2 shadow-lg shadow-cyan-950/40 relative">
-                        <img src="${avatar}" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl object-cover border border-cyan-400/50 flex-shrink-0 cursor-pointer" onclick="openCheckPostModal()" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(acc.nickname || acc.username || 'User')}" />
-                        <div class="hidden sm:block text-left pr-1 cursor-pointer" onclick="openCheckPostModal()">
+                        <img src="${avatar}" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl object-cover border border-cyan-400/50 flex-shrink-0 cursor-pointer" onclick="openCheckPostModal()" onerror="handleStudioAvatarError(this)" data-fallback-name="${escapeHtml(acc.nickname || acc.username || 'User')}" title="${escapeHtml((acc.nickname || 'User') + (acc.username ? ' (' + acc.username + ')' : ''))}" />
+                        <div class="hidden 2xl:block text-left pr-1 cursor-pointer" onclick="openCheckPostModal()">
                             <div class="text-xs font-bold text-white flex items-center gap-1.5 leading-tight">
-                                <span class="whitespace-nowrap">${escapeHtml(acc.nickname || 'User')}</span>
+                                <span class="whitespace-nowrap max-w-[120px] truncate">${escapeHtml(acc.nickname || 'User')}</span>
                                 ${flag}
                             </div>
-                            <div class="text-[10px] text-cyan-400 font-mono leading-tight whitespace-nowrap">${escapeHtml(acc.username ? ('@' + acc.username.replace(/^@+/, '')) : '')}</div>
+                            <div class="text-[10px] text-cyan-400 font-mono leading-tight whitespace-nowrap max-w-[120px] truncate">${escapeHtml(acc.username ? ('@' + acc.username.replace(/^@+/, '')) : '')}</div>
                         </div>
 
                         <!-- Dropdown chuyển đổi nick nhanh trên Navbar -->
@@ -7221,7 +7223,7 @@
                             <button 
                                 type="button" 
                                 onclick="toggleNavAccountDropdown(event)" 
-                                class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 font-bold text-xs border border-slate-700/90 shadow transition active:scale-95"
+                                class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 text-cyan-300 font-bold text-xs border border-slate-700/90 shadow transition active:scale-95 whitespace-nowrap flex-shrink-0"
                                 title="Danh sách các nick đã login để đổi qua đổi lại nhanh chóng"
                             >
                                 <i class="fa-solid fa-users text-cyan-400"></i>
@@ -7282,14 +7284,14 @@
                         <button 
                             type="button" 
                             onclick="openAuthModal()" 
-                            class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95"
+                            class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95 whitespace-nowrap flex-shrink-0"
                             title="Thêm nick mới (Mở trình duyệt hoặc nạp cookie)"
                         >
                             <i class="fa-solid fa-user-plus text-amber-300"></i>
-                            <span>Thêm nick</span>
+                            <span class="hidden 2xl:inline">Thêm nick</span>
                         </button>
 
-                        <button type="button" onclick="openCheckPostModal()" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95" title="Mở Studio Check Post">
+                        <button type="button" onclick="openCheckPostModal()" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95 whitespace-nowrap flex-shrink-0" title="Mở Studio Check Post">
                             <i class="fa-solid fa-layer-group text-amber-300"></i>
                             <span>Check Post</span>
                         </button>
@@ -7300,7 +7302,7 @@
                     <button 
                         type="button"
                         onclick="openAuthModal()" 
-                        class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/25 border border-cyan-400/40 hover:scale-105 active:scale-95 transition-all duration-200"
+                        class="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/25 border border-cyan-400/40 hover:scale-105 active:scale-95 transition-all duration-200 whitespace-nowrap flex-shrink-0"
                         title="Đăng nhập để xem toàn bộ video kênh (kể cả video riêng tư) và thao tác Ẩn/Bạn bè/Xóa"
                     >
                         <i class="fa-solid fa-key text-amber-300"></i>
