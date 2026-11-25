@@ -19,3 +19,8 @@ PUBLIC_DOMAIN.txt
 check_history.json
 account_country_cache.json
 origin_meta_cache.json
+reader_settings.json
+reader_runtime.json
+independent_reader/.private/
+independent_reader/node_modules/
+independent_reader/output/

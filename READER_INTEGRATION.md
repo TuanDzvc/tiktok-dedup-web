@@ -1,0 +1,37 @@
+# Check trùng ưu tiên phiên TikTok, API dự phòng
+
+Ngày triển khai: 25/11/2026. Luồng `/api/check` giữ nguyên xác thực, quota, phí ví khách hàng, phân quyền quét thêm, lịch sử và ảnh. Chỉ thay nguồn dữ liệu: reader riêng trước, engine API cũ làm dự phòng.
+
+## Vận hành trên web
+
+Đăng nhập Admin → Quản Lý Tài Khoản → Phiên TikTok. Có trạng thái reader, lần đọc thành công/nạp phiên, kết nối MuMu, lịch sử nguồn đọc và số lượt dự phòng; bật/tắt ưu tiên reader/API dự phòng; nút kiểm tra và nạp phiên.
+
+Reader tốt → lấy aweme_list/group_id/cờ FYP trực tiếp, không gọi TikHub cho dữ liệu check. Reader lỗi/thiếu group_id/không kết nối được → dùng engine API cũ nếu bật dự phòng, có cảnh báo riêng cho Admin. Nếu API cũng lỗi, kết quả vẫn lỗi và luồng ví cũ không thu phí thành công giả.
+
+Một kênh lỗi/riêng tư không được kết luận là phiên bị đình chỉ. Thông tin không có cờ FYP không bảo đảm video chắc chắn được đề xuất. Bulk Check Tài Khoản (account_labels), Studio, thanh toán và giá khách hàng không đổi.
+
+## Khi đăng nhập lại trong MuMu
+
+1. Chủ máy mở MuMu, tự đăng nhập TikTok và hoàn tất CAPTCHA/xác minh.
+2. Watcher đọc phiên khoảng mỗi 30 giây, tự kết nối lại ADB nếu MuMu đã tắt/mở lại. Không thao tác màn hình hay lấy mật khẩu/OTP.
+3. So dấu nhận diện session. Phiên mới phải đọc thử được video có group_id trước khi thay file đang dùng.
+4. Thay state nguyên tử, báo xanh. Lượt web kế tiếp lại ưu tiên reader riêng, kể cả vừa dùng API dự phòng.
+
+Nếu cần gấp, bấm Nạp phiên mới từ MuMu. Nếu candidate chưa đọc được thì giữ phiên cũ và báo trạng thái, không tự tuyên bố đổi thành công. Tắt MuMu vẫn dùng phiên đã lưu; PC tắt thì Render dùng API cũ dự phòng. Cấu hình chế độ riêng trên từng runtime, không chuyển session/khóa MuMu lên cloud.
+
+## File và cấu hình
+
+- `dedup_provider.py`: adapter schema web, router nguồn đọc, circuit 30 giây, settings/history đã lọc và giám sát sidecar PC.
+- `independent_reader/`: source reader/signer, resolver Chrome và watcher.
+- `reader_settings.json`, `reader_runtime.json`: runtime ignored, không sync peer.
+- `independent_reader/.private/`: session/khóa riêng, loại khỏi Git/Docker; tuyệt đối không đưa vào zip source.
+- Biến tùy chọn: `INDEPENDENT_READER_DIR`, `INDEPENDENT_READER_URL`, `INDEPENDENT_READER_KEY_FILE`, `INDEPENDENT_READER_AUTOSTART=0` để tắt tự khởi động. Mặc định dùng reader bundled tại localhost:8767.
+- Admin APIs: GET `/api/vip/admin/reader-status`; POST `/reader-settings`, `/reader-refresh` cùng prefix admin. Tất cả yêu cầu Admin thật từ token hiện có.
+
+Source reader dựa trên MIT signer; LICENSE giữ nguyên trong vendor. Không có Manager native/module/cache/license trong reader mới. Engine cũ còn nguyên làm fallback; không sửa bỏ các luồng Studio cũ.
+
+## Kiểm chứng
+
+10 test router/watcher bằng fixture, không tiêu tốn API: reader tốt không gọi fallback, fallback một lần khi lỗi, tắt fallback không gọi API, circuit phục hồi khi session khỏe, candidate xấu giữ file cũ, candidate tốt đổi file, MuMu offline giữ phiên, lỗi mục tiêu không gán nhầm phiên hết hạn.
+
+Live adapter và route `/api/check` với lớp xác thực/dữ liệu ví fixture: seitezhm99d → 18 video, 5 trùng, 2 cờ hạn chế, source independent, 0 API trả phí và không chạy hàm fallback. MuMu đang tắt ở lượt kiểm tra này. Admin status: không token 403; fixture Admin 200, không lộ cookie/token. Chưa cố ý làm hỏng tài khoản/session thật để thử đình chỉ; việc chuyển phiên lỗi được kiểm chứng bằng fixture.

@@ -1,0 +1,126 @@
+<svg width="1280" height="400" viewBox="0 0 1280 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0b10"/>
+      <stop offset="55%" stop-color="#111116"/>
+      <stop offset="100%" stop-color="#0b0b10"/>
+    </linearGradient>
+
+    <linearGradient id="cyanFade" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#25F4EE" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#25F4EE" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#25F4EE" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="pinkFade" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FE2C55" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#FE2C55" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#FE2C55" stop-opacity="0"/>
+    </linearGradient>
+
+    <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#25F4EE" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#25F4EE" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="glowPink" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FE2C55" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#FE2C55" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Blueprint-style grid, ala Claude: minor lines + major lines with crosshair ticks -->
+    <pattern id="gridMinor" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+    <pattern id="gridMajor" width="160" height="160" patternUnits="userSpaceOnUse">
+      <path d="M 160 0 L 0 0 0 160" fill="none" stroke="#ffffff" stroke-opacity="0.09" stroke-width="1"/>
+      <path d="M 0 0 L 6 0 M 0 0 L 0 6" stroke="#25F4EE" stroke-opacity="0.5" stroke-width="1.4"/>
+    </pattern>
+
+    <style>
+      .title { font-family: 'Segoe UI', Arial, sans-serif; font-weight: 800; }
+      .mono { font-family: 'Consolas', 'Courier New', monospace; }
+      .sub { font-family: 'Segoe UI', Arial, sans-serif; font-weight: 400; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="400" fill="url(#bg)"/>
+  <rect width="1280" height="400" fill="url(#gridMinor)"/>
+  <rect width="1280" height="400" fill="url(#gridMajor)"/>
+
+  <!-- Ambient glow -->
+  <circle cx="140" cy="60" r="240" fill="url(#glowCyan)"/>
+  <circle cx="1180" cy="360" r="260" fill="url(#glowPink)"/>
+
+  <!-- Top / bottom accent lines -->
+  <rect x="0" y="0" width="1280" height="3" fill="url(#cyanFade)"/>
+  <rect x="0" y="397" width="1280" height="3" fill="url(#pinkFade)"/>
+
+  <!-- Eyebrow: repo path -->
+  <g transform="translate(80, 56)">
+    <circle cx="0" cy="-5" r="4" fill="#25F4EE"/>
+    <text x="14" y="0" class="mono" font-size="14" fill="#8f8fa3" letter-spacing="0.5">github.com/iqbalmh18/tiktok-signer</text>
+  </g>
+
+  <!-- Glitch-style title -->
+  <g>
+    <text x="82" y="148" class="title" font-size="60" fill="#25F4EE" opacity="0.8">TikTok Signer</text>
+    <text x="78" y="144" class="title" font-size="60" fill="#FE2C55" opacity="0.8">TikTok Signer</text>
+    <text x="80" y="146" class="title" font-size="60" fill="#FFFFFF">TikTok Signer</text>
+  </g>
+
+  <!-- Subtitle -->
+  <text x="82" y="188" class="sub" font-size="17.5" fill="#c3c3d0">
+    Python library for generating TikTok Android API authentication signatures
+  </text>
+
+  <!-- Divider -->
+  <rect x="80" y="216" width="1120" height="1" fill="#ffffff" fill-opacity="0.09"/>
+
+  <!-- Algorithm badges -->
+  <g class="mono" font-size="15" font-weight="700">
+    <g transform="translate(80, 246)">
+      <rect width="88" height="36" rx="18" fill="#15151c" stroke="#25F4EE" stroke-width="1.3"/>
+      <text x="44" y="23" text-anchor="middle" fill="#25F4EE">Argus</text>
+    </g>
+    <g transform="translate(182, 246)">
+      <rect width="102" height="36" rx="18" fill="#15151c" stroke="#FE2C55" stroke-width="1.3"/>
+      <text x="51" y="23" text-anchor="middle" fill="#FE2C55">Gorgon</text>
+    </g>
+    <g transform="translate(298, 246)">
+      <rect width="96" height="36" rx="18" fill="#15151c" stroke="#25F4EE" stroke-width="1.3"/>
+      <text x="48" y="23" text-anchor="middle" fill="#25F4EE">Ladon</text>
+    </g>
+    <g transform="translate(408, 246)">
+      <rect width="130" height="36" rx="18" fill="#15151c" stroke="#FE2C55" stroke-width="1.3"/>
+      <text x="65" y="23" text-anchor="middle" fill="#FE2C55">TTEncrypt</text>
+    </g>
+  </g>
+
+  <!-- Tagline -->
+  <text x="82" y="320" class="sub" font-size="14.5" fill="#83839a">
+    Authenticate requests to TikTok's private API — encryption algorithms implemented in pure Python
+  </text>
+
+  <!-- Footer divider -->
+  <rect x="80" y="346" width="1120" height="1" fill="#ffffff" fill-opacity="0.09"/>
+
+  <!-- Footer credit -->
+  <g transform="translate(80, 376)">
+    <text class="sub" font-size="14" fill="#6f6f80">build with</text>
+    <path d="M8 4 C6 -0.5, -0.5 -0.5, -0.5 4.5 C-0.5 9, 8 15, 8 15 C8 15, 16.5 9, 16.5 4.5 C16.5 -0.5, 10 -0.5, 8 4 Z"
+          fill="#FE2C55" transform="translate(72,-11)"/>
+    <text x="98" class="mono" font-size="14" fill="#25F4EE" font-weight="700">iqbalmh18</text>
+  </g>
+
+  <text x="1200" y="390" text-anchor="end" class="mono" font-size="12.5" fill="#5c5c70">MIT License</text>
+
+  <!-- Right-side icon: signature / lock, isolated in open grid space -->
+  <g transform="translate(1104, 60)" opacity="0.95">
+    <rect x="0" y="34" width="64" height="48" rx="7" fill="#15151c" stroke="#25F4EE" stroke-width="2"/>
+    <path d="M 14 34 L 14 22 Q 14 4 32 4 Q 50 4 50 22 L 50 34" fill="none" stroke="#FE2C55" stroke-width="4.5" stroke-linecap="round"/>
+    <circle cx="32" cy="56" r="7" fill="#25F4EE"/>
+    <rect x="29" y="56" width="6" height="16" fill="#25F4EE"/>
+  </g>
+</svg>

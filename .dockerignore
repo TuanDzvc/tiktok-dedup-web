@@ -9,3 +9,9 @@ vip_blocked_devices.json
 free_daily_quota.json
 sheet_config.json
 test folder [with spaces]/
+.private/
+**/.private/
+**/node_modules/
+independent_reader/output/
+reader_settings.json
+reader_runtime.json

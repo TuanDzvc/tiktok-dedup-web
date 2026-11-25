@@ -1,0 +1,7 @@
+{
+  "name": "tiktok-independent-public-resolver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Public profile resolver for local independent TikTok reader",
+  "dependencies": { "playwright": "1.65.1" }
+}

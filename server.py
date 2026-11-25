@@ -55,6 +55,7 @@ import requests
 import core_dedup
 from core_dedup import fetch_channel_info_and_posts, check_accounts_batch_tikhub, DEFAULT_UA, get_borrowed_cookie
 import studio_engine
+import dedup_provider
 
 # Cấu hình Google Sheet Webhook lưu vết người dùng
 SHEET_WEBHOOK_URL = os.getenv(
@@ -2275,6 +2276,7 @@ def start_cloudflare_tunnel(port: int = 8000):
 
 @app.on_event("startup")
 def on_startup():
+    dedup_provider.start_local_supervisor()
     # Khôi phục ngay bản dữ liệu bền vững mới nhất từ Supabase Cloud trước khi phục vụ (bảo toàn 100% dù Render sleep/restart)
     try:
         sb_cfg = _get_supabase_sync_config()
@@ -2979,6 +2981,39 @@ async def api_vip_admin_balance(req: Request, refresh: int = Query(0)):
     import asyncio
     info = await asyncio.to_thread(_get_tikhub_live_balance, bool(refresh))
     return JSONResponse(content={"success": True, "billing": info})
+
+
+def _require_reader_admin(req: Request):
+    user = _extract_vip_user(req)
+    if not user or str(user.get("role") or "").lower() != "admin":
+        raise HTTPException(status_code=403, detail="Chỉ Admin được quản lý phiên đọc TikTok.")
+
+
+@app.get("/api/vip/admin/reader-status")
+async def api_reader_status(req: Request):
+    _require_reader_admin(req)
+    return await asyncio.to_thread(dedup_provider.ROUTER.status)
+
+
+@app.post("/api/vip/admin/reader-settings")
+async def api_reader_settings(req: Request):
+    _require_reader_admin(req)
+    try:
+        settings = dedup_provider.ROUTER.save_settings(await req.json())
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Cấu hình reader không hợp lệ.")
+    return {"success": True, "settings": settings}
+
+
+@app.post("/api/vip/admin/reader-refresh")
+async def api_reader_refresh(req: Request):
+    _require_reader_admin(req)
+    body = await req.json()
+    try:
+        return await asyncio.to_thread(dedup_provider.ROUTER.refresh, bool(body.get("check_only")))
+    except Exception:
+        return JSONResponse(status_code=503, content={"success": False,
+            "error": "Chưa kết nối được reader trên PC. Mở MuMu trên PC rồi thử lại. Cloud dùng API dự phòng."})
 
 
 @app.get("/api/vip/admin/users")
@@ -3792,6 +3827,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                 record_user_check_async(clean_user, client_ip, account=checked_username, device_id=dev_id)
 
         res_scan = await asyncio.to_thread(
+            dedup_provider.ROUTER.check,
             fetch_channel_info_and_posts,
             query,
             sec_uid=eff_sec_uid,
