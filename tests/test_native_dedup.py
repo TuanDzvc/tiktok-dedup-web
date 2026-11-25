@@ -97,6 +97,21 @@ class CoreIntegrationTests(unittest.TestCase):
         self.assertTrue(result['success'])
         legacy.assert_called_once()
 
+    def test_full_video_link_keeps_requested_video_first_without_paid_lookup(self):
+        target = '7710000000000000002'
+        with patch.object(native, 'fetch_native_page', return_value=page()):
+            result = core.fetch_channel_info_and_posts('https://www.tiktok.com/@seitezhm99d/video/' + target,
+                                                      allow_paid_groupid=True)
+        self.assertEqual(result['list'][0]['aweme_id'], target)
+
+    def test_unreadable_target_video_is_not_reported_clean(self):
+        with patch.object(native, 'fetch_native_page', return_value=page()) as fetch:
+            result = core.fetch_channel_info_and_posts('https://www.tiktok.com/@seitezhm99d/video/7700000000000000099',
+                                                      allow_paid_groupid=True)
+        self.assertFalse(result['success'])
+        self.assertEqual(fetch.call_count, 2)
+        self.assertEqual(result['_internal_cost']['api_calls'], 0)
+
 
 class ProviderTests(unittest.TestCase):
     def setUp(self):

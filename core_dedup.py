@@ -2184,8 +2184,23 @@ def fetch_channel_info_and_posts(
         )
     cost = _reset_scan_cost_ctx()
     native_cookie = "" if str(channel_query or "").strip().startswith("!") else cookie_str
+    target_vid = ""
     try:
-        page = fetch_native_page(channel_query, sec_uid, max_cursor, max_videos)
+        native_query, target_vid, _ = _resolve_query_target(str(channel_query or "").lstrip("!"), ua_str or DEFAULT_UA)
+        if not native_query:
+            raise NativeReaderError("Không xác định được user TikTok. Vui lòng nhập @username hoặc link kênh.")
+        page = fetch_native_page(native_query, sec_uid, max_cursor, max_videos)
+        if target_vid and not max_cursor:
+            target = next((item for item in page["rawItems"] if str(item.get("aweme_id")) == target_vid), None)
+            if target is None:
+                # Reuse the same free post-list endpoint around the video's
+                # snowflake time; never manufacture a clean result from SSR.
+                around_cursor = ((int(target_vid) >> 32) + 1) * 1000
+                page = fetch_native_page(native_query, page["secUid"], around_cursor, max_videos)
+                target = next((item for item in page["rawItems"] if str(item.get("aweme_id")) == target_vid), None)
+            if target is None:
+                raise NativeReaderError("Reader không đọc được video này. Chưa thể kết luận trùng; thử check theo user.")
+            page["rawItems"] = [target] + [item for item in page["rawItems"] if str(item.get("aweme_id")) != target_vid]
     except (NativeReaderError, ValueError) as exc:
         return {"success": False, "error": str(exc), "provider": "native",
                 "_internal_cost": {"cost_usd": 0.0, "api_calls": 0, "cached_hits": 0, "provider": "native"}}
@@ -2226,7 +2241,7 @@ def fetch_channel_info_and_posts(
         is_self_account=bool(native_cookie), effective_cookie=native_cookie,
         allow_paid_groupid=allow_paid_groupid, did_self_penalty_sync=False,
         _run_self_penalty_and_crp_sync=sync_own_details,
-        sec_uid=page["secUid"], max_cursor=max_cursor, target_vid="", max_videos=max_videos,
+        sec_uid=page["secUid"], max_cursor=max_cursor, target_vid=target_vid, max_videos=max_videos,
         all_fetched_api_items=items, creator_meta={}, matched_acc_ua=ua_str or DEFAULT_UA,
         matched_acc_proxy=proxy_str, allow_tool_self_cookies=allow_tool_self_cookies,
         all_studio_items=[], is_private_account=bool(author.get("secret")), no_public_videos=False,
