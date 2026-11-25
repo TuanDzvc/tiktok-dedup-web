@@ -2552,8 +2552,22 @@ async def api_vip_payos_create_order(req: Request):
         return JSONResponse(status_code=400, content={"success": False, "error": "Tài khoản Admin không cần thanh toán."})
 
     order_type = "vip"
-    amount = int(cfg["price_vnd"])
-    days = int(cfg["duration_days"])
+    base_price = max(2000, int(cfg["price_vnd"]))
+    base_days = max(1, int(cfg["duration_days"]))
+    raw_amt = body.get("amount")
+    if raw_amt is None or str(raw_amt).strip() == "":
+        amount = base_price
+    else:
+        try:
+            amount = int(raw_amt)
+        except Exception:
+            amount = 0
+    if amount < base_price or amount > 50_000_000:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": f"Số tiền nạp tối thiểu là {base_price:,}đ (tối đa 50,000,000đ)!"},
+        )
+    days = max(1, amount // base_price) * base_days
 
     force_new = bool(body.get("force_new", False))
     now_ts = int(time.time())
@@ -2628,7 +2642,7 @@ async def api_vip_payos_create_order(req: Request):
     return_url = f"{base_url}/payos/return?orderCode={order_code}"
     cancel_url = f"{base_url}/payos/cancel?orderCode={order_code}"
     desc = f"VIP{order_code}"
-    item_name = f"Goi VIP {days}N + {amount:,}d Check TK ({uname})"[:75]
+    item_name = f"Nap {amount:,}d (VIP {days}N + {_calc_account_checks_left(amount)} luot) - {uname}"[:75]
     exp_ts = now_ts + 900
     sign_payload = {
         "amount": amount,
@@ -3956,7 +3970,7 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
                         "error": (
                             f"Số dư Check Tài Khoản không đủ! Cần {required_vnd:,}đ "
                             f"({req_count} tài khoản × {ACCOUNT_CHECK_UNIT_PRICE_VND}đ), "
-                            f"số dư hiện có {cur_bal:,}đ (tối đa {checks_left} lượt). Vui lòng nạp gói 50.000đ qua VietQR!"
+                            f"số dư hiện có {cur_bal:,}đ (tối đa {checks_left} lượt). Vui lòng nạp thêm số dư qua VietQR (từ 50.000đ)!"
                         ),
                     },
                 )
