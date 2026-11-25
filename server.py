@@ -57,6 +57,7 @@ from core_dedup import fetch_channel_info_and_posts, check_accounts_batch_tikhub
 import studio_engine
 import dedup_provider
 from vip_subscription import activate_paid_membership, restore_paid_memberships
+from usage_counts import ensure_usage_counts, record_dedup_success, record_account_results
 
 # Cấu hình Google Sheet Webhook lưu vết người dùng
 SHEET_WEBHOOK_URL = os.getenv(
@@ -1404,6 +1405,10 @@ def _load_vip_users_unlocked() -> Dict[str, Dict[str, Any]]:
     if restore_paid_memberships(users, _load_vip_orders_unlocked(), int(time.time()),
                                 cfg["duration_days"], cfg["price_vnd"]):
         changed = True
+    for user in users.values():
+        if isinstance(user, dict) and ensure_usage_counts(user):
+            user['updated_at'] = int(time.time())
+            changed = True
     if changed:
         _save_vip_users_unlocked(users)
     return users
@@ -1586,6 +1591,9 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
         chosen = json.loads(json.dumps(primary))
         chosen["scan_count"] = max(int(lu.get("scan_count") or 0), int(ru.get("scan_count") or 0))
         chosen["account_check_count"] = max(int(lu.get("account_check_count") or 0), int(ru.get("account_check_count") or 0))
+        if 'dedup_check_count' in lu or 'dedup_check_count' in ru:
+            chosen['dedup_check_count'] = max(int(lu.get('dedup_check_count') or 0), int(ru.get('dedup_check_count') or 0))
+            chosen['dedup_count_estimated'] = bool(lu.get('dedup_count_estimated') or ru.get('dedup_count_estimated'))
         l_bal_ts = int(lu.get("account_balance_updated_at") or 0)
         r_bal_ts = int(ru.get("account_balance_updated_at") or 0)
         if l_bal_ts > r_bal_ts:
@@ -2127,6 +2135,8 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
         "expires_at": int(u.get("expires_at") or 0),
         "note": str(u.get("note") or ""),
         "scan_count": int(u.get("scan_count") or 0),
+        "dedup_check_count": int(u.get("dedup_check_count", max(0, int(u.get("scan_count") or 0) - int(u.get("account_check_count") or 0)))),
+        "dedup_count_estimated": bool(u.get("dedup_count_estimated", int(u.get("scan_count") or 0) > 0)),
         "account_balance_vnd": bal_vnd,
         "dedup_checks_left": _calc_dedup_checks_left(bal_vnd),
         "dedup_check_unit_price_vnd": DEDUP_CHECK_UNIT_PRICE_VND,
@@ -3772,8 +3782,6 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                 cur_bal = max(0, int(u_rec.get("account_balance_vnd") or 0))
                 charge_dedup_balance = False
                 has_vip_access = has_manual_vip
-                if has_manual_vip and max_cursor == 0:
-                    u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + 1
                 _save_vip_users_unlocked(users_db)
         elif dev_id in bmap_db:
             return JSONResponse(
@@ -3845,6 +3853,14 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
 
         internal_cost = res_scan.pop("_internal_cost", None) if isinstance(res_scan, dict) else None
         if isinstance(res_scan, dict) and res_scan.get("success"):
+            if checked_username and max_cursor == 0 and not dedup_locked:
+                with _VIP_LOCK:
+                    usage_users = _load_vip_users_unlocked()
+                    usage_user = usage_users.get(checked_username)
+                    if isinstance(usage_user, dict):
+                        record_dedup_success(usage_user)
+                        usage_user['updated_at'] = int(time.time())
+                        _save_vip_users_unlocked(usage_users)
             if not is_tuandzvcc:
                 res_scan["hasMore"] = False
             if has_vip_access:
@@ -4092,8 +4108,8 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
                     u_rec["account_balance_updated_at"] = now_bal_ts
                     u_rec["updated_at"] = now_bal_ts
                 new_bal = max(0, int(u_rec.get("account_balance_vnd") or 0))
-                u_rec["account_check_count"] = int(u_rec.get("account_check_count") or 0) + ok_count
-                u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + max(1, len(results_list))
+                record_account_results(u_rec, ok_count, len(results_list))
+                u_rec['updated_at'] = int(time.time())
                 _save_vip_users_unlocked(users_db)
                 user_has_vip = _has_vip_privilege(u_rec)
             else:

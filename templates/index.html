@@ -2321,8 +2321,9 @@
                                         <th class="px-3 py-2.5 text-center">Tài khoản</th>
                                         <th class="px-3 py-2.5 text-center">Mật khẩu</th>
                                         <th class="px-3 py-2.5 text-center">Quyền</th>
-                                        <th class="px-3 py-2.5 text-center">Số dư Ví Chung</th>
-                                        <th class="px-3 py-2.5 text-center">Lượt quét</th>
+                                        <th class="px-3 py-2.5 text-center">Số dư check tài khoản</th>
+                                        <th class="px-3 py-2.5 text-center" title="Số lượt Check trùng thành công; không tính quét thêm video hoặc xem lịch sử">Đã Check trùng</th>
+                                        <th class="px-3 py-2.5 text-center" title="Số tài khoản đã Check thành công, không tính tài khoản lỗi">Đã Check tài khoản</th>
                                         <th class="px-3 py-2.5 text-center">Hạn dùng</th>
                                         <th class="px-3 py-2.5 text-center">Mã Máy & IP (Chống Share)</th>
                                         <th class="px-3 py-2.5 text-center">Ghi chú</th>
@@ -3869,7 +3870,8 @@
                             </td>
                             <td class="px-2.5 py-2.5 text-center align-middle whitespace-nowrap">${roleBadge}</td>
                             <td class="px-2.5 py-2.5 text-center align-middle whitespace-nowrap">${balCellHtml}</td>
-                            <td class="px-2.5 py-2.5 font-mono text-cyan-300 font-extrabold text-center align-middle whitespace-nowrap">${u.scan_count || 0}</td>
+                            <td class="px-2.5 py-2.5 font-mono text-cyan-300 font-extrabold text-center align-middle whitespace-nowrap" title="${u.dedup_count_estimated ? 'Số cũ ước tính từ tổng lượt quét trừ Check tài khoản thành công. Tổng cũ có thể chứa lượt lỗi. Lượt mới được đếm riêng khi Check trùng thành công.' : 'Số lượt Check trùng thành công'}">${u.dedup_count_estimated ? '≈' : ''}${Number(u.dedup_check_count || 0).toLocaleString('vi-VN')}</td>
+                            <td class="px-2.5 py-2.5 font-mono text-emerald-300 font-extrabold text-center align-middle whitespace-nowrap">${Number(u.account_check_count || 0).toLocaleString('vi-VN')}</td>
                             <td class="px-2.5 py-2.5 text-center align-middle whitespace-nowrap">${expStr}</td>
                             <td class="px-2.5 py-2.5 text-center align-middle">${devicesHtml}</td>
                             <td class="px-2.5 py-2.5 text-center align-middle min-w-[150px] max-w-[210px]">

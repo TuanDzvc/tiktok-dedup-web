@@ -64,3 +64,11 @@ Live adapter và route `/api/check` với lớp xác thực/dữ liệu ví fixt
 Đã kiểm tra thêm trên worker PC đang chạy bằng xác thực Admin thật: `/api/check` trả đúng 18/5/2, source independent, `admin_billing.api_calls=0`; status báo healthy trong lúc MuMu tắt. HTML mới và bảo vệ Admin 403 đã xác nhận qua domain công khai. Giao diện panel được kiểm tra bằng trình duyệt với fixture Admin, gồm trạng thái xanh, dự phòng cam và banner cảnh báo; không đăng nhập Admin giả vào backend thật và không gọi API trả phí trong test fallback.
 
 VIP expiry now uses a separate two-line header box (remaining days / expiry date); the account button keeps only its title and username. Browser verification on PC-served checktiktok.site confirmed both boxes have two rows.
+
+### Thống kê lượt sử dụng riêng
+
+Bảng quản lý đổi “Số dư Ví Chung” thành “Số dư check tài khoản”; thay tổng “Lượt quét” bằng “Đã Check trùng” và “Đã Check tài khoản”. Backend lưu riêng `dedup_check_count` và `account_check_count`. Check trùng chỉ cộng khi lượt đầu thành công, không bị khóa kết quả; không cộng lượt quét thêm video hoặc đọc lịch sử. Check tài khoản cộng theo số kết quả thành công, kể cả kết quả cache; tài khoản lỗi không cộng.
+
+`scan_count` cũ chứa cả Check trùng và mọi kết quả Check tài khoản (kể cả lỗi), trong khi `account_check_count` chỉ chứa kết quả thành công. Không thể khôi phục chính xác toàn bộ Check trùng cũ từ hai số này. Khởi tạo một lần bằng `max(0, scan_count - account_check_count)`, đánh dấu `dedup_count_estimated` và hiện “≈” kèm giải thích khi rê chuột. Các lượt mới tăng độc lập, không tiếp tục suy ra từ tổng. Giữ tổng cũ để tương thích đồng bộ, merge bộ đếm riêng theo max. Không sửa ví, hạn dùng hoặc mật khẩu; backup trước chuyển đổi trong thư mục private.
+
+Kiểm tra: 22 tests qua (`test_usage_counts`, `test_vip_subscription`, `test_reader_provider`); API PC công khai trả đủ hai bộ đếm cho 10 user và giữ nguyên số dư/hạn. Fixture giao diện: tổng cũ 65, Check TK 62 → Check trùng ≈3 và Check TK 62 ở hai cột riêng.
