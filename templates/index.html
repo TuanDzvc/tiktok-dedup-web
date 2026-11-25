@@ -5712,11 +5712,19 @@
             }
         }
 
+        function getVideoPenaltyDetails(video) {
+            const detail = String(video.penalty_details || video.shadowReason || '').trim();
+            if (detail === 'Không lên FYP') {
+                return 'Không đủ điều kiện xuất hiện trên bảng tin Cho bạn (Hạn chế FYP · Cần cookie chính chủ để xem chi tiết lý do)';
+            }
+            return detail;
+        }
+
         function buildVideoTableRowHtml(v, index, allVideosRef, imgCookie = '', historyChannelKey = '') {
             const safeAweme = String(v.aweme_id || v.id || '').replace(/[^0-9a-zA-Z_-]/g, '');
             const safeHistKey = String(historyChannelKey || '').replace(/[^a-zA-Z0-9._-]/g, '');
             const listRef = Array.isArray(allVideosRef) ? allVideosRef : [];
-            const penTitle = (v.penalty_details || v.shadowReason || '').replace(/"/g, '&quot;');
+            const penTitle = escapeHtml(getVideoPenaltyDetails(v));
             const isThisDup = Boolean(v.is_dup || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null'));
             const isSameChDup = Boolean(v.is_same_channel_dup || (isThisDup && v.group_id && String(v.group_id) !== String(v.aweme_id) && listRef.some(x => String(x.aweme_id) === String(v.group_id))));
             const origLink = v.origin_url || (v.group_id && String(v.group_id) !== String(v.aweme_id) && String(v.group_id) !== '0' && String(v.group_id) !== 'null' ? `https://www.tiktok.com/@tiktok/video/${v.group_id}` : '');
@@ -6157,7 +6165,7 @@
             const penAlert = document.getElementById('modalPenaltyAlert');
             const penText = document.getElementById('modalPenaltyText');
             if (penAlert && penText) {
-                const reason = video.penalty_details || video.shadowReason || '';
+                const reason = getVideoPenaltyDetails(video);
                 if (reason) {
                     penText.innerText = reason;
                     penAlert.classList.remove('hidden');

@@ -35,7 +35,56 @@ def _first_url(*objects):
     return min(candidates,key=rank) if candidates else ''
 
 
-def format_native(payload):
+def _native_moderation(post):
+    """Preserve the legacy reason wording and exact reason-code formatter."""
+    status = post.get('status') or {}
+    context = (((post.get('content_model') or {}).get('standard_biz') or {}).get('penalty_context')
+               or post.get('penaltyContext') or {})
+    code = int(post.get('status_code') or context.get('video_status') or 0)
+    copyright = bool(post.get('is_copyright') or code == 141)
+    takedown = bool(post.get('is_takedown') or code in (141, 142, 144))
+    prohibited = bool(status.get('is_prohibited') or post.get('isProhibited'))
+    ec = int(context.get('ec_global_verdict') or 0)
+    tns_ban = ec not in (0, 1) or any(
+        int(context.get(k) or 0) not in (0, 102, 140, 143)
+        for k in ('tns_status', 'arb_content_safety_status', 'status'))
+    fyp = bool(post.get('is_nff_or_nr') is True or post.get('is_fyp_restricted')
+               or tns_ban or copyright or takedown or prohibited)
+    codes = post.get('reason_codes') or context.get('reason_codes') or []
+    info = post.get('penalty_reason_info_list') or context.get('penalty_reason_info_list') or []
+    detail, _ = core_dedup._format_penalty_reason_details_native(
+        [{'reason_codes': codes, 'penalty_reason_info_list': info}], codes,
+        int(post.get('appeal_status') or context.get('appeal_status') or 0))
+    detail = detail or str(post.get('penalty_details') or post.get('shadowReason')
+                           or context.get('penalty_detail') or '').strip()
+    if detail in ('Không lên FYP', 'Án phạt'):
+        detail = ''
+    if codes or info or detail:
+        fyp = True
+    reasons = []
+    if detail:
+        reasons.append(detail)
+    elif copyright:
+        reasons.append('Vi phạm bản quyền âm thanh / hình ảnh (TikTok tự khóa Riêng tư & ngừng đề xuất Xu hướng)')
+    elif takedown:
+        reasons.append('Video bị TikTok gỡ bỏ do vi phạm Tiêu chuẩn Cộng đồng')
+    elif prohibited:
+        reasons.append('Vi phạm Tiêu chuẩn Cộng đồng TikTok (Bị cấm phân phối)')
+    elif fyp:
+        reasons.append('Không đủ điều kiện xuất hiện trên bảng tin Cho bạn (Hạn chế FYP · Cần cookie chính chủ để xem chi tiết lý do)')
+    elif context.get('display_penalty_type'):
+        reasons.append('Mất đề xuất Xu hướng (FYP): Đang dính án phạt kiểm duyệt nội dung của TikTok')
+        fyp = True
+    for key, text in [('in_reviewing', 'Đang xét duyệt'), ('self_see', 'Chỉ mình tôi')]:
+        if status.get(key):
+            reasons.append(text)
+    return {'is_fyp_restricted': fyp, 'is_copyright': copyright, 'is_takedown': takedown,
+            'status_code': code, 'reason_codes': codes, 'penalty_reason_info_list': info,
+            'penalty_details': ', '.join(reasons), 'shadowReason': ', '.join(reasons),
+            'shadow': bool(reasons), 'has_penalty': bool(reasons)}
+
+
+def format_native(payload, cookie_str='', proxy_str=''):
     """Map raw mobile response into existing web schema; performs zero HTTP calls."""
     profile=payload['profile'];data=payload['data'];posts=data['aweme_list']
     username=profile['username'];author=next((p.get('author') for p in posts if isinstance(p.get('author'),dict)),{}) or {}
@@ -48,14 +97,9 @@ def format_native(payload):
         if post.get('group_id') is None:raise ValueError('Missing group_id')
         aid=str(post.get('aweme_id') or '');group=str(post.get('group_id') or '')
         stats=post.get('statistics') or {};video=post.get('video') or {};status=post.get('status') or {}
-        penalty=((post.get('content_model') or {}).get('standard_biz') or {}).get('penalty_context') or {}
         dup=bool(group and group not in ('0','None','null') and group!=aid)
-        fyp=post.get('is_nff_or_nr') is True
-        reasons=[text for key,text in [('is_prohibited','Cấm đăng'),('in_reviewing','Đang xét duyệt'),('self_see','Chỉ mình tôi')]
-            if status.get(key)]
-        if penalty.get('display_penalty_type'):reasons.append('Án phạt')
-        if fyp:reasons.append('Không lên FYP')
-        shadow=bool(reasons);ct=int(post.get('create_time') or 0)
+        moderation = _native_moderation(post)
+        ct=int(post.get('create_time') or 0)
         date=datetime.datetime.fromtimestamp(ct,datetime.timezone.utc) if ct else None
         duration=max(0,int(video.get('duration') or post.get('duration') or 0)//1000)
         phone=bool(post.get('content_original_type') is not None or post.get('shoot_tab_name') or
@@ -71,18 +115,24 @@ def format_native(payload):
             'source_icon':'fa-mobile-screen' if phone else 'fa-desktop',
             'quality':core_dedup._extract_aweme_quality_label(video) or 'Chuẩn',
             'region':post.get('region') or region,'region_display':core_dedup.format_full_country_display(post.get('region') or region) if post.get('region') or region else '—',
-            'shadow':shadow,'shadowReason':', '.join(reasons),'has_penalty':shadow,
-            'is_fyp_restricted':fyp,'is_prohibited':bool(status.get('is_prohibited')),
+            **moderation,'is_prohibited':bool(status.get('is_prohibited')),
             'is_private':bool(status.get('is_private') or status.get('self_see')),
-            'is_crp_punished':False,'is_copyright':False,'is_takedown':False,
-            'is_muted':bool(post.get('is_muted')),'status_code':int(post.get('status_code') or 0),
-            'penalty_details':', '.join(reasons),'duration_str':f'{duration//60}:{duration%60:02d}' if duration else '',
+            'is_crp_punished':False,
+            'is_muted':bool(post.get('is_muted')),
+            'duration_str':f'{duration//60}:{duration%60:02d}' if duration else '',
             'cover_url':_first_url(video.get('cover'),video.get('origin_cover'),video.get('dynamic_cover')),
             'share_url':f'https://www.tiktok.com/@{username}/video/{aid}'}
         for key in ('play','digg','comment','share','collect'):
             value=int(stats.get(key+'_count') or 0);row[key+'_count']=value
             row[key+'_count_fmt']=core_dedup.format_count_compact(value)
         rows.append(row)
+    if cookie_str:
+        flagged = [r for r in rows if r['is_fyp_restricted']]
+        if flagged:
+            try:
+                core_dedup.sync_items_penalty_data_native(flagged, cookie_str, proxy=proxy_str, region=region or 'US')
+            except Exception:
+                pass  # Missing owner detail must not turn a good read into paid fallback.
     bad=sum(bool(r['is_dup'] or r['shadow']) for r in rows)
     channel={'uniqueId':username,'nickname':profile.get('nickname') or author.get('nickname') or username,
         'avatar':_first_url(profile.get('avatar'),author.get('avatar_larger'),author.get('avatar_thumb')),
@@ -92,7 +142,7 @@ def format_native(payload):
     channel['followers_fmt']=core_dedup.format_count_compact(channel['followers'])
     return {'success':True,'vip_mode':True,'channel':channel,'secUid':profile['secUid'],'list':rows,
         'stats_summary':{'total_videos':len(rows),'duplicate_count':sum(r['is_dup'] for r in rows),
-            'penalty_count':sum(r['shadow'] for r in rows),'copyright_count':0,'clean_count':len(rows)-bad,
+            'penalty_count':sum(r['shadow'] for r in rows),'copyright_count':sum(r['is_copyright'] for r in rows),'clean_count':len(rows)-bad,
             'dup_percentage':round(bad/len(rows)*100,1) if rows else 0},
         'user_info':{'screen_name':username,'username':'@'+username,'create_date':created,'uid':uid,
             'mobile':'—','country':region_display,'last_nickname_change':'—','is_self':False},
@@ -183,7 +233,7 @@ class ReaderRouter:
                 if response.status_code!=200 or not payload.get('success'):
                     reason=payload.get('code') or reason
                     raise RuntimeError('Native read failed')
-                result=format_native(payload)
+                result=format_native(payload, cookie_str=kwargs.get('cookie_str', ''), proxy_str=kwargs.get('proxy_str', ''))
                 self.blocked_until=0;self._record('independent')
                 result['reader_provider']={'source':'independent','fallback':False}
                 return result

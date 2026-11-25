@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import dedup_provider
 
@@ -88,6 +88,55 @@ class ProviderTests(unittest.TestCase):
         jpeg='https://images.example/original.jpeg?signature=unchanged'
         payload['data']['aweme_list'][0]['video']={'cover':{'uri':'present-but-no-urls'},'origin_cover':{'url_list':[jpeg]}}
         self.assertEqual(dedup_provider.format_native(payload)['list'][0]['cover_url'],jpeg)
+
+
+class ModerationTests(unittest.TestCase):
+    def row(self, **fields):
+        payload = native_payload()
+        payload['data']['aweme_list'][0].update(fields)
+        return dedup_provider.format_native(payload)['list'][0]
+
+    def test_real_nff_signal_keeps_legacy_explanation_without_inventing_category(self):
+        row = self.row(content_model={'standard_biz': {'penalty_context': {'ec_global_verdict': 3}}})
+        self.assertTrue(row['is_fyp_restricted'])
+        self.assertIn('Cần cookie chính chủ', row['penalty_details'])
+        self.assertNotIn('Mã 13', row['penalty_details'])
+        self.assertFalse(row['is_copyright'])
+
+    def test_exact_reason_codes_use_existing_legacy_formatter(self):
+        row = self.row(reason_codes=['121'])
+        self.assertIn('Nội dung không phải nguyên tác', row['penalty_details'])
+        self.assertIn('Mã 121', row['penalty_details'])
+
+    def test_reason_title_and_failed_appeal_are_preserved(self):
+        row = self.row(reason_codes=['13'], appeal_status=4,
+                       penalty_reason_info_list=[{'code': '13', 'title': 'Unoriginal content'}])
+        self.assertIn('Mã 13', row['penalty_details'])
+        self.assertIn('Kháng xịt', row['penalty_details'])
+
+    def test_copyright_status_is_not_replaced_by_generic_nff(self):
+        row = self.row(status_code=141)
+        self.assertTrue(row['is_copyright'])
+        self.assertIn('Vi phạm bản quyền', row['penalty_details'])
+
+    def test_private_and_reviewing_alone_are_not_fyp_ban(self):
+        row = self.row(is_nff_or_nr=False, status={'self_see': True, 'in_reviewing': True},
+                       content_model={'standard_biz': {'penalty_context': {'status': 140}}})
+        self.assertFalse(row['is_fyp_restricted'])
+        self.assertIn('Đang xét duyệt', row['penalty_details'])
+
+    def test_owner_cookie_uses_native_detail_enrichment_only_when_provided(self):
+        with patch.object(dedup_provider.core_dedup, 'sync_items_penalty_data_native') as enrich:
+            dedup_provider.format_native(native_payload())
+            enrich.assert_not_called()
+            dedup_provider.format_native(native_payload(), cookie_str='synthetic-owner-cookie')
+            enrich.assert_called_once()
+
+    def test_unavailable_owner_detail_does_not_fail_a_good_read(self):
+        with patch.object(dedup_provider.core_dedup, 'sync_items_penalty_data_native', side_effect=RuntimeError):
+            result = dedup_provider.format_native(native_payload(), cookie_str='synthetic-owner-cookie')
+        self.assertTrue(result['success'])
+        self.assertIn('Cần cookie chính chủ', result['list'][0]['penalty_details'])
 
 
 class SessionTests(unittest.TestCase):

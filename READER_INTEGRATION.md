@@ -76,3 +76,11 @@ Kiểm tra: 22 tests qua (`test_usage_counts`, `test_vip_subscription`, `test_re
 Owner header balance exception: admin tuandzvcc sees API USD/VND balance on checker and account_check tabs. Other users keep the previous visibility rules. Fetch the balance at initial render and on entering either allowed tab. Scan-cost banners still require API fallback. Browser fixture verified owner checker/account visible, history hidden, other-admin checker hidden and VIP checker hidden.
 
 Owner balance visibility extended to history as requested: tuandzvcc now sees USD/VND on checker, account_check and history. Other users remain unchanged. Verified the helper served publicly against owner, other-admin and VIP history cases.
+
+### Lý do hạn chế FYP (26/11/2026)
+
+Adapter reader trước đây ghi cứng “Không lên FYP”, làm mất diễn giải và bỏ qua mã lý do. Đã dùng lại bộ định dạng lý do/mã của `core_dedup`, giữ nội dung biên bản khi dữ liệu có `reason_codes`/`penalty_reason_info_list`; đọc thêm penalty context và trạng thái bản quyền/gỡ/cấm phân phối. Nếu người dùng cung cấp cookie chính chủ, gọi enrichment native hiện có cho video bị hạn chế (không qua TikHub và không lấy phiên Manager). Enrichment lỗi không làm chuyển một lượt đọc tốt sang API trả phí.
+
+Đối chiếu trực tiếp reader kênh `bhaijan15781.t`, hai video `7711918759103040781` và `7711916198442585374`: có `is_nff_or_nr=true`, `ec_global_verdict=3`, không có reason code/title cụ thể. Với dữ liệu này chỉ hiển thị đúng lời giải thích cũ “Không đủ điều kiện xuất hiện trên bảng tin Cho bạn (Hạn chế FYP · Cần cookie chính chủ để xem chi tiết lý do)”; không suy mã 13/bản quyền từ cờ NFF hoặc mã lifecycle. Tooltip bảng/lịch sử cũ có chuỗi ngắn cũng được chuẩn hóa khi hiển thị, không sửa dữ liệu lịch sử gốc.
+
+29 tests qua (provider, usage, VIP); kiểm tra dữ liệu thật hai video qua reader riêng, không dùng paid API; fixture trình duyệt trên domain PC xác nhận tooltip lịch sử và mã lý do chi tiết được giữ nguyên. Chưa có cookie chính chủ của kênh thử để xác minh biên bản chi tiết của đúng hai video này.
