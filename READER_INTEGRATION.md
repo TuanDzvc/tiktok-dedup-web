@@ -14,7 +14,7 @@ Hộp Thông tin tài khoản khách cũng áp dụng cùng quy tắc: mở từ
 
 Bảng quản lý tài khoản, chỉnh số dư, chọn mức nạp QR và thông báo nạp thành công chỉ quy đổi lượt Check tài khoản; bỏ quy đổi lượt Check trùng và các nội dung giá Check trùng trong các màn hình này. Kiểm tra giao diện bảng bằng fixture: 50.000đ → 200 lượt Check TK, 34.500đ → 138 lượt Check TK. Đây là thay đổi hiển thị; không sửa dữ liệu ví/quota/thu phí backend.
 
-Ghi chú cũ kiểu “Quy đổi gói 50k sang Ví chung (đã quét … lượt)” được lọc khỏi bảng quản lý. Giữ các ghi chú khác như tự đăng ký trên web hoặc ghi chú thủ công; không sửa dữ liệu ví.
+Ghi chú cũ kiểu “Quy đổi gói 50k sang Ví chung (đã quét … lượt)” được lọc khỏi bảng quản lý. Nếu chỉ có ghi chú chuyển gói 50k này, hiển thị lại “Tự đăng ký trên web” theo xác nhận chủ web (voitenlua1, cutinhaque01). Giữ các ghi chú khác; không sửa dữ liệu ví.
 
 ### Hạn VIP tháng (sửa ngày 25/11/2026)
 
@@ -23,6 +23,7 @@ Ghi chú cũ kiểu “Quy đổi gói 50k sang Ví chung (đã quét … lượ
 - Khôi phục tài khoản bị mất hạn bằng ngày `paid_at` của đơn PAID, không cộng ví lần nữa và không tạo lại người dùng đã xóa. Admin và VIP vĩnh viễn cấp thủ công được giữ nguyên. Bảng quản lý hiển thị hạn thực tế theo giờ Việt Nam.
 - Đã khôi phục `voitenlua1`, `virgo0805`, `ducson2222` theo đơn thanh toán. Theo xác nhận chủ web, `cutinhaque01` và `123456` bắt đầu từ 00:00 ngày 24/11/2026, hết hạn 00:00 ngày 24/12/2026. Bản sao dữ liệu trước sửa nằm trong `independent_reader/.private/backups/` (không đưa vào Git).
 - Kiểm tra hồi quy: `python -m unittest test_vip_subscription test_reader_provider -q`.
+- Nút Tài Khoản VIP trên đầu trang hiển thị số ngày còn lại và ngày hết hạn (giờ Việt Nam), cập nhật mỗi phút ngay trên trình duyệt. Còn dưới 24 giờ ghi “Còn dưới 1 ngày”; VIP không hạn ghi “Vĩnh viễn”. Thanh đầu trang cho xuống dòng trên điện thoại để không cắt mất hạn dùng. Đã kiểm tra trên trình duyệt bằng dữ liệu giả, gồm gói tháng, dưới 1 ngày, hết hạn và vĩnh viễn.
 
 Đăng nhập Admin → Quản Lý Tài Khoản → Phiên TikTok. Có trạng thái reader, lần đọc thành công/nạp phiên, kết nối MuMu, lịch sử nguồn đọc và số lượt dự phòng; nút kiểm tra và nạp phiên. Luôn ưu tiên reader và luôn fallback API khi reader lỗi; không còn checkbox hay nút lưu chế độ. Cấu hình tắt cũ được bỏ qua. Khung tạo/cập nhật tài khoản VIP đã được bỏ khỏi giao diện, bảng quản lý và thao tác trên tài khoản hiện có vẫn giữ.
 

@@ -117,7 +117,7 @@
 
     <!-- Top Banner -->
     <header class="border-b border-slate-800/80 bg-dark-900/90 backdrop-blur sticky top-0 z-40">
-        <div class="max-w-7xl 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-2 xl:gap-4">
+        <div class="max-w-7xl 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 xl:gap-4">
             <div class="flex items-center gap-3">
                 <a href="/" class="flex items-center gap-3 group">
                     <svg class="w-11 h-11 rounded-2xl shadow-xl shadow-cyan-500/25 border border-cyan-500/40 group-hover:scale-105 transition-all duration-300" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
@@ -2907,6 +2907,21 @@
         }
         setInterval(loadReaderStatus, 30000);
 
+        function vipExpiryLabel(user, nowMs = Date.now()) {
+            const expires = Number(user?.expires_at || 0);
+            if (expires <= 0) return 'Vĩnh viễn';
+            const remaining = expires * 1000 - nowMs;
+            const date = new Date(expires * 1000).toLocaleDateString('vi-VN', {timeZone: 'Asia/Ho_Chi_Minh'});
+            if (remaining <= 0) return `Đã hết hạn · ${date}`;
+            const left = remaining < 86400000 ? 'Còn dưới 1 ngày' : `Còn ${Math.ceil(remaining / 86400000)} ngày`;
+            return `${left} · ${date}`;
+        }
+
+        setInterval(() => {
+            const label = document.getElementById('vipNavExpiry');
+            if (label && currentVipUser) label.textContent = vipExpiryLabel(currentVipUser);
+        }, 60000);
+
         function renderVipNav() {
             if (!currentVipUser || currentVipUser.role !== 'admin') document.getElementById('readerFallbackNotice')?.classList.add('hidden');
             else setTimeout(loadReaderStatus, 0);
@@ -2970,6 +2985,7 @@
                     <div class="flex flex-col items-center text-center leading-tight">
                         <span class="text-xs font-extrabold text-emerald-300 whitespace-nowrap">Tài Khoản VIP</span>
                         <span class="text-[11px] font-mono font-bold text-white whitespace-nowrap">${escapeHtml(currentVipUser.username)}</span>
+                        <span id="vipNavExpiry" class="text-[10px] font-semibold text-emerald-200 whitespace-nowrap mt-0.5">${escapeHtml(vipExpiryLabel(currentVipUser))}</span>
                     </div>
                 `;
             }
@@ -3744,9 +3760,11 @@
         }
 
         function displayAccountNote(note) {
-            return String(note || '').split(/\r?\n/)
+            const original = String(note || '');
+            const visible = original.split(/\r?\n/)
                 .filter(line => !/qu[yi]\s+đổi/i.test(line))
-                .join('\n').trim() || '—';
+                .join('\n').trim();
+            return visible || (/qu[yi]\s+đổi\s+gói\s+50k/i.test(original) ? 'Tự đăng ký trên web' : '—');
         }
 
         async function loadVipUsersList() {
