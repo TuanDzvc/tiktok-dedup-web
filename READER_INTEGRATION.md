@@ -12,6 +12,8 @@ Ví header của VIP/khách cũng chỉ hiện ở tab Check tài khoản, gồm
 
 Hộp Thông tin tài khoản khách cũng áp dụng cùng quy tắc: mở từ Kiểm tra kênh chỉ còn tên/trạng thái tài khoản và Đổi mật khẩu; ẩn dòng ví và nút nạp. Mở từ Check tài khoản mới hiện ví/lượt check tài khoản và nạp tiền, không còn quy đổi lượt Check trùng.
 
+Bảng quản lý tài khoản, chỉnh số dư, chọn mức nạp QR và thông báo nạp thành công chỉ quy đổi lượt Check tài khoản; bỏ quy đổi lượt Check trùng và các nội dung giá Check trùng trong các màn hình này. Kiểm tra giao diện bảng bằng fixture: 50.000đ → 200 lượt Check TK, 34.500đ → 138 lượt Check TK. Đây là thay đổi hiển thị; không sửa dữ liệu ví/quota/thu phí backend.
+
 Đăng nhập Admin → Quản Lý Tài Khoản → Phiên TikTok. Có trạng thái reader, lần đọc thành công/nạp phiên, kết nối MuMu, lịch sử nguồn đọc và số lượt dự phòng; bật/tắt ưu tiên reader/API dự phòng; nút kiểm tra và nạp phiên.
 
 Reader tốt → lấy aweme_list/group_id/cờ FYP trực tiếp, không gọi TikHub cho dữ liệu check. Reader lỗi/thiếu group_id/không kết nối được → dùng engine API cũ nếu bật dự phòng, có cảnh báo riêng cho Admin. Nếu API cũng lỗi, kết quả vẫn lỗi và luồng ví cũ không thu phí thành công giả.
