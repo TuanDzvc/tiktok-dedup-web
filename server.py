@@ -3155,6 +3155,8 @@ async def api_vip_admin_render_env(req: Request):
 
     lines = [
         "IS_CLOUD=true",
+        "DEDUP_PROVIDER=native",
+        f"DEDUP_NATIVE_BRIDGE_URL={(os.environ.get('DEDUP_NATIVE_BRIDGE_URL') or env_map.get('DEDUP_NATIVE_BRIDGE_URL') or os.environ.get('PRIMARY_SYNC_BASE') or env_map.get('PRIMARY_SYNC_BASE') or 'https://checktiktok.site').rstrip('/')}",
         f"TIKHUB_API_KEY={tikhub_key}",
         f"ADMIN_DEFAULT_USER={adm_u}",
         f"ADMIN_DEFAULT_PASS={adm_p}",
@@ -3164,6 +3166,9 @@ async def api_vip_admin_render_env(req: Request):
         f"VIP_PRICE_VND={payos_cfg['price_vnd']}",
         f"VIP_DURATION_DAYS={payos_cfg['duration_days']}",
     ]
+    native_bridge_token = os.environ.get("DEDUP_NATIVE_BRIDGE_TOKEN") or env_map.get("DEDUP_NATIVE_BRIDGE_TOKEN")
+    if native_bridge_token:
+        lines.append(f"DEDUP_NATIVE_BRIDGE_TOKEN={native_bridge_token}")
     if payos_cfg.get("configured"):
         lines.extend([
             f"PAYOS_CLIENT_ID={payos_cfg['client_id']}",
@@ -3219,6 +3224,32 @@ async def api_internal_post_sync_state(req: Request):
     _PEER_SYNC_STATUS["last_error"] = ""
     _PEER_SYNC_STATUS["last_direction"] = "incoming"
     return JSONResponse(content={"success": True, "changed": res["changed"], "user_count": res["user_count"]})
+
+
+@app.post("/api/internal/native-dedup")
+async def api_internal_native_dedup(req: Request):
+    """Authenticated cloud-to-PC reader; local_only prevents failover loops."""
+    from native_dedup import bridge_token, fetch_native_page, NativeReaderError
+    expected = bridge_token()
+    provided = (req.headers.get("x-native-reader-token") or "").strip()
+    if not expected or not provided or not hmac.compare_digest(provided, expected):
+        return JSONResponse(status_code=403, content={"success": False, "error": "forbidden"})
+    if _is_cloud_runtime() or sys.platform != "win32":
+        return JSONResponse(status_code=503, content={"success": False, "error": "native_reader_requires_pc"})
+    try:
+        body = await req.json()
+        if not isinstance(body, dict):
+            raise ValueError("invalid_json")
+        result = await asyncio.to_thread(
+            fetch_native_page, str(body.get("channel") or ""),
+            str(body.get("secUid") or ""), int(body.get("maxCursor") or 0),
+            max(1, min(50, int(body.get("count") or 18))), local_only=True,
+        )
+        return JSONResponse(content=result)
+    except (TypeError, ValueError):
+        return JSONResponse(status_code=400, content={"success": False, "error": "invalid_payload"})
+    except NativeReaderError as exc:
+        return JSONResponse(status_code=503, content={"success": False, "error": str(exc)})
 
 
 @app.post("/api/vip/admin/sync-render-now")

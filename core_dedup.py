@@ -2164,6 +2164,78 @@ def _resolve_query_target(raw_query: str, ua_str: str = "") -> Tuple[str, str, O
     return username, "", None
 
 def fetch_channel_info_and_posts(
+    channel_query: str, sec_uid: str = "", max_cursor: int = 0,
+    cookie_str: str = "", ua_str: str = "", proxy_str: str = "",
+    max_videos: int = 18, allow_paid_groupid: bool = False,
+    allow_tool_self_cookies: bool = False,
+) -> Dict[str, Any]:
+    """Native is the default. Paid TikHub is an explicit operator opt-in only."""
+    from native_dedup import fetch_native_page, provider_mode, NativeReaderError
+    try:
+        mode = provider_mode()
+    except NativeReaderError as exc:
+        return {"success": False, "error": str(exc)}
+    if mode == "tikhub":
+        return _fetch_channel_info_and_posts_legacy(
+            channel_query, sec_uid=sec_uid, max_cursor=max_cursor,
+            cookie_str=cookie_str, ua_str=ua_str, proxy_str=proxy_str,
+            max_videos=max_videos, allow_paid_groupid=allow_paid_groupid,
+            allow_tool_self_cookies=allow_tool_self_cookies,
+        )
+    cost = _reset_scan_cost_ctx()
+    native_cookie = "" if str(channel_query or "").strip().startswith("!") else cookie_str
+    try:
+        page = fetch_native_page(channel_query, sec_uid, max_cursor, max_videos)
+    except (NativeReaderError, ValueError) as exc:
+        return {"success": False, "error": str(exc), "provider": "native",
+                "_internal_cost": {"cost_usd": 0.0, "api_calls": 0, "cached_hits": 0, "provider": "native"}}
+    raw = page["rawItems"]
+    info = page.get("channel") or {}
+    author = next((item.get("author") for item in raw if isinstance(item, dict)
+                   and isinstance(item.get("author"), dict)), {})
+    username = str(info.get("uniqueId") or author.get("unique_id") or
+                   str(channel_query).lstrip("!@").split("/")[0])
+    items = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        # Retain the complete raw mobile payload (including item_control,
+        # creation_info and penalty context) alongside the web's existing schema.
+        normalized = {**item, **_normalize_tikhub_aweme_to_raw_item(item, username)}
+        context = (item.get("content_model") or {}).get("standard_biz") or {}
+        normalized["penaltyContext"] = item.get("penaltyContext") or context.get("penalty_context") or {}
+        items.append(normalized)
+    region = normalize_country_code(author.get("region") or (items[0].get("region") if items else "") or "US")
+    channel = {"uniqueId": username, "nickname": info.get("nickname") or author.get("nickname") or username,
+               "avatar": info.get("avatar") or "", "followers": int(info.get("followers") or author.get("follower_count") or 0),
+               "videoCount": int(info.get("videoCount") or author.get("aweme_count") or len(items)),
+               "createDate": "—", "region": region, "region_display": format_full_country_display(region),
+               "location_detail": ""}
+    uid = str(info.get("uid") or author.get("uid") or "---")
+    user_info = {"screen_name": channel["nickname"], "username": "@" + username,
+                 "create_date": "—", "mobile": "—", "country": channel["region_display"],
+                 "uid": uid, "last_nickname_change": "—", "is_self": False}
+    # Explicit own-account cookies retain the existing optional FYP/CRP detail
+    # calls. These are native TikTok requests, not TikHub enrichment.
+    def sync_own_details(target_items):
+        sync_items_penalty_data_native(target_items, native_cookie, ua_str or DEFAULT_UA, proxy_str, region)
+        sync_items_crp_punishment_data(target_items, native_cookie, ua_str or DEFAULT_UA, proxy_str, region)
+
+    return _format_channel_scan(
+        channel_info=channel, raw_items=items, username=username, check_user_info=user_info,
+        is_self_account=bool(native_cookie), effective_cookie=native_cookie,
+        allow_paid_groupid=allow_paid_groupid, did_self_penalty_sync=False,
+        _run_self_penalty_and_crp_sync=sync_own_details,
+        sec_uid=page["secUid"], max_cursor=max_cursor, target_vid="", max_videos=max_videos,
+        all_fetched_api_items=items, creator_meta={}, matched_acc_ua=ua_str or DEFAULT_UA,
+        matched_acc_proxy=proxy_str, allow_tool_self_cookies=allow_tool_self_cookies,
+        all_studio_items=[], is_private_account=bool(author.get("secret")), no_public_videos=False,
+        has_more=bool(page.get("hasMore")), next_cursor=page.get("maxCursor") or 0,
+        scan_cost_ctx=cost, native_reader=True,
+    )
+
+
+def _fetch_channel_info_and_posts_legacy(
     channel_query: str,
     sec_uid: str = "",
     max_cursor: int = 0,
@@ -2868,6 +2940,62 @@ def fetch_channel_info_and_posts(
                         raw_items = raw_items[:max_videos]
 
     # Trích xuất Avatar & Nickname từ author nếu chưa có
+    return _format_channel_scan(
+        channel_info=channel_info,
+        raw_items=raw_items,
+        username=username,
+        check_user_info=check_user_info,
+        is_self_account=is_self_account,
+        effective_cookie=effective_cookie,
+        allow_paid_groupid=allow_paid_groupid,
+        did_self_penalty_sync=did_self_penalty_sync,
+        _run_self_penalty_and_crp_sync=_run_self_penalty_and_crp_sync,
+        sec_uid=sec_uid,
+        max_cursor=max_cursor,
+        target_vid=target_vid,
+        max_videos=max_videos,
+        all_fetched_api_items=all_fetched_api_items,
+        creator_meta=creator_meta,
+        matched_acc_ua=matched_acc_ua,
+        matched_acc_proxy=matched_acc_proxy,
+        allow_tool_self_cookies=allow_tool_self_cookies,
+        all_studio_items=all_studio_items,
+        is_private_account=is_private_account,
+        no_public_videos=no_public_videos,
+        has_more=has_more,
+        next_cursor=next_cursor,
+        scan_cost_ctx=scan_cost_ctx,
+    )
+
+
+def _format_channel_scan(
+    *,
+    channel_info,
+    raw_items,
+    username,
+    check_user_info,
+    is_self_account,
+    effective_cookie,
+    allow_paid_groupid,
+    did_self_penalty_sync,
+    _run_self_penalty_and_crp_sync,
+    sec_uid,
+    max_cursor,
+    target_vid,
+    max_videos,
+    all_fetched_api_items,
+    creator_meta,
+    matched_acc_ua,
+    matched_acc_proxy,
+    allow_tool_self_cookies,
+    all_studio_items,
+    is_private_account,
+    no_public_videos,
+    has_more,
+    next_cursor,
+    scan_cost_ctx,
+    native_reader=False,
+):
     if not channel_info.get("avatar") and raw_items:
         for it in raw_items:
             auth = it.get("author") if isinstance(it.get("author"), dict) else {}
@@ -2919,7 +3047,7 @@ def fetch_channel_info_and_posts(
 
     # Chỉ tài khoản đã đăng nhập (VIP / Admin) mới kích hoạt quét trùng lặp Group ID & API trả phí
     video_list = []
-    if allow_paid_groupid:
+    if allow_paid_groupid and not native_reader:
         tkm_cache = _load_tiktokmanager_cache()
         sync_items_tikhub_groupid(
             raw_items,
@@ -2945,7 +3073,7 @@ def fetch_channel_info_and_posts(
         and not str(it.get("quality") or "").strip()
         and not _extract_aweme_quality_label(it.get("video"))
     ]
-    if need_qual_items and sec_uid:
+    if need_qual_items and sec_uid and not native_reader:
         qual_src_map: Dict[str, Dict[str, Any]] = {}
         for x_src in (all_fetched_api_items or []):
             if isinstance(x_src, dict):
@@ -3030,7 +3158,7 @@ def fetch_channel_info_and_posts(
     cur_ch_handle = str(channel_info.get("uniqueId") or username or "").lstrip("@").strip().lower()
 
     origin_meta_map: Dict[str, Dict[str, Any]] = {}
-    if allow_paid_groupid and raw_items:
+    if allow_paid_groupid and raw_items and not native_reader:
         unresolved_gids: List[str] = []
         seen_ug = set()
         for x_it in raw_items:
@@ -3585,6 +3713,7 @@ def fetch_channel_info_and_posts(
             "cost_usd": round(float(scan_cost_ctx.get("cost_usd") or 0.0), 4),
             "api_calls": int(scan_cost_ctx.get("api_calls") or 0),
             "cached_hits": int(scan_cost_ctx.get("cached_hits") or 0),
+            "provider": "native" if native_reader else "tikhub",
         },
     }
 
