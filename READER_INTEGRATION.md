@@ -36,7 +36,9 @@ Source reader dựa trên MIT signer; LICENSE giữ nguyên trong vendor. Không
 
 ## Kiểm chứng
 
-11 test router/watcher bằng fixture, không tiêu tốn API: reader tốt không gọi fallback, fallback một lần khi lỗi, tắt fallback không gọi API, circuit phục hồi khi session khỏe, candidate xấu giữ file cũ, candidate tốt đổi file, MuMu offline giữ phiên, lỗi mục tiêu không gán nhầm phiên hết hạn, link video giữ đúng phạm vi một video.
+Sửa thumbnail: mobile response có HEIC đứng trước JPEG; ảnh HEIC tải được nhưng không hiển thị trong trình duyệt đang dùng. Adapter nay ưu tiên URL JPEG/PNG/WebP từ toàn bộ cover/origin_cover/dynamic_cover, giữ nguyên chữ ký URL. Đã xác nhận 18/18 URL JPEG và proxy trả image/jpeg thật cho ảnh mẫu. Kết quả lịch sử lưu URL HEIC cũ cần quét lại kênh để lấy URL mới; không xóa lịch sử khách.
+
+13 test router/watcher/thumbnail bằng fixture, không tiêu tốn API: reader tốt không gọi fallback, fallback một lần khi lỗi, tắt fallback không gọi API, circuit phục hồi khi session khỏe, candidate xấu giữ file cũ, candidate tốt đổi file, MuMu offline giữ phiên, lỗi mục tiêu không gán nhầm phiên hết hạn, link video giữ đúng phạm vi một video, chọn đúng URL ảnh trình duyệt đọc được và giữ nguyên chữ ký.
 
 Live adapter và route `/api/check` với lớp xác thực/dữ liệu ví fixture: seitezhm99d → 18 video, 5 trùng, 2 cờ hạn chế, source independent, 0 API trả phí và không chạy hàm fallback. MuMu đang tắt ở lượt kiểm tra này. Admin status: không token 403; fixture Admin 200, không lộ cookie/token. Chưa cố ý làm hỏng tài khoản/session thật để thử đình chỉ; việc chuyển phiên lỗi được kiểm chứng bằng fixture.
 

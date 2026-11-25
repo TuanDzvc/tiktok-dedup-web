@@ -74,6 +74,19 @@ class ProviderTests(unittest.TestCase):
         self.legacy.assert_called_once_with(query)
         self.assertEqual(result['reader_provider']['reason'],'video_or_short_link')
 
+    def test_thumbnail_prefers_original_signed_jpeg_over_heic(self):
+        payload=native_payload()
+        heic='https://images.example/cover.heic?signature=heic-value'
+        jpeg='https://images.example/cover.jpeg?signature=jpeg-value'
+        payload['data']['aweme_list'][0]['video']={'cover':{'url_list':[heic,jpeg]}}
+        self.assertEqual(dedup_provider.format_native(payload)['list'][0]['cover_url'],jpeg)
+
+    def test_thumbnail_checks_other_cover_fields(self):
+        payload=native_payload()
+        jpeg='https://images.example/original.jpeg?signature=unchanged'
+        payload['data']['aweme_list'][0]['video']={'cover':{'uri':'present-but-no-urls'},'origin_cover':{'url_list':[jpeg]}}
+        self.assertEqual(dedup_provider.format_native(payload)['list'][0]['cover_url'],jpeg)
+
 
 class SessionTests(unittest.TestCase):
     def setUp(self):

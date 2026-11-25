@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import requests
 import core_dedup
@@ -19,12 +20,19 @@ ROOT=Path(__file__).resolve().parent
 READER_DIR=Path(os.getenv('INDEPENDENT_READER_DIR',str(ROOT/'independent_reader')))
 
 
-def _first_url(obj):
-    if isinstance(obj,str):return obj
-    if isinstance(obj,dict):
-        values=obj.get('url_list') or obj.get('urlList') or []
-        return str(values[0]) if values else ''
-    return ''
+def _first_url(*objects):
+    """Prefer browser-readable images, keeping TikTok's signed URLs unchanged."""
+    candidates=[]
+    for obj in objects:
+        values=[obj] if isinstance(obj,str) else (obj.get('url_list') or obj.get('urlList') or []) if isinstance(obj,dict) else []
+        candidates.extend(value for value in values if isinstance(value,str) and value.startswith(('https://','http://')))
+    def rank(value):
+        path=urlsplit(value).path.lower()
+        if path.endswith(('.jpeg','.jpg','.png')):return 0
+        if path.endswith(('.webp','.awebp','.avif','.gif')):return 1
+        if path.endswith(('.heic','.heif')):return 3
+        return 2
+    return min(candidates,key=rank) if candidates else ''
 
 
 def format_native(payload):
@@ -69,7 +77,7 @@ def format_native(payload):
             'is_crp_punished':False,'is_copyright':False,'is_takedown':False,
             'is_muted':bool(post.get('is_muted')),'status_code':int(post.get('status_code') or 0),
             'penalty_details':', '.join(reasons),'duration_str':f'{duration//60}:{duration%60:02d}' if duration else '',
-            'cover_url':_first_url(video.get('cover') or video.get('origin_cover') or video.get('dynamic_cover')),
+            'cover_url':_first_url(video.get('cover'),video.get('origin_cover'),video.get('dynamic_cover')),
             'share_url':f'https://www.tiktok.com/@{username}/video/{aid}'}
         for key in ('play','digg','comment','share','collect'):
             value=int(stats.get(key+'_count') or 0);row[key+'_count']=value
@@ -77,7 +85,7 @@ def format_native(payload):
         rows.append(row)
     bad=sum(bool(r['is_dup'] or r['shadow']) for r in rows)
     channel={'uniqueId':username,'nickname':profile.get('nickname') or author.get('nickname') or username,
-        'avatar':profile.get('avatar') or _first_url(author.get('avatar_larger') or author.get('avatar_thumb')),
+        'avatar':_first_url(profile.get('avatar'),author.get('avatar_larger'),author.get('avatar_thumb')),
         'followers':int(profile.get('followers') or author.get('follower_count') or 0),
         'videoCount':int(profile.get('videoCount') or author.get('aweme_count') or 0),
         'createDate':created,'region':region,'region_display':region_display,'location_detail':''}
