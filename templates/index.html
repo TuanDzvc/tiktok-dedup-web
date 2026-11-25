@@ -2985,7 +2985,7 @@
                     </div>
                 `;
             } else if (isVip) {
-                badgeCls = 'bg-emerald-950/90 border-emerald-500/60 hover:bg-emerald-900/80';
+                badgeCls = 'bg-indigo-950 border-indigo-400/70 hover:bg-indigo-900';
                 iconCls = 'fa-crown text-yellow-300 text-sm';
                 roleHtml = `
                     <div class="flex flex-col items-center text-center leading-tight">
@@ -3051,13 +3051,13 @@
                     <button
                         type="button"
                         onclick="openVipAdminModal()"
-                        class="px-3 py-1 rounded-xl ${badgeCls} border flex items-center gap-2 transition whitespace-nowrap flex-shrink-0"
+                        class="px-3 py-1 rounded-xl ${badgeCls} ${!isAdmin && isVip ? 'w-[140px] h-10 justify-center' : ''} border flex items-center gap-2 transition whitespace-nowrap flex-shrink-0"
                         title="${isAdmin ? 'Bấm để mở Bảng Quản Lý Tài Khoản Khách & Đổi mật khẩu' : 'Bấm để xem thông tin / Đổi mật khẩu'}"
                     >
                         <i class="fa-solid ${iconCls}"></i>
                         ${roleHtml}
                     </button>
-                    ${!isAdmin && isVip ? `<div id="vipNavExpiry" class="px-3 py-1 rounded-xl border border-emerald-500/40 bg-emerald-950/60 flex flex-col items-center justify-center leading-tight flex-shrink-0">${vipExpiryMarkup(currentVipUser)}</div>` : ''}
+                    ${!isAdmin && isVip ? `<div id="vipNavExpiry" class="w-[140px] h-10 px-3 py-1 rounded-xl border border-emerald-500/40 bg-emerald-950/60 flex flex-col items-center justify-center leading-tight flex-shrink-0">${vipExpiryMarkup(currentVipUser)}</div>` : ''}
                     <button
                         type="button"
                         onclick="vipLogout()"
