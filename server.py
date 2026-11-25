@@ -930,6 +930,38 @@ def _record_and_check_device_unlocked(
     raw_max_devs = int(u_rec.get("max_devices") if u_rec.get("max_devices") is not None else _default_max_devices_for_user(uname))
     max_devs = 0 if is_unlimited else raw_max_devs
     active_ids = [k for k, v in devs.items() if isinstance(v, dict) and not v.get("blocked")]
+    enforce_limit = bool(_load_sync_meta_unlocked().get("enforce_device_limit", True))
+    is_manual_block = (dev_id in blocked_map) or (bool(prev.get("blocked")) and not bool(prev.get("auto_limit")))
+
+    if not enforce_limit:
+        # Công tắc tổng Giới hạn đăng nhập đang TẮT: chỉ chặn thiết bị bị Admin khóa cứng thủ công,
+        # còn lại cho phép đăng nhập thoải mái mã máy và luôn ghi nhận đầy đủ mọi Mã Máy + IP.
+        if not is_unlimited and is_manual_block:
+            devs[dev_id] = {
+                "id": dev_id,
+                "label": dev_label or prev.get("label") or "",
+                "ip": client_ip,
+                "last_seen": now_ts,
+                "blocked": True,
+                "auto_limit": False,
+            }
+            u_rec["updated_at"] = now_ts
+            if dev_id in blocked_map:
+                return f"⛔ Mã máy {dev_id} đã bị Quản trị viên khóa truy cập!"
+            return f"⛔ Mã máy {dev_id} bị từ chối đăng nhập (Chống share acc)!"
+
+        entry_unlim = {
+            "id": dev_id,
+            "label": dev_label or prev.get("label") or ("PC Admin" if is_super_admin else ""),
+            "ip": client_ip,
+            "last_seen": now_ts,
+            "blocked": False,
+        }
+        if prev.get("admin_unblocked"):
+            entry_unlim["admin_unblocked"] = True
+        devs[dev_id] = entry_unlim
+        u_rec["updated_at"] = now_ts
+        return None
 
     # Kiểm tra danh sách mã máy bị Admin khóa cứng hoặc bị khóa trên tài khoản này (miễn trừ toàn bộ cho Chủ hệ thống / tài khoản vô cực)
     if not is_unlimited and ((dev_id in blocked_map) or bool(prev.get("blocked"))):
@@ -951,11 +983,18 @@ def _record_and_check_device_unlocked(
         return f"⛔ Mã máy {dev_id} bị từ chối đăng nhập (Chống share acc)!"
 
     # Giới hạn số lượng mã máy: tuandzvcc = vô cực (0), admin = 3 máy, các tài khoản khác mặc định = 1 mã máy cố định (đổi IP trên cùng mã máy vẫn hợp lệ)
-    if dev_id not in devs and max_devs > 0:
-        if len(active_ids) >= max_devs:
+    if not is_unlimited and max_devs > 0:
+        is_new_over_limit = (dev_id not in devs) and (len(active_ids) >= max_devs)
+        is_existing_excess = (
+            (dev_id in devs)
+            and (len(active_ids) > max_devs)
+            and (not bool(prev.get("admin_unblocked")))
+            and (dev_id not in active_ids[:max_devs])
+        )
+        if is_new_over_limit or is_existing_excess:
             devs[dev_id] = {
                 "id": dev_id,
-                "label": dev_label,
+                "label": dev_label or prev.get("label") or "",
                 "ip": client_ip,
                 "last_seen": now_ts,
                 "blocked": True,
@@ -966,13 +1005,16 @@ def _record_and_check_device_unlocked(
                 return "⛔ Tài khoản chỉ được dùng trên 1 mã máy để tránh share tài khoản. Nếu muốn đăng nhập thêm ở máy khác vui lòng liên hệ Admin!"
             return f"⛔ Tài khoản chỉ được dùng tối đa {max_devs} mã máy để tránh share tài khoản. Nếu muốn đăng nhập thêm ở máy khác vui lòng liên hệ Admin!"
 
-    devs[dev_id] = {
+    entry_ok = {
         "id": dev_id,
         "label": dev_label or prev.get("label") or ("PC Admin" if is_super_admin else ""),
         "ip": client_ip,
         "last_seen": now_ts,
         "blocked": False,
     }
+    if prev.get("admin_unblocked"):
+        entry_ok["admin_unblocked"] = True
+    devs[dev_id] = entry_ok
     u_rec["updated_at"] = now_ts
     return None
 
@@ -1354,8 +1396,13 @@ def _get_sync_token() -> str:
     return hmac.new(_get_vip_secret(), b"tikflow-pc-render-sync-v1", hashlib.sha256).hexdigest()
 
 
-def _load_sync_meta_unlocked() -> Dict[str, Dict[str, int]]:
-    out: Dict[str, Dict[str, int]] = {"deleted_users": {}, "unblocked_devices": {}}
+def _load_sync_meta_unlocked() -> Dict[str, Any]:
+    out: Dict[str, Any] = {
+        "deleted_users": {},
+        "unblocked_devices": {},
+        "enforce_device_limit": True,
+        "enforce_device_limit_updated_at": 0,
+    }
     if VIP_SYNC_META_FILE.exists():
         try:
             raw = json.loads(VIP_SYNC_META_FILE.read_text(encoding="utf-8"))
@@ -1364,6 +1411,9 @@ def _load_sync_meta_unlocked() -> Dict[str, Dict[str, int]]:
                     out["deleted_users"] = {str(k).lower(): int(v or 0) for k, v in raw["deleted_users"].items() if k}
                 if isinstance(raw.get("unblocked_devices"), dict):
                     out["unblocked_devices"] = {str(k).upper(): int(v or 0) for k, v in raw["unblocked_devices"].items() if k}
+                if "enforce_device_limit" in raw:
+                    out["enforce_device_limit"] = bool(raw.get("enforce_device_limit"))
+                out["enforce_device_limit_updated_at"] = int(raw.get("enforce_device_limit_updated_at") or 0)
         except Exception:
             pass
     return out
@@ -1374,6 +1424,8 @@ def _save_sync_meta_unlocked(meta: Dict[str, Any]) -> None:
         cleaned = {
             "deleted_users": dict(sorted((meta.get("deleted_users") or {}).items(), key=lambda kv: -int(kv[1] or 0))[:500]),
             "unblocked_devices": dict(sorted((meta.get("unblocked_devices") or {}).items(), key=lambda kv: -int(kv[1] or 0))[:500]),
+            "enforce_device_limit": bool(meta.get("enforce_device_limit", True)),
+            "enforce_device_limit_updated_at": int(meta.get("enforce_device_limit_updated_at") or 0),
         }
         tmp_f = VIP_SYNC_META_FILE.with_suffix(".json.tmp")
         tmp_f.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1453,6 +1505,15 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
         dk_c = str(dk or "").strip().upper()
         if dk_c:
             m_unblk[dk_c] = max(m_unblk.get(dk_c, 0), int(ts or 0))
+
+    l_edl_val = bool(l_meta.get("enforce_device_limit", True))
+    l_edl_ts = int(l_meta.get("enforce_device_limit_updated_at") or 0)
+    r_edl_val = bool(r_meta.get("enforce_device_limit", True)) if "enforce_device_limit" in r_meta else l_edl_val
+    r_edl_ts = int(r_meta.get("enforce_device_limit_updated_at") or 0)
+    if r_edl_ts > l_edl_ts:
+        m_edl_val, m_edl_ts = r_edl_val, r_edl_ts
+    else:
+        m_edl_val, m_edl_ts = l_edl_val, l_edl_ts
 
     # 2. Trộn users theo updated_at + devices_reset_at + deleted_users
     m_users: Dict[str, Dict[str, Any]] = {}
@@ -1597,7 +1658,12 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
             }
     _prune_check_history_unlocked(m_hist, now_hist_ts)
 
-    m_meta = {"deleted_users": m_del, "unblocked_devices": m_unblk}
+    m_meta = {
+        "deleted_users": m_del,
+        "unblocked_devices": m_unblk,
+        "enforce_device_limit": m_edl_val,
+        "enforce_device_limit_updated_at": m_edl_ts,
+    }
 
     def _canon(obj: Any) -> str:
         return json.dumps(obj, sort_keys=True, ensure_ascii=False)
@@ -2848,9 +2914,73 @@ async def api_vip_admin_list_users(req: Request):
     with _VIP_LOCK:
         users = _load_vip_users_unlocked()
         bmap = _load_blocked_devices_unlocked()
+        enforce_device_limit = bool(_load_sync_meta_unlocked().get("enforce_device_limit", True))
         out = [_public_vip_user(v, bmap, include_password=True) for v in users.values() if isinstance(v, dict)]
     out.sort(key=lambda x: (0 if x["role"] == "admin" else 1, -x["created_at"]))
-    return JSONResponse(content={"success": True, "users": out})
+    return JSONResponse(content={"success": True, "users": out, "enforce_device_limit": enforce_device_limit})
+
+
+@app.post("/api/vip/admin/device-limit")
+async def api_vip_admin_toggle_device_limit(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    u_obj = _extract_vip_user(req, body)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền chỉnh giới hạn đăng nhập mã máy."})
+
+    with _VIP_LOCK:
+        meta = _load_sync_meta_unlocked()
+        if "enforce_device_limit" in body:
+            new_val = bool(body.get("enforce_device_limit"))
+        else:
+            new_val = not bool(meta.get("enforce_device_limit", True))
+        now_ts = int(time.time())
+        meta["enforce_device_limit"] = new_val
+        meta["enforce_device_limit_updated_at"] = now_ts
+        _save_sync_meta_unlocked(meta)
+
+        if not new_val:
+            users = _load_vip_users_unlocked()
+            bmap = _load_blocked_devices_unlocked()
+            users_changed = False
+            for u_rec in users.values():
+                if not isinstance(u_rec, dict):
+                    continue
+                devs = u_rec.get("devices")
+                if not isinstance(devs, dict):
+                    continue
+                rec_changed = False
+                for did, d_entry in devs.items():
+                    if (
+                        isinstance(d_entry, dict)
+                        and d_entry.get("blocked")
+                        and d_entry.get("auto_limit")
+                        and did not in bmap
+                    ):
+                        d_entry["blocked"] = False
+                        d_entry.pop("auto_limit", None)
+                        rec_changed = True
+                if rec_changed:
+                    u_rec["updated_at"] = now_ts
+                    users_changed = True
+            if users_changed:
+                _save_vip_users_unlocked(users)
+        _schedule_peer_sync_push()
+
+    msg = (
+        "🔒 Đã BẬT giới hạn đăng nhập: mỗi tài khoản giới hạn 1 mã máy!"
+        if new_val
+        else "🔓 Đã TẮT giới hạn đăng nhập: cho phép đăng nhập thoải mái mã máy (vẫn ghi lại đủ mọi mã máy & IP)."
+    )
+    return JSONResponse(content={
+        "success": True,
+        "enforce_device_limit": new_val,
+        "message": msg,
+    })
 
 
 @app.get("/api/vip/admin/sheet-script")
@@ -3217,6 +3347,8 @@ async def api_vip_admin_device_action(req: Request):
         meta = _load_sync_meta_unlocked()
         if action == "block":
             d_entry["blocked"] = True
+            d_entry["auto_limit"] = False
+            d_entry.pop("admin_unblocked", None)
             d_entry["status_ts"] = now_ts
             devs[dev_id] = d_entry
             rec["updated_at"] = now_ts
@@ -3230,6 +3362,7 @@ async def api_vip_admin_device_action(req: Request):
             }
         elif action == "unblock":
             d_entry["blocked"] = False
+            d_entry["admin_unblocked"] = True
             d_entry["status_ts"] = now_ts
             d_entry.pop("auto_limit", None)
             devs[dev_id] = d_entry

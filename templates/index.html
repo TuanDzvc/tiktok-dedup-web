@@ -2210,11 +2210,17 @@
 
                     <!-- Danh sách tài khoản -->
                     <div class="rounded-2xl border border-slate-800 overflow-hidden bg-slate-950/70">
-                        <div class="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs font-bold text-slate-300">
+                        <div class="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300">
                             <span>Danh Sách Tài Khoản Đang Cấp Quyền</span>
-                            <button type="button" onclick="loadVipUsersList()" class="text-cyan-400 hover:text-cyan-300 text-[11px] flex items-center gap-1">
-                                <i class="fa-solid fa-arrows-rotate"></i> Làm mới
-                            </button>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button" id="btnToggleGlobalDeviceLimit" onclick="toggleGlobalDeviceLimit()" class="px-3 py-1 rounded-xl bg-amber-600/90 hover:bg-amber-500 border border-amber-400 text-white font-extrabold text-[11px] transition flex items-center gap-1.5 shadow" title="Bật/Tắt giới hạn 1 mã máy trên toàn hệ thống">
+                                    <i id="iconGlobalDeviceLimit" class="fa-solid fa-lock"></i>
+                                    <span id="lblGlobalDeviceLimit">Giới hạn đăng nhập: BẬT (1 mã máy)</span>
+                                </button>
+                                <button type="button" onclick="loadVipUsersList()" class="text-cyan-400 hover:text-cyan-300 text-[11px] flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-slate-800/80 transition">
+                                    <i class="fa-solid fa-arrows-rotate"></i> Làm mới
+                                </button>
+                            </div>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-center text-xs">
@@ -3248,6 +3254,52 @@
             document.getElementById('vipAdminModal')?.classList.add('hidden');
         }
 
+        let currentGlobalDeviceLimit = true;
+
+        function renderGlobalDeviceLimitBtn(enabled) {
+            currentGlobalDeviceLimit = Boolean(enabled);
+            const btn = document.getElementById('btnToggleGlobalDeviceLimit');
+            const icon = document.getElementById('iconGlobalDeviceLimit');
+            const lbl = document.getElementById('lblGlobalDeviceLimit');
+            if (!btn || !lbl) return;
+            if (currentGlobalDeviceLimit) {
+                btn.className = 'px-3 py-1 rounded-xl bg-amber-600/90 hover:bg-amber-500 border border-amber-400 text-white font-extrabold text-[11px] transition flex items-center gap-1.5 shadow';
+                if (icon) icon.className = 'fa-solid fa-lock';
+                lbl.innerText = 'Giới hạn đăng nhập: BẬT (1 mã máy)';
+            } else {
+                btn.className = 'px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-cyan-500/60 text-cyan-200 font-extrabold text-[11px] transition flex items-center gap-1.5 shadow';
+                if (icon) icon.className = 'fa-solid fa-lock-open';
+                lbl.innerText = 'Giới hạn đăng nhập: TẮT (Thoải mái máy)';
+            }
+        }
+
+        async function toggleGlobalDeviceLimit() {
+            const btn = document.getElementById('btnToggleGlobalDeviceLimit');
+            if (btn) btn.disabled = true;
+            try {
+                const resp = await fetch('/api/vip/admin/device-limit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + getVipToken()
+                    },
+                    body: JSON.stringify({ enforce_device_limit: !currentGlobalDeviceLimit })
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    showToast(data.error || 'Không cập nhật được giới hạn đăng nhập!');
+                    return;
+                }
+                renderGlobalDeviceLimitBtn(Boolean(data.enforce_device_limit));
+                showToast(data.message || 'Đã cập nhật giới hạn đăng nhập.');
+                await loadVipUsersList();
+            } catch (e) {
+                showToast('Lỗi cập nhật giới hạn đăng nhập: ' + e.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
         async function loadVipUsersList() {
             const tbody = document.getElementById('vipUsersTableBody');
             if (!tbody) return;
@@ -3257,6 +3309,7 @@
                 });
                 const data = await resp.json();
                 if (!data.success) return;
+                renderGlobalDeviceLimitBtn(data.enforce_device_limit !== undefined ? Boolean(data.enforce_device_limit) : true);
                 const list = data.users || [];
                 tbody.innerHTML = list.map(u => {
                     const isSelf = currentVipUser && u.username === currentVipUser.username;
@@ -3291,12 +3344,20 @@
                     const maxDevsLabel = isUnlimitedDevs
                         ? '<i class="fa-solid fa-infinity text-amber-300 text-xs align-middle" title="Không giới hạn mã máy"></i>'
                         : `${rawMaxDevs}`;
-                    let devicesHtml = isUnlimitedDevs
-                        ? '<span class="text-amber-300/90 text-[11px] font-bold inline-flex items-center gap-1"><i class="fa-solid fa-infinity text-xs"></i> Không giới hạn máy</span>'
-                        : '<span class="text-slate-400 text-[11px]">Chưa đăng nhập máy nào</span>';
+                    let devicesHtml = !currentGlobalDeviceLimit
+                        ? '<span class="text-cyan-300/90 text-[11px] font-semibold">Thoải mái mã máy (chưa đăng nhập)</span>'
+                        : (isUnlimitedDevs
+                            ? '<span class="text-amber-300/90 text-[11px] font-bold inline-flex items-center gap-1"><i class="fa-solid fa-infinity text-xs"></i> Không giới hạn máy</span>'
+                            : '<span class="text-slate-400 text-[11px]">Chưa đăng nhập máy nào</span>');
                     if (devs.length > 0) {
-                        const headerChip = `<div class="text-[11px] font-bold mb-1 ${(!isUnlimitedDevs && activeDevCount > rawMaxDevs) ? 'text-rose-400' : 'text-cyan-300'}">
-                            Đã ghi nhận: ${activeDevCount}/${maxDevsLabel} máy
+                        const headerSummary = !currentGlobalDeviceLimit
+                            ? `Đã ghi nhận: ${activeDevCount} máy · Thoải mái`
+                            : `Đã ghi nhận: ${activeDevCount}/${maxDevsLabel} máy`;
+                        const headerColorCls = !currentGlobalDeviceLimit
+                            ? 'text-cyan-300'
+                            : ((!isUnlimitedDevs && activeDevCount > rawMaxDevs) ? 'text-rose-400' : 'text-cyan-300');
+                        const headerChip = `<div class="text-[11px] font-bold mb-1 ${headerColorCls}">
+                            ${headerSummary}
                             ${(!isSelf || u.role === 'admin') ? `<button type="button" onclick="adminDeviceAction('${escapeHtml(u.username)}', '', 'reset_all')" class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white border border-slate-600" title="Xóa lịch sử máy cũ khi khách đổi thiết bị">🔄 Reset</button>` : ''}
                         </div>`;
                         const rowsChip = devs.map(d => {
