@@ -1074,6 +1074,25 @@ def _save_payos_file_config_unlocked(cfg: Dict[str, Any]) -> None:
         logger.error(f"[PayOS] Lỗi lưu payos_config.json: {e}")
 
 
+ACCOUNT_CHECK_UNIT_PRICE_VND = 250
+ACCOUNT_TOPUP_MIN_VND = 10000
+ACCOUNT_TOPUP_MAX_VND = 50000000
+_ACCOUNT_CHECK_USER_LOCKS: Dict[str, asyncio.Lock] = {}
+
+
+def _calc_account_checks_left(balance_vnd: int) -> int:
+    return max(0, int(balance_vnd or 0)) // ACCOUNT_CHECK_UNIT_PRICE_VND
+
+
+def _get_user_account_check_lock(username: str) -> asyncio.Lock:
+    k = str(username or "").strip().lower()
+    lk = _ACCOUNT_CHECK_USER_LOCKS.get(k)
+    if lk is None:
+        lk = asyncio.Lock()
+        _ACCOUNT_CHECK_USER_LOCKS[k] = lk
+    return lk
+
+
 def _get_payos_config() -> Dict[str, Any]:
     env_map = _read_local_env()
     ext_map = _read_external_shop_payos_env()
@@ -1237,7 +1256,7 @@ def _fulfill_vip_order_unlocked(
     order_code: int,
     amount_paid: int,
 ) -> Dict[str, Any]:
-    """Xác nhận thanh toán & nâng cấp tài khoản lên VIP idempotent dưới _VIP_LOCK."""
+    """Xác nhận thanh toán PayOS (nâng cấp VIP hoặc cộng số dư Check Tài Khoản) idempotent dưới _VIP_LOCK."""
     key = str(int(order_code))
     ord_rec = orders.get(key)
     if not isinstance(ord_rec, dict):
@@ -1256,24 +1275,32 @@ def _fulfill_vip_order_unlocked(
         return {"ok": False, "reason": "insufficient_amount"}
 
     now_ts = int(time.time())
-    days = max(1, int(ord_rec.get("duration_days") or 30))
+    ord_type = str(ord_rec.get("order_type") or "vip").strip().lower()
     old_role = str(u_rec.get("role") or "member").lower()
-    old_exp = int(u_rec.get("expires_at") or 0)
 
-    if old_role != "admin":
-        u_rec["role"] = "vip"
-        u_rec["active"] = True
-        if u_rec.get("max_devices") is None:
-            u_rec["max_devices"] = _default_max_devices_for_user(uname)
-        if old_role == "vip" and old_exp <= 0:
-            u_rec["expires_at"] = 0
-        else:
-            base_ts = max(now_ts, old_exp) if (old_role == "vip" and old_exp > now_ts) else now_ts
-            u_rec["expires_at"] = base_ts + days * 86400
-        old_note = str(u_rec.get("note") or "").strip()
-        if not old_note or old_note == "Tự đăng ký trên web":
-            u_rec["note"] = f"VIP QR PayOS ({req_amount:,}đ/{days}N)"
+    if ord_type == "topup":
+        credit_vnd = max(0, int(amount_paid))
+        u_rec["account_balance_vnd"] = max(0, int(u_rec.get("account_balance_vnd") or 0)) + credit_vnd
+        u_rec["account_balance_updated_at"] = now_ts
         u_rec["updated_at"] = now_ts
+    else:
+        days = max(1, int(ord_rec.get("duration_days") or 30))
+        old_exp = int(u_rec.get("expires_at") or 0)
+
+        if old_role != "admin":
+            u_rec["role"] = "vip"
+            u_rec["active"] = True
+            if u_rec.get("max_devices") is None:
+                u_rec["max_devices"] = _default_max_devices_for_user(uname)
+            if old_role == "vip" and old_exp <= 0:
+                u_rec["expires_at"] = 0
+            else:
+                base_ts = max(now_ts, old_exp) if (old_role == "vip" and old_exp > now_ts) else now_ts
+                u_rec["expires_at"] = base_ts + days * 86400
+            old_note = str(u_rec.get("note") or "").strip()
+            if not old_note or old_note == "Tự đăng ký trên web":
+                u_rec["note"] = f"VIP QR PayOS ({req_amount:,}đ/{days}N)"
+            u_rec["updated_at"] = now_ts
 
     ord_rec["status"] = "PAID"
     ord_rec["amount_paid"] = int(amount_paid)
@@ -1284,11 +1311,16 @@ def _fulfill_vip_order_unlocked(
 
 
 def _public_order_view(ord_rec: Dict[str, Any]) -> Dict[str, Any]:
+    ord_type = str(ord_rec.get("order_type") or "vip").strip().lower()
+    amt_val = int(ord_rec.get("amount") or 0)
     return {
         "order_code": int(ord_rec.get("order_code") or 0),
+        "order_type": ord_type,
         "username": str(ord_rec.get("username") or ""),
-        "amount": int(ord_rec.get("amount") or 0),
-        "duration_days": int(ord_rec.get("duration_days") or 30),
+        "amount": amt_val,
+        "duration_days": 0 if ord_type == "topup" else int(ord_rec.get("duration_days") or 30),
+        "checks_credit": _calc_account_checks_left(amt_val) if ord_type == "topup" else 0,
+        "unit_price_vnd": ACCOUNT_CHECK_UNIT_PRICE_VND,
         "description": str(ord_rec.get("description") or ""),
         "status": str(ord_rec.get("status") or "PENDING"),
         "qr_code": str(ord_rec.get("qr_code") or ""),
@@ -1437,7 +1469,10 @@ def _save_sync_meta_unlocked(meta: Dict[str, Any]) -> None:
 def _user_record_timestamp(u_rec: Dict[str, Any]) -> int:
     if not isinstance(u_rec, dict):
         return 0
-    ts = int(u_rec.get("updated_at") or u_rec.get("created_at") or 0)
+    ts = max(
+        int(u_rec.get("updated_at") or u_rec.get("created_at") or 0),
+        int(u_rec.get("account_balance_updated_at") or 0),
+    )
     devs = u_rec.get("devices") if isinstance(u_rec.get("devices"), dict) else {}
     for d in devs.values():
         if isinstance(d, dict):
@@ -1551,6 +1586,18 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
             primary = lu if _user_record_timestamp(lu) >= _user_record_timestamp(ru) else ru
         chosen = json.loads(json.dumps(primary))
         chosen["scan_count"] = max(int(lu.get("scan_count") or 0), int(ru.get("scan_count") or 0))
+        chosen["account_check_count"] = max(int(lu.get("account_check_count") or 0), int(ru.get("account_check_count") or 0))
+        l_bal_ts = int(lu.get("account_balance_updated_at") or 0)
+        r_bal_ts = int(ru.get("account_balance_updated_at") or 0)
+        if l_bal_ts > r_bal_ts:
+            chosen["account_balance_vnd"] = max(0, int(lu.get("account_balance_vnd") or 0))
+            chosen["account_balance_updated_at"] = l_bal_ts
+        elif r_bal_ts > l_bal_ts:
+            chosen["account_balance_vnd"] = max(0, int(ru.get("account_balance_vnd") or 0))
+            chosen["account_balance_updated_at"] = r_bal_ts
+        else:
+            chosen["account_balance_vnd"] = max(0, int(chosen.get("account_balance_vnd") or 0))
+            chosen["account_balance_updated_at"] = l_bal_ts
         reset_at = max(int(lu.get("devices_reset_at") or 0), int(ru.get("devices_reset_at") or 0))
         if reset_at > 0:
             chosen["devices_reset_at"] = reset_at
@@ -2063,6 +2110,7 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
     uname_pub = str(u.get("username") or "").strip().lower()
     raw_max_devs = int(u.get("max_devices") if u.get("max_devices") is not None else _default_max_devices_for_user(uname_pub))
     pub_max_devs = 0 if (uname_pub in UNLIMITED_DEVICE_USERS or str(u.get("role") or "").lower() == "admin") else raw_max_devs
+    bal_vnd = max(0, int(u.get("account_balance_vnd") or 0))
     out = {
         "username": u.get("username"),
         "role": u.get("role", "member"),
@@ -2071,6 +2119,10 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
         "expires_at": int(u.get("expires_at") or 0),
         "note": str(u.get("note") or ""),
         "scan_count": int(u.get("scan_count") or 0),
+        "account_balance_vnd": bal_vnd,
+        "account_checks_left": _calc_account_checks_left(bal_vnd),
+        "account_check_unit_price_vnd": ACCOUNT_CHECK_UNIT_PRICE_VND,
+        "account_check_count": int(u.get("account_check_count") or 0),
         "created_at": int(u.get("created_at") or 0),
         "max_devices": pub_max_devs,
         "devices": dev_list,
@@ -2352,6 +2404,9 @@ async def api_vip_register(req: Request):
             "expires_at": 0,
             "note": note or "Tự đăng ký trên web",
             "scan_count": 0,
+            "account_balance_vnd": 0,
+            "account_balance_updated_at": 0,
+            "account_check_count": 0,
             "created_at": now_ts,
             "updated_at": now_ts,
             "token_ver": 1,
@@ -2409,7 +2464,8 @@ async def api_vip_me(req: Request):
             return JSONResponse(content={"success": True, "authenticated": False, "device_blocked": True, "error": dev_err, "user": None})
         pub = _public_vip_user(cur, bmap)
         has_vip = _has_vip_privilege(cur)
-        if not has_vip:
+        is_adm = str(cur.get("role") or "").lower() == "admin"
+        if not is_adm:
             now_ts = int(time.time())
             orders = _load_vip_orders_unlocked()
             cands = [
@@ -2418,6 +2474,7 @@ async def api_vip_me(req: Request):
                 and str(o.get("username") or "").lower() == cur["username"]
                 and str(o.get("status") or "").upper() == "PENDING"
                 and (now_ts - int(o.get("created_at") or 0)) < 86400
+                and (str(o.get("order_type") or "vip").strip().lower() == "topup" or not has_vip)
             ]
             if cands:
                 cands.sort(key=lambda x: -int(x.get("created_at") or 0))
@@ -2484,22 +2541,40 @@ async def api_vip_payos_create_order(req: Request):
         body = {}
     u_obj = _extract_vip_user(req, body)
     if not u_obj:
-        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng ký hoặc đăng nhập tài khoản trước khi lấy mã QR kích hoạt VIP."})
+        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng ký hoặc đăng nhập tài khoản trước khi lấy mã QR thanh toán."})
 
     cfg = _get_payos_config()
     if not cfg.get("configured"):
         return JSONResponse(status_code=503, content={"success": False, "error": "Hệ thống thanh toán PayOS chưa được cấu hình. Vui lòng liên hệ Admin qua Zalo/Facebook!"})
 
     uname = str(u_obj["username"]).strip().lower()
-    if str(u_obj.get("role") or "").lower() == "admin" or (str(u_obj.get("role") or "").lower() == "vip" and int(u_obj.get("expires_at") or 0) <= 0):
-        return JSONResponse(status_code=400, content={"success": False, "error": "Tài khoản của bạn đã có quyền VIP Vĩnh Viễn rồi!"})
+    order_type = str(body.get("order_type") or "vip").strip().lower()
+    if order_type not in ("vip", "topup"):
+        order_type = "vip"
+
+    if order_type == "topup":
+        if str(u_obj.get("role") or "").lower() == "admin":
+            return JSONResponse(status_code=400, content={"success": False, "error": "Tài khoản Admin được miễn phí Check Tài Khoản (0đ/lượt), không cần nạp số dư!"})
+        try:
+            amount = int(body.get("amount") or 50000)
+        except Exception:
+            amount = 0
+        if amount < ACCOUNT_TOPUP_MIN_VND or amount > ACCOUNT_TOPUP_MAX_VND:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": f"Số tiền nạp phải từ {ACCOUNT_TOPUP_MIN_VND:,}đ đến {ACCOUNT_TOPUP_MAX_VND:,}đ!"},
+            )
+        days = 0
+    else:
+        if str(u_obj.get("role") or "").lower() == "admin" or (str(u_obj.get("role") or "").lower() == "vip" and int(u_obj.get("expires_at") or 0) <= 0):
+            return JSONResponse(status_code=400, content={"success": False, "error": "Tài khoản của bạn đã có quyền VIP Vĩnh Viễn rồi!"})
+        amount = int(cfg["price_vnd"])
+        days = int(cfg["duration_days"])
 
     force_new = bool(body.get("force_new", False))
-    amount = int(cfg["price_vnd"])
-    days = int(cfg["duration_days"])
     now_ts = int(time.time())
 
-    # Tái sử dụng đơn PENDING còn hạn (< 10 phút) để tránh tạo nhiều link dư thừa trên PayOS
+    # Tái sử dụng đơn PENDING cùng loại còn hạn (< 10 phút) để tránh tạo nhiều link dư thừa trên PayOS
     reuse_ord: Optional[Dict[str, Any]] = None
     if not force_new:
         with _VIP_LOCK:
@@ -2508,6 +2583,7 @@ async def api_vip_payos_create_order(req: Request):
                 o for o in orders.values()
                 if isinstance(o, dict)
                 and str(o.get("username") or "").lower() == uname
+                and str(o.get("order_type") or "vip").strip().lower() == order_type
                 and str(o.get("status") or "").upper() == "PENDING"
                 and int(o.get("amount") or 0) == amount
                 and int(o.get("duration_days") or 0) == days
@@ -2540,12 +2616,17 @@ async def api_vip_payos_create_order(req: Request):
                         reuse_ord = dict(res_f["order"])
                 if newly_paid and pub_user:
                     init_user_sheet_async(pub_user["username"], role=pub_user["role"], note=sheet_note)
+                paid_msg = (
+                    "🎉 Đơn nạp trước đó đã thanh toán xong! Số dư Check Tài Khoản đã được cộng."
+                    if order_type == "topup"
+                    else "🎉 Đơn trước đó đã thanh toán xong! Tài khoản VIP đã được kích hoạt."
+                )
                 return JSONResponse(content={
                     "success": True,
                     "paid": True,
                     "order": _public_order_view(reuse_ord),
                     "user": pub_user,
-                    "message": "🎉 Đơn trước đó đã thanh toán xong! Tài khoản VIP đã được kích hoạt.",
+                    "message": paid_msg,
                 })
             if p_status == "PENDING":
                 return JSONResponse(content={"success": True, "paid": False, "reused": True, "order": _public_order_view(reuse_ord)})
@@ -2567,7 +2648,12 @@ async def api_vip_payos_create_order(req: Request):
     base_url = _public_base_url_from_request(req)
     return_url = f"{base_url}/payos/return?orderCode={order_code}"
     cancel_url = f"{base_url}/payos/cancel?orderCode={order_code}"
-    desc = f"VIP{order_code}"
+    desc = f"NAP{order_code}" if order_type == "topup" else f"VIP{order_code}"
+    item_name = (
+        f"Nap Check TK {amount:,}d (~{_calc_account_checks_left(amount)} luot) - {uname}"[:75]
+        if order_type == "topup"
+        else f"Goi VIP {days} ngay ({uname})"[:75]
+    )
     exp_ts = now_ts + 900
     sign_payload = {
         "amount": amount,
@@ -2583,14 +2669,14 @@ async def api_vip_payos_create_order(req: Request):
         "returnUrl": return_url,
         "cancelUrl": cancel_url,
         "expiredAt": exp_ts,
-        "items": [{"name": f"Goi VIP {days} ngay ({uname})"[:75], "quantity": 1, "price": amount}],
+        "items": [{"name": item_name, "quantity": 1, "price": amount}],
         "signature": _payos_sign_data(sign_payload, cfg["checksum_key"]),
     }
 
     try:
         pay_res = await asyncio.to_thread(_create_payos_payment_sync, payload, cfg)
     except Exception as exc:
-        logger.error(f"[PayOS] Lỗi tạo đơn QR cho {uname}: {exc}")
+        logger.error(f"[PayOS] Lỗi tạo đơn QR ({order_type}) cho {uname}: {exc}")
         return JSONResponse(status_code=502, content={"success": False, "error": f"Không tạo được mã QR PayOS: {exc}"})
 
     qr_str = str(pay_res.get("qrCode") or "").strip()
@@ -2598,6 +2684,7 @@ async def api_vip_payos_create_order(req: Request):
     qr_uri = _build_qr_data_uri(qr_str)
     ord_rec = {
         "order_code": order_code,
+        "order_type": order_type,
         "username": uname,
         "amount": amount,
         "duration_days": days,
@@ -2899,8 +2986,8 @@ def _get_tikhub_live_balance(force_refresh: bool = False) -> Dict[str, Any]:
 @app.get("/api/vip/admin/api-balance")
 async def api_vip_admin_balance(req: Request, refresh: int = Query(0)):
     u_obj = _extract_vip_user(req)
-    if not _has_vip_privilege(u_obj):
-        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ tài khoản VIP hoặc Admin mới xem được số dư API."})
+    if not u_obj or str(u_obj.get("role") or "").lower() != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới xem được số dư ví API hệ thống."})
     import asyncio
     info = await asyncio.to_thread(_get_tikhub_live_balance, bool(refresh))
     return JSONResponse(content={"success": True, "billing": info})
@@ -3379,6 +3466,59 @@ async def api_vip_admin_device_action(req: Request):
     return JSONResponse(content={"success": True})
 
 
+@app.post("/api/vip/admin/balance")
+async def api_vip_admin_adjust_balance(req: Request):
+    """Admin cộng / trừ / đặt số dư ví Check Tài Khoản cho user."""
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+    u_obj = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not u_obj or u_obj.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới có quyền chỉnh số dư tài khoản."})
+
+    target_u = re.sub(r"[^a-z0-9_.-]", "", str(body.get("username") or "").strip().lower())
+    mode = str(body.get("mode") or "add").strip().lower()
+    if mode not in ("add", "sub", "set"):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Chế độ chỉnh số dư không hợp lệ (add / sub / set)."})
+    try:
+        amount_vnd = int(body.get("amount_vnd"))
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Số tiền không hợp lệ."})
+
+    if amount_vnd < 0 or (mode in ("add", "sub") and amount_vnd <= 0):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Vui lòng nhập số tiền hợp lệ (> 0đ khi cộng/trừ, >= 0đ khi đặt)."})
+    if amount_vnd > 1_000_000_000:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Số tiền vượt quá giới hạn cho phép."})
+
+    with _VIP_LOCK:
+        users = _load_vip_users_unlocked()
+        bmap = _load_blocked_devices_unlocked()
+        cur = users.get(target_u)
+        if not isinstance(cur, dict):
+            return JSONResponse(status_code=404, content={"success": False, "error": f"Không tìm thấy tài khoản '{target_u}'."})
+        old_bal = max(0, int(cur.get("account_balance_vnd") or 0))
+        if mode == "add":
+            new_bal = old_bal + amount_vnd
+        elif mode == "sub":
+            new_bal = max(0, old_bal - amount_vnd)
+        else:
+            new_bal = amount_vnd
+        now_ts = int(time.time())
+        cur["account_balance_vnd"] = new_bal
+        cur["account_balance_updated_at"] = now_ts
+        cur["updated_at"] = now_ts
+        _save_vip_users_unlocked(users)
+        pub_u = _public_vip_user(cur, bmap, include_password=True)
+
+    checks_left = _calc_account_checks_left(new_bal)
+    return JSONResponse(content={
+        "success": True,
+        "user": pub_u,
+        "message": f"✅ Đã cập nhật số dư @{target_u}: {new_bal:,}đ (~{checks_left:,} lượt Check Tài Khoản)!",
+    })
+
+
 @app.post("/api/vip/admin/users")
 async def api_vip_admin_upsert_user(req: Request):
     try:
@@ -3455,6 +3595,9 @@ async def api_vip_admin_upsert_user(req: Request):
                 "expires_at": exp_ts,
                 "note": str(note_in or "").strip()[:120],
                 "scan_count": 0,
+                "account_balance_vnd": 0,
+                "account_balance_updated_at": 0,
+                "account_check_count": 0,
                 "created_at": now_ts,
                 "updated_at": now_ts,
                 "token_ver": 1,
@@ -3662,28 +3805,30 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     )
 
     internal_cost = res.pop("_internal_cost", None) if isinstance(res, dict) else None
+    is_admin_user = bool(vip_user and str(vip_user.get("role") or "").lower() == "admin")
     if isinstance(res, dict) and res.get("success"):
         if not is_tuandzvcc:
             res["hasMore"] = False
         if has_vip_access:
             res["vip_mode"] = True
             res["dedup_locked"] = False
-            cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
-            c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
-            c_calls = int(cost_obj.get("api_calls") or 0)
-            c_cached = int(cost_obj.get("cached_hits") or 0)
-            c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
-            bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
-            res["admin_billing"] = {
-                "scan_cost_usd": c_usd,
-                "scan_cost_vnd": c_vnd,
-                "api_calls": c_calls,
-                "cached_hits": c_cached,
-                "balance_usd": bal_info["total_usd"],
-                "balance_vnd": bal_info["total_vnd"],
-                "est_scans_left": bal_info["est_scans_left"],
-                "usd_rate": _TIKHUB_USD_TO_VND,
-            }
+            if is_admin_user:
+                cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
+                c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
+                c_calls = int(cost_obj.get("api_calls") or 0)
+                c_cached = int(cost_obj.get("cached_hits") or 0)
+                c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
+                bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
+                res["admin_billing"] = {
+                    "scan_cost_usd": c_usd,
+                    "scan_cost_vnd": c_vnd,
+                    "api_calls": c_calls,
+                    "cached_hits": c_cached,
+                    "balance_usd": bal_info["total_usd"],
+                    "balance_vnd": bal_info["total_vnd"],
+                    "est_scans_left": bal_info["est_scans_left"],
+                    "usd_rate": _TIKHUB_USD_TO_VND,
+                }
         elif not dedup_locked:
             res["vip_mode"] = False
             res["dedup_locked"] = False
@@ -3771,7 +3916,6 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
 
     vip_user = _extract_vip_user(req, body)
     dev_id, dev_label, client_ip_chk = _extract_device_info(req, body)
-    has_vip_access = False
     checked_username = ""
 
     with _VIP_LOCK:
@@ -3779,60 +3923,125 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
         if vip_user:
             users_db = _load_vip_users_unlocked()
             u_rec = users_db.get(vip_user["username"])
-            if isinstance(u_rec, dict):
-                checked_username = str(u_rec.get("username") or "")
-                dev_err = _record_and_check_device_unlocked(u_rec, dev_id, dev_label, client_ip_chk, bmap_db)
-                _save_vip_users_unlocked(users_db)
-                if dev_err:
-                    return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": dev_err})
-                has_vip_access = _has_vip_privilege(u_rec)
+            if not isinstance(u_rec, dict):
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "success": False,
+                        "login_required": True,
+                        "error": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại!",
+                    },
+                )
+            checked_username = str(u_rec.get("username") or "")
+            dev_err = _record_and_check_device_unlocked(u_rec, dev_id, dev_label, client_ip_chk, bmap_db)
+            _save_vip_users_unlocked(users_db)
+            if dev_err:
+                return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": dev_err})
         elif dev_id in bmap_db:
             return JSONResponse(
                 status_code=403,
                 content={"success": False, "device_blocked": True, "error": f"⛔ Mã máy {dev_id} đã bị Quản trị viên khóa truy cập!"},
             )
+        else:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "success": False,
+                    "login_required": True,
+                    "error": f"Vui lòng đăng nhập tài khoản để sử dụng Check Tài Khoản ({ACCOUNT_CHECK_UNIT_PRICE_VND}đ / tài khoản)!",
+                },
+            )
 
-    if not vip_user or not has_vip_access:
-        return JSONResponse(
-            status_code=403,
-            content={
-                "success": False,
-                "vip_required": True,
-                "error": "⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!",
-            },
-        )
+    req_count = len(unique_inputs)
+    required_vnd = req_count * ACCOUNT_CHECK_UNIT_PRICE_VND
 
-    batch_res = await asyncio.to_thread(check_accounts_batch_tikhub, unique_inputs, 6)
-    batch_res["duplicate_lines_skipped"] = int(batch_res.get("duplicate_lines_skipped") or 0) + pre_dup_skipped
-    if not batch_res.get("success"):
-        return JSONResponse(status_code=400, content=batch_res)
+    async with _get_user_account_check_lock(checked_username):
+        with _VIP_LOCK:
+            users_db = _load_vip_users_unlocked()
+            u_rec = users_db.get(checked_username)
+            if not isinstance(u_rec, dict):
+                return JSONResponse(
+                    status_code=401,
+                    content={"success": False, "login_required": True, "error": "Tài khoản không tồn tại."},
+                )
+            is_admin_user = str(u_rec.get("role") or "").lower() == "admin"
+            cur_bal = max(0, int(u_rec.get("account_balance_vnd") or 0))
+            checks_left = _calc_account_checks_left(cur_bal)
+            if not is_admin_user and cur_bal < required_vnd:
+                return JSONResponse(
+                    status_code=402,
+                    content={
+                        "success": False,
+                        "insufficient_balance": True,
+                        "balance_vnd": cur_bal,
+                        "checks_left": checks_left,
+                        "required_vnd": required_vnd,
+                        "requested_count": req_count,
+                        "unit_price_vnd": ACCOUNT_CHECK_UNIT_PRICE_VND,
+                        "error": (
+                            f"Số dư Check Tài Khoản không đủ! Cần {required_vnd:,}đ "
+                            f"({req_count} tài khoản × {ACCOUNT_CHECK_UNIT_PRICE_VND}đ), "
+                            f"số dư hiện có {cur_bal:,}đ (tối đa {checks_left} lượt). Vui lòng nạp thêm số dư!"
+                        ),
+                    },
+                )
 
-    checked_total = max(1, len(batch_res.get("results") or unique_inputs))
-    if has_vip_access and checked_username:
+        batch_res = await asyncio.to_thread(check_accounts_batch_tikhub, unique_inputs, 6)
+        batch_res["duplicate_lines_skipped"] = int(batch_res.get("duplicate_lines_skipped") or 0) + pre_dup_skipped
+        if not batch_res.get("success"):
+            return JSONResponse(status_code=400, content=batch_res)
+
+        results_list = batch_res.get("results") or []
+        ok_count = sum(1 for r in results_list if isinstance(r, dict) and r.get("ok") is True)
+        error_count = max(0, len(results_list) - ok_count)
+        charged_vnd = 0 if is_admin_user else (ok_count * ACCOUNT_CHECK_UNIT_PRICE_VND)
+
         with _VIP_LOCK:
             users_db = _load_vip_users_unlocked()
             u_rec = users_db.get(checked_username)
             if isinstance(u_rec, dict):
-                u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + checked_total
+                cur_bal2 = max(0, int(u_rec.get("account_balance_vnd") or 0))
+                if not is_admin_user and charged_vnd > 0:
+                    now_bal_ts = int(time.time())
+                    u_rec["account_balance_vnd"] = max(0, cur_bal2 - charged_vnd)
+                    u_rec["account_balance_updated_at"] = now_bal_ts
+                    u_rec["updated_at"] = now_bal_ts
+                new_bal = max(0, int(u_rec.get("account_balance_vnd") or 0))
+                u_rec["account_check_count"] = int(u_rec.get("account_check_count") or 0) + ok_count
+                u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + max(1, len(results_list))
                 _save_vip_users_unlocked(users_db)
-        c_usd = round(float(batch_res.get("cost_usd") or 0.0), 4)
-        c_calls = int(batch_res.get("api_calls") or 0)
-        c_cached = int(batch_res.get("cached_country_hits") or 0)
-        c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
-        bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
-        batch_res["vip_mode"] = True
-        batch_res["admin_billing"] = {
-            "scan_cost_usd": c_usd,
-            "scan_cost_vnd": c_vnd,
-            "api_calls": c_calls,
-            "cached_hits": c_cached,
-            "balance_usd": bal_info["total_usd"],
-            "balance_vnd": bal_info["total_vnd"],
-            "est_scans_left": bal_info["est_scans_left"],
-            "usd_rate": _TIKHUB_USD_TO_VND,
+            else:
+                new_bal = 0
+
+        batch_res["user_billing"] = {
+            "is_admin_free": is_admin_user,
+            "unit_price_vnd": ACCOUNT_CHECK_UNIT_PRICE_VND,
+            "charged_count": ok_count,
+            "error_skipped_count": error_count,
+            "charged_vnd": charged_vnd,
+            "balance_vnd": new_bal,
+            "checks_left": _calc_account_checks_left(new_bal),
         }
 
-    if vip_user and checked_username:
+        if is_admin_user:
+            c_usd = round(float(batch_res.get("cost_usd") or 0.0), 4)
+            c_calls = int(batch_res.get("api_calls") or 0)
+            c_cached = int(batch_res.get("cached_country_hits") or 0)
+            c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
+            bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
+            batch_res["vip_mode"] = True
+            batch_res["admin_billing"] = {
+                "scan_cost_usd": c_usd,
+                "scan_cost_vnd": c_vnd,
+                "api_calls": c_calls,
+                "cached_hits": c_cached,
+                "balance_usd": bal_info["total_usd"],
+                "balance_vnd": bal_info["total_vnd"],
+                "est_scans_left": bal_info["est_scans_left"],
+                "usd_rate": _TIKHUB_USD_TO_VND,
+            }
+
+    if checked_username:
         try:
             _record_account_check_history_for_user(checked_username, batch_res.get("results") or [])
         except Exception as e_ahist:
@@ -3849,8 +4058,6 @@ def _clear_history_bucket_response(req: Request, entries_key: str, deleted_key: 
     vip_user = _extract_vip_user(req)
     if not vip_user:
         return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
-    if entries_key == "account_entries" and not _has_vip_privilege(vip_user):
-        return JSONResponse(status_code=403, content={"success": False, "vip_required": True, "error": "⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!"})
     acct = str(vip_user.get("username") or "").strip().lower()
     now_ts = int(time.time())
     with _HISTORY_LOCK:
@@ -3870,8 +4077,6 @@ def _delete_history_item_response(req: Request, target_username: str, entries_ke
     vip_user = _extract_vip_user(req)
     if not vip_user:
         return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
-    if entries_key == "account_entries" and not _has_vip_privilege(vip_user):
-        return JSONResponse(status_code=403, content={"success": False, "vip_required": True, "error": "⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!"})
     acct = str(vip_user.get("username") or "").strip().lower()
     target = re.sub(r"[^a-zA-Z0-9._-]", "", str(target_username or "").lstrip("@").strip().lower())
     if not target:
@@ -3896,7 +4101,7 @@ def api_get_check_history(req: Request):
     if not vip_user:
         return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập để sử dụng Lịch sử check."})
     acct = str(vip_user.get("username") or "").strip().lower()
-    can_acc_hist = _has_vip_privilege(vip_user)
+    can_acc_hist = True
     now_ts = int(time.time())
     with _HISTORY_LOCK:
         hmap = _load_check_history_unlocked()
@@ -3955,13 +4160,13 @@ async def api_export_accounts_excel(req: Request):
         return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
 
     vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
-    if not vip_user or not _has_vip_privilege(vip_user):
+    if not vip_user:
         return JSONResponse(
-            status_code=403,
+            status_code=401,
             content={
                 "success": False,
-                "vip_required": True,
-                "error": "⛔ Tính năng Check Tài Khoản chỉ dành riêng cho tài khoản VIP và Admin!",
+                "login_required": True,
+                "error": "Vui lòng đăng nhập tài khoản để xuất Excel Check Tài Khoản!",
             },
         )
 
