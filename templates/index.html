@@ -2463,12 +2463,12 @@
                         </div>
                         <div class="min-w-0 space-y-0.5">
                             <div class="text-xs sm:text-sm font-extrabold text-white">Tài khoản: <span id="selfCardUsername" class="font-mono text-cyan-300">—</span></div>
-                            <div id="selfCardVipStatus" class="text-[11px] text-slate-300">Nạp từ 50.000đ để có VIP Kiểm Tra Kênh &amp; số dư Check Tài Khoản</div>
-                            <div id="selfCardBalanceStatus" class="text-[11px] font-bold text-emerald-300">💰 Ví Check Tài Khoản: 0đ (~0 lượt · 250đ/lượt)</div>
+                            <div id="selfCardVipStatus" class="text-[11px] text-slate-300">Thông tin tài khoản</div>
+                            <div id="selfCardBalanceStatus" class="hidden text-[11px] font-bold text-emerald-300"></div>
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 pt-2.5 border-t border-slate-800/80">
-                        <button type="button" id="btnSelfActivateVipQr" onclick="closeVipAdminModal(); openVipQrModal();" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/25 whitespace-nowrap">
+                        <button type="button" id="btnSelfActivateVipQr" onclick="closeVipAdminModal(); openVipQrModal();" class="hidden flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/25 whitespace-nowrap">
                             <i class="fa-solid fa-qrcode"></i> <span id="lblSelfActivateVipQr">Nạp Tiền / VIP (VietQR)</span>
                         </button>
                         <button type="button" onclick="openChangePasswordModal(currentVipUser ? currentVipUser.username : '', true)" class="flex-1 py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow whitespace-nowrap">
@@ -3704,27 +3704,30 @@
                     if (selfCardName) selfCardName.innerText = currentVipUser.username || '—';
                     const isPermVip = Boolean(currentVipUser.has_manual_vip && (!currentVipUser.expires_at || Number(currentVipUser.expires_at) <= 0));
                     const balV = (typeof getUserAccountBalanceVnd === 'function') ? getUserAccountBalanceVnd() : Number(currentVipUser.account_balance_vnd || 0);
-                    const dLeft = Math.floor(balV / DEDUP_CHECK_UNIT_PRICE_VND);
+                    const accountTab = activeMainWorkspaceTab === 'account_check';
                     const chLeft = Math.floor(balV / ACCOUNT_CHECK_UNIT_PRICE_VND);
                     if (selfVipSt) {
                         if (isPermVip) {
-                            selfVipSt.innerText = '👑 VIP Đặc Quyền: Vĩnh Viễn (Không trừ số dư Check Trùng)';
+                            selfVipSt.innerText = '👑 VIP Đặc Quyền: Vĩnh Viễn';
                         } else if (currentVipUser.has_manual_vip && currentVipUser.expires_at) {
                             const dStr = new Date(Number(currentVipUser.expires_at) * 1000).toLocaleDateString('vi-VN');
                             selfVipSt.innerText = `👑 VIP Đặc Quyền: Đang hoạt động (Hạn đến ${dStr})`;
-                        } else if (balV >= DEDUP_CHECK_UNIT_PRICE_VND) {
-                            selfVipSt.innerText = '✅ Đang mở khóa Check Trùng + Check Tài Khoản theo số dư Ví chung';
+                        } else if (!accountTab) {
+                            selfVipSt.innerText = '✅ Tài khoản đang hoạt động';
+                        } else if (balV >= ACCOUNT_CHECK_UNIT_PRICE_VND) {
+                            selfVipSt.innerText = '✅ Check Tài Khoản theo số dư';
                         } else {
-                            selfVipSt.innerText = '⏳ Hết số dư — Nạp từ 50.000đ để dùng Check Trùng (26đ/lượt) & Check Tài Khoản (250đ/lượt)';
+                            selfVipSt.innerText = '⏳ Nạp tiền để dùng Check Tài Khoản (250đ/lượt)';
                         }
                     }
                     if (selfBalSt) {
-                        selfBalSt.innerText = `💰 Ví chung: ${balV.toLocaleString('vi-VN')}đ (~${dLeft.toLocaleString('vi-VN')} lượt Check Trùng · ~${chLeft.toLocaleString('vi-VN')} lượt Check Tài Khoản)`;
+                        selfBalSt.innerText = accountTab ? `💰 Ví Check Tài Khoản: ${balV.toLocaleString('vi-VN')}đ (~${chLeft.toLocaleString('vi-VN')} lượt)` : '';
+                        selfBalSt.classList.toggle('hidden', !accountTab);
                     }
                     if (selfQrBtn) {
-                        selfQrBtn.classList.remove('hidden');
+                        selfQrBtn.classList.toggle('hidden', !accountTab);
                         if (selfQrLbl) {
-                            selfQrLbl.innerText = 'Nạp Tiền Ví Chung (VietQR)';
+                            selfQrLbl.innerText = 'Nạp Tiền (VietQR)';
                         }
                     }
                 }
