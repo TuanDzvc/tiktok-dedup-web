@@ -1075,11 +1075,16 @@ def _save_payos_file_config_unlocked(cfg: Dict[str, Any]) -> None:
 
 
 ACCOUNT_CHECK_UNIT_PRICE_VND = 250
+DEDUP_CHECK_UNIT_PRICE_VND = 26
 _ACCOUNT_CHECK_USER_LOCKS: Dict[str, asyncio.Lock] = {}
 
 
 def _calc_account_checks_left(balance_vnd: int) -> int:
     return max(0, int(balance_vnd or 0)) // ACCOUNT_CHECK_UNIT_PRICE_VND
+
+
+def _calc_dedup_checks_left(balance_vnd: int) -> int:
+    return max(0, int(balance_vnd or 0)) // DEDUP_CHECK_UNIT_PRICE_VND
 
 
 def _get_user_account_check_lock(username: str) -> asyncio.Lock:
@@ -1273,37 +1278,16 @@ def _fulfill_vip_order_unlocked(
         return {"ok": False, "reason": "insufficient_amount"}
 
     now_ts = int(time.time())
-    ord_type = str(ord_rec.get("order_type") or "vip").strip().lower()
     old_role = str(u_rec.get("role") or "member").lower()
 
-    if ord_type == "topup":
+    if old_role != "admin":
         credit_vnd = max(0, int(amount_paid))
         u_rec["account_balance_vnd"] = max(0, int(u_rec.get("account_balance_vnd") or 0)) + credit_vnd
         u_rec["account_balance_updated_at"] = now_ts
+        old_note = str(u_rec.get("note") or "").strip()
+        if not old_note or old_note == "Tự đăng ký trên web":
+            u_rec["note"] = f"Nạp QR PayOS ({req_amount:,}đ)"
         u_rec["updated_at"] = now_ts
-    else:
-        days = max(1, int(ord_rec.get("duration_days") or 30))
-        old_exp = int(u_rec.get("expires_at") or 0)
-
-        if old_role != "admin":
-            has_active_vip = (old_role == "vip") and (old_exp <= 0 or old_exp > now_ts)
-            u_rec["role"] = "vip"
-            u_rec["active"] = True
-            if u_rec.get("max_devices") is None:
-                u_rec["max_devices"] = _default_max_devices_for_user(uname)
-            if has_active_vip:
-                # Đang có VIP (còn hạn hoặc vĩnh viễn): nạp thêm chỉ cộng số dư Check Tài Khoản, không tăng hạn VIP Check Trùng
-                u_rec["expires_at"] = old_exp
-            else:
-                # Chưa có VIP hoặc VIP đã hết hạn: kích hoạt đúng gói VIP mặc định (30 ngày)
-                u_rec["expires_at"] = now_ts + days * 86400
-            credit_vnd = max(0, int(amount_paid))
-            u_rec["account_balance_vnd"] = max(0, int(u_rec.get("account_balance_vnd") or 0)) + credit_vnd
-            u_rec["account_balance_updated_at"] = now_ts
-            old_note = str(u_rec.get("note") or "").strip()
-            if not old_note or old_note == "Tự đăng ký trên web":
-                u_rec["note"] = f"VIP QR PayOS ({req_amount:,}đ/{days}N)"
-            u_rec["updated_at"] = now_ts
 
     ord_rec["status"] = "PAID"
     ord_rec["amount_paid"] = int(amount_paid)
@@ -1321,7 +1305,9 @@ def _public_order_view(ord_rec: Dict[str, Any]) -> Dict[str, Any]:
         "order_type": ord_type,
         "username": str(ord_rec.get("username") or ""),
         "amount": amt_val,
-        "duration_days": 0 if ord_type == "topup" else int(ord_rec.get("duration_days") or 30),
+        "duration_days": 0,
+        "dedup_checks_credit": _calc_dedup_checks_left(amt_val),
+        "dedup_unit_price_vnd": DEDUP_CHECK_UNIT_PRICE_VND,
         "checks_credit": _calc_account_checks_left(amt_val),
         "unit_price_vnd": ACCOUNT_CHECK_UNIT_PRICE_VND,
         "description": str(ord_rec.get("description") or ""),
@@ -2072,7 +2058,7 @@ def _verify_vip_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _has_vip_privilege(u: Optional[Dict[str, Any]]) -> bool:
+def _has_manual_vip_privilege(u: Optional[Dict[str, Any]]) -> bool:
     if not isinstance(u, dict) or not u.get("active", True):
         return False
     role = str(u.get("role") or "member").lower()
@@ -2082,6 +2068,14 @@ def _has_vip_privilege(u: Optional[Dict[str, Any]]) -> bool:
         return False
     exp_at = int(u.get("expires_at") or 0)
     return exp_at <= 0 or exp_at >= int(time.time())
+
+
+def _has_vip_privilege(u: Optional[Dict[str, Any]]) -> bool:
+    if not isinstance(u, dict) or not u.get("active", True):
+        return False
+    if _has_manual_vip_privilege(u):
+        return True
+    return int(u.get("account_balance_vnd") or 0) >= DEDUP_CHECK_UNIT_PRICE_VND
 
 
 def _extract_vip_user(req: Request, body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
@@ -2118,11 +2112,14 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
         "username": u.get("username"),
         "role": u.get("role", "member"),
         "is_vip": _has_vip_privilege(u),
+        "has_manual_vip": _has_manual_vip_privilege(u),
         "active": bool(u.get("active", True)),
         "expires_at": int(u.get("expires_at") or 0),
         "note": str(u.get("note") or ""),
         "scan_count": int(u.get("scan_count") or 0),
         "account_balance_vnd": bal_vnd,
+        "dedup_checks_left": _calc_dedup_checks_left(bal_vnd),
+        "dedup_check_unit_price_vnd": DEDUP_CHECK_UNIT_PRICE_VND,
         "account_checks_left": _calc_account_checks_left(bal_vnd),
         "account_check_unit_price_vnd": ACCOUNT_CHECK_UNIT_PRICE_VND,
         "account_check_count": int(u.get("account_check_count") or 0),
@@ -2569,7 +2566,7 @@ async def api_vip_payos_create_order(req: Request):
             status_code=400,
             content={"success": False, "error": f"Số tiền nạp tối thiểu là {base_price:,}đ (tối đa 50,000,000đ)!"},
         )
-    days = base_days
+    days = 0
 
     force_new = bool(body.get("force_new", False))
     now_ts = int(time.time())
@@ -2621,7 +2618,7 @@ async def api_vip_payos_create_order(req: Request):
                     "paid": True,
                     "order": _public_order_view(reuse_ord),
                     "user": pub_user,
-                    "message": "🎉 Đơn trước đó đã thanh toán xong! Tài khoản đã kích hoạt VIP Check Trùng và cộng số dư Check Tài Khoản.",
+                    "message": "🎉 Đơn trước đó đã thanh toán xong! Số dư Ví chung đã được cộng.",
                 })
             if p_status == "PENDING":
                 return JSONResponse(content={"success": True, "paid": False, "reused": True, "order": _public_order_view(reuse_ord)})
@@ -2644,7 +2641,7 @@ async def api_vip_payos_create_order(req: Request):
     return_url = f"{base_url}/payos/return?orderCode={order_code}"
     cancel_url = f"{base_url}/payos/cancel?orderCode={order_code}"
     desc = f"VIP{order_code}"
-    item_name = f"Nap {amount:,}d ({_calc_account_checks_left(amount)} luot Check TK) - {uname}"[:75]
+    item_name = f"Nap goi chung {amount:,}d ({_calc_dedup_checks_left(amount)} trung / {_calc_account_checks_left(amount)} TK) - {uname}"[:75]
     exp_ts = now_ts + 900
     sign_payload = {
         "amount": amount,
@@ -3503,10 +3500,11 @@ async def api_vip_admin_adjust_balance(req: Request):
         pub_u = _public_vip_user(cur, bmap, include_password=True)
 
     checks_left = _calc_account_checks_left(new_bal)
+    dedup_left = _calc_dedup_checks_left(new_bal)
     return JSONResponse(content={
         "success": True,
         "user": pub_u,
-        "message": f"✅ Đã cập nhật số dư @{target_u}: {new_bal:,}đ (~{checks_left:,} lượt Check Tài Khoản)!",
+        "message": f"✅ Đã cập nhật số dư @{target_u}: {new_bal:,}đ (~{dedup_left:,} lượt Check Trùng · ~{checks_left:,} lượt Check Tài Khoản)!",
     })
 
 
@@ -3709,6 +3707,9 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     )[:20]
     dev_id, dev_label, client_ip_chk = _extract_device_info(req, body)
     has_vip_access = False
+    has_manual_vip = False
+    is_admin_user = False
+    charge_dedup_balance = False
     checked_username = ""
 
     with _VIP_LOCK:
@@ -3722,8 +3723,17 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                 if dev_err:
                     _save_vip_users_unlocked(users_db)
                     return JSONResponse(status_code=403, content={"success": False, "device_blocked": True, "error": dev_err})
-                has_vip_access = _has_vip_privilege(u_rec)
-                if has_vip_access and max_cursor == 0:
+                is_admin_user = str(u_rec.get("role") or "").lower() == "admin"
+                has_manual_vip = _has_manual_vip_privilege(u_rec)
+                cur_bal = max(0, int(u_rec.get("account_balance_vnd") or 0))
+                charge_dedup_balance = bool(
+                    not is_admin_user
+                    and not has_manual_vip
+                    and cur_bal >= DEDUP_CHECK_UNIT_PRICE_VND
+                    and max_cursor == 0
+                )
+                has_vip_access = bool(has_manual_vip or charge_dedup_balance)
+                if has_manual_vip and max_cursor == 0:
                     u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + 1
                 _save_vip_users_unlocked(users_db)
         elif dev_id in bmap_db:
@@ -3743,120 +3753,164 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
             },
         )
 
-    allow_paid_dedup = True
-    dedup_locked = False
-    q_stat = None
+    async def _execute_dedup_scan() -> Dict[str, Any]:
+        allow_paid_dedup = True
+        dedup_locked = False
+        q_stat = None
 
-    if not has_vip_access:
-        if not re.match(r"^DEV-[0-9A-Z]{6,12}$", raw_explicit_dev):
-            return JSONResponse(
-                status_code=400,
-                content={"success": False, "error": "Không xác thực được Mã máy thiết bị. Vui lòng tải lại trang web (Ctrl+F5) và thử lại!"},
-            )
-        q_stat = _get_free_quota_status(dev_id, checked_username)
-        if q_stat["used"] >= FREE_DAILY_LIMIT:
-            allow_paid_dedup = False
-            dedup_locked = True
-
-    force_ext = query.startswith("!")
-    if force_ext:
-        cookie = ""
-    clean_user = extract_clean_username(query.lstrip("!"))
-
-    # Chỉ tài khoản tuandzvcc mới được phép tự động tra cứu và dùng cookie nick trong tool / server
-    if is_tuandzvcc and not cookie and clean_user and not force_ext:
-        acc_entry = studio_engine.ACTIVE_STUDIO_ACCOUNTS.get(clean_user.lower())
-        if acc_entry:
-            cookie = acc_entry.get("cookie", "")
-            if not proxy and acc_entry.get("proxy"):
-                proxy = acc_entry["proxy"]
-            if not sec_uid and acc_entry.get("account", {}).get("sec_uid"):
-                sec_uid = acc_entry["account"]["sec_uid"]
-
-    # Ghi nhận người dùng kiểm tra ngầm về đúng trang tính Google Sheet theo tài khoản đã đăng ký (lần quét đầu max_cursor == 0)
-    if max_cursor == 0:
-        client_ip = get_client_ip(req)
-        if clean_user:
-            record_user_check_async(clean_user, client_ip, account=checked_username, device_id=dev_id)
-
-    # Chạy phân tích trong thread riêng:
-    # - 10 lượt đầu Free/ngày theo Mã máy: mở khóa 100% tính năng (kể cả Check Trùng & Video Gốc).
-    # - Sau khi hết 10 lượt: vẫn cho check bình thường (0đ) thông tin User, Video, Shadowban; khóa cột Trùng lặp & Án phạt bằng nút VIP.
-    import asyncio
-    res = await asyncio.to_thread(
-        fetch_channel_info_and_posts,
-        query,
-        sec_uid=sec_uid,
-        max_cursor=max_cursor,
-        cookie_str=cookie,
-        proxy_str=proxy,
-        max_videos=max_videos,
-        allow_paid_groupid=allow_paid_dedup,
-        allow_tool_self_cookies=is_tuandzvcc,
-    )
-
-    internal_cost = res.pop("_internal_cost", None) if isinstance(res, dict) else None
-    is_admin_user = bool(vip_user and str(vip_user.get("role") or "").lower() == "admin")
-    if isinstance(res, dict) and res.get("success"):
-        if not is_tuandzvcc:
-            res["hasMore"] = False
-        if has_vip_access:
-            res["vip_mode"] = True
-            res["dedup_locked"] = False
-            if is_admin_user:
-                cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
-                c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
-                c_calls = int(cost_obj.get("api_calls") or 0)
-                c_cached = int(cost_obj.get("cached_hits") or 0)
-                c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
-                bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
-                res["admin_billing"] = {
-                    "scan_cost_usd": c_usd,
-                    "scan_cost_vnd": c_vnd,
-                    "api_calls": c_calls,
-                    "cached_hits": c_cached,
-                    "balance_usd": bal_info["total_usd"],
-                    "balance_vnd": bal_info["total_vnd"],
-                    "est_scans_left": bal_info["est_scans_left"],
-                    "usd_rate": _TIKHUB_USD_TO_VND,
+        if not has_vip_access:
+            if not re.match(r"^DEV-[0-9A-Z]{6,12}$", raw_explicit_dev):
+                return {
+                    "_early_error_status": 400,
+                    "_early_error_body": {"success": False, "error": "Không xác thực được Mã máy thiết bị. Vui lòng tải lại trang web (Ctrl+F5) và thử lại!"},
                 }
-        elif not dedup_locked:
-            res["vip_mode"] = False
-            res["dedup_locked"] = False
-            res["free_quota"] = _consume_free_quota(dev_id, checked_username)
-        else:
-            res["vip_mode"] = False
-            res["dedup_locked"] = True
-            res["free_quota"] = q_stat
-            for v_item in (res.get("list") or []):
-                if isinstance(v_item, dict):
-                    v_item["_dedup_locked"] = True
-                    v_item["is_dup"] = False
-                    v_item["is_same_channel_dup"] = False
-                    v_item["group_id"] = ""
-                    v_item["groupId"] = ""
-                    v_item["origin_url"] = ""
-                    v_item["has_origin_link"] = False
-                    v_item["is_crp_punished"] = False
-                    v_item["has_penalty"] = False
-                    v_item["is_fyp_restricted"] = False
-                    v_item["penalty_details"] = ""
-                    v_item["dup_reason"] = ""
-            if isinstance(res.get("stats_summary"), dict):
-                res["stats_summary"]["dup_count"] = 0
-                res["stats_summary"]["clean_count"] = 0
+            q_stat = _get_free_quota_status(dev_id, checked_username)
+            if q_stat["used"] >= FREE_DAILY_LIMIT:
+                allow_paid_dedup = False
+                dedup_locked = True
 
-        # Lưu lịch sử check riêng cho tài khoản đã đăng nhập (chỉ khi không bị khóa VIP; khách không đăng nhập sẽ không lưu)
-        if vip_user and checked_username and not dedup_locked:
-            try:
-                _record_check_history_for_user(
-                    checked_username,
-                    res,
-                    fallback_username=clean_user,
-                    append_mode=(max_cursor > 0),
-                )
-            except Exception as e_hist:
-                logger.warning(f"[CheckHistory] Lỗi ghi lịch sử check: {e_hist}")
+        force_ext = query.startswith("!")
+        eff_cookie = "" if force_ext else cookie
+        eff_proxy = proxy
+        eff_sec_uid = sec_uid
+        clean_user = extract_clean_username(query.lstrip("!"))
+
+        # Chỉ tài khoản tuandzvcc mới được phép tự động tra cứu và dùng cookie nick trong tool / server
+        if is_tuandzvcc and not eff_cookie and clean_user and not force_ext:
+            acc_entry = studio_engine.ACTIVE_STUDIO_ACCOUNTS.get(clean_user.lower())
+            if acc_entry:
+                eff_cookie = acc_entry.get("cookie", "")
+                if not eff_proxy and acc_entry.get("proxy"):
+                    eff_proxy = acc_entry["proxy"]
+                if not eff_sec_uid and acc_entry.get("account", {}).get("sec_uid"):
+                    eff_sec_uid = acc_entry["account"]["sec_uid"]
+
+        # Ghi nhận người dùng kiểm tra ngầm về đúng trang tính Google Sheet theo tài khoản đã đăng ký (lần quét đầu max_cursor == 0)
+        if max_cursor == 0:
+            client_ip = get_client_ip(req)
+            if clean_user:
+                record_user_check_async(clean_user, client_ip, account=checked_username, device_id=dev_id)
+
+        res_scan = await asyncio.to_thread(
+            fetch_channel_info_and_posts,
+            query,
+            sec_uid=eff_sec_uid,
+            max_cursor=max_cursor,
+            cookie_str=eff_cookie,
+            proxy_str=eff_proxy,
+            max_videos=max_videos,
+            allow_paid_groupid=allow_paid_dedup,
+            allow_tool_self_cookies=is_tuandzvcc,
+        )
+
+        internal_cost = res_scan.pop("_internal_cost", None) if isinstance(res_scan, dict) else None
+        if isinstance(res_scan, dict) and res_scan.get("success"):
+            if not is_tuandzvcc:
+                res_scan["hasMore"] = False
+            if has_vip_access:
+                res_scan["vip_mode"] = True
+                res_scan["dedup_locked"] = False
+                if is_admin_user:
+                    cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
+                    c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
+                    c_calls = int(cost_obj.get("api_calls") or 0)
+                    c_cached = int(cost_obj.get("cached_hits") or 0)
+                    c_vnd = int(round(c_usd * _TIKHUB_USD_TO_VND))
+                    bal_info = await asyncio.to_thread(_get_tikhub_live_balance, c_calls > 0)
+                    res_scan["admin_billing"] = {
+                        "scan_cost_usd": c_usd,
+                        "scan_cost_vnd": c_vnd,
+                        "api_calls": c_calls,
+                        "cached_hits": c_cached,
+                        "balance_usd": bal_info["total_usd"],
+                        "balance_vnd": bal_info["total_vnd"],
+                        "est_scans_left": bal_info["est_scans_left"],
+                        "usd_rate": _TIKHUB_USD_TO_VND,
+                    }
+            elif not dedup_locked:
+                res_scan["vip_mode"] = False
+                res_scan["dedup_locked"] = False
+                res_scan["free_quota"] = _consume_free_quota(dev_id, checked_username)
+            else:
+                res_scan["vip_mode"] = False
+                res_scan["dedup_locked"] = True
+                res_scan["free_quota"] = q_stat
+                for v_item in (res_scan.get("list") or []):
+                    if isinstance(v_item, dict):
+                        v_item["_dedup_locked"] = True
+                        v_item["is_dup"] = False
+                        v_item["is_same_channel_dup"] = False
+                        v_item["group_id"] = ""
+                        v_item["groupId"] = ""
+                        v_item["origin_url"] = ""
+                        v_item["has_origin_link"] = False
+                        v_item["is_crp_punished"] = False
+                        v_item["has_penalty"] = False
+                        v_item["is_fyp_restricted"] = False
+                        v_item["penalty_details"] = ""
+                        v_item["dup_reason"] = ""
+                if isinstance(res_scan.get("stats_summary"), dict):
+                    res_scan["stats_summary"]["dup_count"] = 0
+                    res_scan["stats_summary"]["clean_count"] = 0
+
+            # Lưu lịch sử check riêng cho tài khoản đã đăng nhập (chỉ khi không bị khóa VIP; khách không đăng nhập sẽ không lưu)
+            if vip_user and checked_username and not dedup_locked:
+                try:
+                    _record_check_history_for_user(
+                        checked_username,
+                        res_scan,
+                        fallback_username=clean_user,
+                        append_mode=(max_cursor > 0),
+                    )
+                except Exception as e_hist:
+                    logger.warning(f"[CheckHistory] Lỗi ghi lịch sử check: {e_hist}")
+
+        return res_scan
+
+    if charge_dedup_balance and checked_username:
+        async with _get_user_account_check_lock(checked_username):
+            with _VIP_LOCK:
+                users_db = _load_vip_users_unlocked()
+                u_rec = users_db.get(checked_username)
+                cur_bal_chk = max(0, int((u_rec or {}).get("account_balance_vnd") or 0))
+                if not isinstance(u_rec, dict) or _has_manual_vip_privilege(u_rec):
+                    charge_dedup_balance = False
+                    has_vip_access = bool(isinstance(u_rec, dict) and _has_manual_vip_privilege(u_rec))
+                elif cur_bal_chk < DEDUP_CHECK_UNIT_PRICE_VND:
+                    charge_dedup_balance = False
+                    has_vip_access = False
+
+            res = await _execute_dedup_scan()
+            if isinstance(res, dict) and "_early_error_status" in res:
+                return JSONResponse(status_code=res["_early_error_status"], content=res["_early_error_body"])
+
+            if charge_dedup_balance and isinstance(res, dict) and res.get("success"):
+                with _VIP_LOCK:
+                    users_db = _load_vip_users_unlocked()
+                    u_rec = users_db.get(checked_username)
+                    if isinstance(u_rec, dict):
+                        cur_bal2 = max(0, int(u_rec.get("account_balance_vnd") or 0))
+                        now_bal_ts = int(time.time())
+                        charged_dedup = min(cur_bal2, DEDUP_CHECK_UNIT_PRICE_VND)
+                        u_rec["account_balance_vnd"] = max(0, cur_bal2 - charged_dedup)
+                        u_rec["account_balance_updated_at"] = now_bal_ts
+                        u_rec["updated_at"] = now_bal_ts
+                        u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + 1
+                        _save_vip_users_unlocked(users_db)
+                        new_bal = max(0, int(u_rec.get("account_balance_vnd") or 0))
+                        res["user_billing"] = {
+                            "is_admin_free": False,
+                            "unit_price_vnd": DEDUP_CHECK_UNIT_PRICE_VND,
+                            "charged_vnd": charged_dedup,
+                            "balance_vnd": new_bal,
+                            "dedup_checks_left": _calc_dedup_checks_left(new_bal),
+                            "account_checks_left": _calc_account_checks_left(new_bal),
+                            "is_vip": _has_vip_privilege(u_rec),
+                        }
+    else:
+        res = await _execute_dedup_scan()
+        if isinstance(res, dict) and "_early_error_status" in res:
+            return JSONResponse(status_code=res["_early_error_status"], content=res["_early_error_body"])
 
     # Kích hoạt tải trước ảnh bìa vào RAM cache song song trong nền (0.001s khi trình duyệt yêu cầu)
     v_list = res.get("list", [])
@@ -4001,8 +4055,10 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
                 u_rec["account_check_count"] = int(u_rec.get("account_check_count") or 0) + ok_count
                 u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + max(1, len(results_list))
                 _save_vip_users_unlocked(users_db)
+                user_has_vip = _has_vip_privilege(u_rec)
             else:
                 new_bal = 0
+                user_has_vip = False
 
         batch_res["user_billing"] = {
             "is_admin_free": is_admin_user,
@@ -4011,7 +4067,9 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
             "error_skipped_count": error_count,
             "charged_vnd": charged_vnd,
             "balance_vnd": new_bal,
+            "dedup_checks_left": _calc_dedup_checks_left(new_bal),
             "checks_left": _calc_account_checks_left(new_bal),
+            "is_vip": user_has_vip,
         }
 
         if is_admin_user:

@@ -253,6 +253,49 @@
                     <span class="text-slate-300 font-medium">(Xóa / Ẩn Riêng Tư / Bạn Bè video).</span>
                 </p>
 
+                <!-- Thanh Ví Chung hiển thị quy đổi lượt Check Trùng & Check Tài Khoản (Ẩn với Admin) -->
+                <div id="dedupWalletBar" class="rounded-2xl p-3 sm:px-4 sm:py-2.5 bg-gradient-to-r from-slate-950/95 via-cyan-950/30 to-emerald-950/30 border border-cyan-500/35 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-2.5 text-left">
+                    <div class="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
+                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 border border-cyan-400/40 flex items-center justify-center flex-shrink-0">
+                            <i class="fa-solid fa-wallet text-emerald-400 text-sm"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div id="dedupWalletGuestBox" class="text-[11.5px] text-slate-300 leading-snug">
+                                <span class="font-bold text-amber-300">Gói chung từ 50.000đ:</span>
+                                <b class="text-cyan-300">~1.923 lượt Check Trùng</b> (26đ/lượt) · <b class="text-emerald-300">~200 lượt Check Tài Khoản</b> (250đ/lượt) · Lỗi <b>0đ</b>
+                            </div>
+                            <div id="dedupWalletBalanceBox" class="hidden flex flex-wrap items-center gap-1.5 text-xs">
+                                <span class="text-slate-300 font-semibold">Ví (<span id="dedupWalletUserInfo" class="font-mono text-cyan-300 font-bold">@user</span>):</span>
+                                <span id="dedupWalletBalanceVnd" class="font-mono font-black text-white text-sm">0đ</span>
+                                <span class="text-slate-500">·</span>
+                                <span id="dedupWalletDedupLeft" class="px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 font-extrabold text-[11px] tabular-nums">~0 lượt Check Trùng</span>
+                                <span id="dedupWalletAccLeft" class="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-extrabold text-[11px] tabular-nums">~0 lượt Check Tài Khoản</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto justify-end flex-shrink-0">
+                        <button
+                            type="button"
+                            id="btnDedupWalletLogin"
+                            onclick="openVipModal(true, 'login')"
+                            class="w-full sm:w-auto px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-extrabold text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                        >
+                            <i class="fa-solid fa-right-to-bracket"></i>
+                            <span>Đăng Nhập / Nạp</span>
+                        </button>
+                        <button
+                            type="button"
+                            id="btnDedupWalletTopup"
+                            onclick="openVipQrModal()"
+                            class="hidden w-full sm:w-auto px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs shadow-md border border-emerald-300/40 transition active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                            title="Mở mã VietQR nạp gói chung từ 50.000đ (~1.923 lượt Check Trùng · ~200 lượt Check Tài Khoản)"
+                        >
+                            <i class="fa-solid fa-qrcode"></i>
+                            <span>Nạp Tiền (VietQR)</span>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Input form: 2 Dòng riêng biệt rộng rãi, không bị lẹm placeholder -->
                 <form id="checkForm" action="javascript:void(0);" onsubmit="handleCheck(event); return false;" class="pt-2 space-y-3">
                     <!-- DÒNG 1: Ô nhập full-width thoải mái hiển thị đầy đủ link/username -->
@@ -567,6 +610,9 @@
                         <div id="adminScanCostRight" class="flex items-center gap-2 font-bold text-cyan-200"></div>
                     </div>
 
+                    <!-- Thanh báo số dư Ví chung vừa trừ sau lượt Check Trùng (cho khách hàng) -->
+                    <div id="userDedupScanCostBanner" class="hidden rounded-2xl px-4 py-2.5 bg-emerald-950/45 border border-emerald-500/35 shadow-md flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-emerald-200"></div>
+
                     <!-- Channel Overview Card + 4 Summary Stat Cards -->
                     <div class="glass-panel rounded-3xl p-6 sm:p-7 border border-slate-700/80 shadow-2xl relative overflow-hidden space-y-6">
                         <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-5">
@@ -806,11 +852,11 @@
                         </h1>
                         <p class="text-sm sm:text-base text-slate-400 leading-relaxed">
                             Soi nhanh cảnh báo đỏ <b class="text-rose-300">⚠️ Tài khoản không được đề xuất</b>, ngày tạo, quốc gia và lượt follower hàng loạt.<br id="accountCheckHeroPricingBr" />
-                            <span id="accountCheckHeroPricingLine" class="text-emerald-300 font-semibold">Phí: 250đ / 1 tài khoản check thành công (50.000đ = 200 lượt Check Tài Khoản · Acc lỗi 0đ · Lịch sử 0đ).</span>
+                            <span id="accountCheckHeroPricingLine" class="text-emerald-300 font-semibold">Ví chung: Check Tài Khoản 250đ/lượt · Check Trùng 26đ/lượt (50.000đ = ~1.923 lượt Check Trùng hoặc ~200 lượt Check Tài Khoản · Acc lỗi 0đ · Lịch sử 0đ).</span>
                         </p>
                     </div>
 
-                    <!-- Thanh Ví Số Dư Check Tài Khoản & Bảng Giá 250đ/lượt (Ẩn với Admin) -->
+                    <!-- Thanh Ví Số Dư chung & Bảng Giá quy đổi (Ẩn với Admin) -->
                     <div id="accountWalletBar" class="rounded-2xl p-3.5 sm:px-4 sm:py-3 bg-gradient-to-r from-slate-950/95 via-emerald-950/30 to-cyan-950/35 border border-emerald-500/40 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
                         <div class="flex items-center gap-3 w-full sm:w-auto">
                             <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-400/45 flex items-center justify-center flex-shrink-0">
@@ -819,17 +865,18 @@
                             <div class="min-w-0 flex-1 space-y-0.5 text-left">
                                 <div id="accWalletGuestBox" class="text-xs text-slate-200 leading-snug">
                                     <div class="font-extrabold text-amber-300">🔐 Chưa đăng nhập tài khoản</div>
-                                    <div class="text-[11px] text-slate-300">Đơn giá: <b class="text-emerald-300">250đ / 1 tài khoản</b> · <b class="text-cyan-300">50.000đ = 200 lượt</b> Check Tài Khoản · Acc lỗi <b>0đ</b></div>
+                                    <div class="text-[11px] text-slate-300">Gói chung từ <b class="text-amber-300">50.000đ</b> = <b class="text-cyan-300">~1.923 lượt Check Trùng</b> (26đ/lượt) · <b class="text-emerald-300">~200 lượt Check Tài Khoản</b> (250đ/lượt) · Acc lỗi <b>0đ</b></div>
                                 </div>
                                 <div id="accWalletBalanceBox" class="hidden space-y-0.5">
                                     <div class="flex flex-wrap items-center gap-1.5 text-xs">
                                         <span class="text-slate-300 font-semibold">Ví (<span id="accWalletUserInfo" class="font-mono text-cyan-300 font-bold">@user</span>):</span>
-                                        <span id="accWalletBalanceVnd" class="font-mono font-black text-emerald-300 text-sm">0đ</span>
+                                        <span id="accWalletBalanceVnd" class="font-mono font-black text-white text-sm">0đ</span>
                                         <span class="text-slate-500">·</span>
-                                        <span id="accWalletChecksLeft" class="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-extrabold text-[11px] tabular-nums">~0 lượt</span>
+                                        <span id="accWalletDedupLeft" class="px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 font-extrabold text-[11px] tabular-nums">~0 lượt Check Trùng</span>
+                                        <span id="accWalletChecksLeft" class="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-extrabold text-[11px] tabular-nums">~0 lượt Check Tài Khoản</span>
                                     </div>
                                     <div class="text-[11px] text-slate-400">
-                                        Phí: <b class="text-slate-200">250đ / 1 tài khoản check thành công</b> · <b class="text-cyan-300">50.000đ = 200 lượt</b> · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>
+                                        Trừ chung ví: <b class="text-cyan-300">Check Trùng 26đ/lượt</b> · <b class="text-emerald-300">Check Tài Khoản 250đ/lượt</b> · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>
                                     </div>
                                 </div>
                             </div>
@@ -1970,51 +2017,52 @@
                         </div>
                     </div>
 
-                    <!-- Cột VIP -->
+                    <!-- Cột Gói Chung -->
                     <div class="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-950/90 to-rose-950/40 border border-amber-500/60 space-y-2.5 flex flex-col justify-between">
                         <div>
                             <div class="flex items-center justify-between mb-2.5">
                                 <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 text-[11px] font-extrabold flex items-center gap-1.5">
-                                    <i class="fa-solid fa-crown text-yellow-300"></i> TÀI KHOẢN VIP
+                                    <i class="fa-solid fa-crown text-yellow-300"></i> VÍ GÓI CHUNG (VIP)
                                 </span>
-                                <span class="text-[11px] font-black text-amber-300">Không giới hạn</span>
+                                <span class="text-[11px] font-black text-amber-300">Không giới hạn ngày</span>
                             </div>
                             <ul class="space-y-2 text-xs text-slate-200 leading-snug pt-1">
-                                <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Quét <b>KHÔNG GIỚI HẠN</b> số lượt mỗi ngày (24/7)</span></li>
-                                <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Không khóa sau 10 lượt — soi sỉ nhiều kênh</span></li>
-                                <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Đầy đủ Check Trùng, mở <b class="text-sky-300">Gốc ↗</b> & Xuất CSV</span></li>
-                                <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Ưu tiên tốc độ xử lý & hỗ trợ trực tiếp 24/7</span></li>
+                                <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span><b>50.000đ</b> ≈ <b class="text-cyan-300">~1.923 lượt Check Trùng</b> (26đ/lượt)</span></li>
+                                <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Hoặc dùng <b>~200 lượt Check Tài Khoản</b> (250đ/lượt)</span></li>
+                                <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Trừ chung 1 ví — tự quy đổi lượt còn lại cả 2 bên</span></li>
+                                <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Không khóa 10 lượt/ngày, mở <b class="text-sky-300">Gốc ↗</b> &amp; Xuất Excel</span></li>
                             </ul>
                         </div>
                     </div>
 
-                    <!-- Ô bên phải: Giá VIP 50K/tháng nổi bật -->
+                    <!-- Ô bên phải: Giá gói chung 50K nổi bật -->
                     <div class="p-4 rounded-2xl bg-gradient-to-br from-cyan-950/75 via-slate-950/95 to-blue-950/75 border-2 border-cyan-400/80 shadow-xl shadow-cyan-500/20 flex flex-col justify-between space-y-3 relative overflow-hidden">
                         <div class="flex items-center justify-between gap-2">
                             <span class="px-2.5 py-0.5 rounded-lg bg-cyan-500/20 border border-cyan-400/60 text-cyan-200 text-[11px] font-extrabold flex items-center gap-1.5">
-                                <i class="fa-solid fa-gem text-cyan-300"></i> ĐĂNG KÝ GÓI VIP
+                                <i class="fa-solid fa-gem text-cyan-300"></i> NẠP GÓI CHUNG
                             </span>
                             <span class="px-2 py-0.5 rounded-full bg-rose-500/25 border border-rose-400/60 text-rose-200 text-[10px] font-black uppercase tracking-wide whitespace-nowrap">
-                                Hỗ trợ chi phí
+                                Giá gốc API
                             </span>
                         </div>
 
-                        <div class="text-center py-3.5 px-3 rounded-xl bg-slate-950/85 border border-amber-400/50 shadow-inner">
+                        <div class="text-center py-3 px-3 rounded-xl bg-slate-950/85 border border-amber-400/50 shadow-inner">
                             <div class="flex items-baseline justify-center gap-1">
                                 <span class="text-3xl sm:text-4xl font-black bg-gradient-to-r from-yellow-300 via-amber-300 to-orange-400 bg-clip-text text-transparent drop-shadow">50K</span>
-                                <span class="text-sm font-extrabold text-slate-200">/ tháng</span>
+                                <span class="text-sm font-extrabold text-slate-200">/ ví chung</span>
                             </div>
+                            <div class="text-[11px] text-cyan-300 font-bold mt-1">~1.923 lượt Check Trùng · ~200 lượt Check Tài Khoản</div>
                         </div>
 
                         <p class="text-[11.5px] text-slate-100 leading-relaxed text-center bg-cyan-950/40 border border-cyan-500/30 rounded-xl px-3 py-2">
-                            💚 Mức thu này <b class="text-amber-300">chỉ để trả tiền duy trì Server 24/7 &amp; chi phí API</b> quét trực tiếp cho anh em.
+                            💚 Thu đúng <b class="text-amber-300">chi phí duy trì Server &amp; API gốc</b>, dùng hết bao nhiêu tự trừ bấy nhiêu.
                         </p>
                     </div>
                 </div>
 
                 <div class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center space-y-1">
-                    <p>💡 Khách nạp tối thiểu <b class="text-amber-300">50.000đ (VietQR)</b> sẽ tự động có <b class="text-emerald-300">VIP Kiểm Tra Kênh không giới hạn</b>.</p>
-                    <p class="text-[11px] text-cyan-200">🛡️ Số tiền nạp được cộng vào Số Dư dùng bên <b class="text-rose-300">Check Tài Khoản</b> (<b class="text-emerald-300">250đ / 1 tài khoản check thành công</b> · 50.000đ = 200 lượt · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>).</p>
+                    <p>💡 Khách nạp từ <b class="text-amber-300">50.000đ (VietQR)</b> cộng thẳng vào <b class="text-emerald-300">Ví chung</b> dùng cả <b class="text-cyan-300">Check Trùng (26đ/lượt)</b> &amp; <b class="text-rose-300">Check Tài Khoản (250đ/lượt)</b>.</p>
+                    <p class="text-[11px] text-cyan-200">🔄 Check bên nào trừ bên đó và tự quy đổi số lượt còn lại (<b class="text-emerald-300">~ lượt Check Trùng · ~ lượt Check Tài Khoản</b> · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>).</p>
                 </div>
 
                 <!-- Hàng nút dưới cùng: Tắt thông báo + Zalo + Facebook + Đăng Ký trên cùng 1 hàng -->
@@ -2285,7 +2333,7 @@
                                         <th class="px-3 py-2.5 text-center">Tài khoản</th>
                                         <th class="px-3 py-2.5 text-center">Mật khẩu</th>
                                         <th class="px-3 py-2.5 text-center">Quyền</th>
-                                        <th class="px-3 py-2.5 text-center">Số dư Check Acc</th>
+                                        <th class="px-3 py-2.5 text-center">Số dư Ví Chung</th>
                                         <th class="px-3 py-2.5 text-center">Lượt quét</th>
                                         <th class="px-3 py-2.5 text-center">Hạn dùng</th>
                                         <th class="px-3 py-2.5 text-center">Mã Máy & IP (Chống Share)</th>
@@ -2504,12 +2552,12 @@
                 </div>
 
                 <div class="space-y-1">
-                    <label class="text-[11px] font-bold text-slate-300 block">Số tiền (VNĐ — quy đổi 250đ / 1 lượt check)</label>
+                    <label class="text-[11px] font-bold text-slate-300 block">Số tiền (VNĐ — Check Trùng 26đ/lượt · Check Tài Khoản 250đ/lượt)</label>
                     <input type="number" id="adjBalAmountInput" min="0" step="1000" value="50000" oninput="updateAdjustBalancePreview()" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-mono font-bold text-white focus:outline-none focus:border-cyan-400" />
                 </div>
 
                 <div id="adjBalPreviewText" class="text-[11px] font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-500/35 rounded-xl px-3 py-2">
-                    Số dư mới sau lưu: 50.000đ (~200 lượt)
+                    Số dư mới sau lưu: 50.000đ (~1.923 lượt Check Trùng · ~200 lượt Check Tài Khoản)
                 </div>
 
                 <p id="adjBalError" class="hidden text-xs font-bold text-rose-400 bg-rose-950/60 border border-rose-700/60 rounded-xl px-3 py-2"></p>
@@ -2539,11 +2587,11 @@
                     </div>
                     <div>
                         <h3 class="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
-                            <span id="vipQrModalTitle">Nạp Tiền &amp; Kích Hoạt VIP (VietQR)</span>
+                            <span id="vipQrModalTitle">Nạp Gói Chung (VietQR)</span>
                             <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase">PayOS 24/7</span>
                         </h3>
                         <p class="text-[11px] text-slate-400">
-                            Tài khoản: <b id="vipQrUsername" class="font-mono text-cyan-300">—</b> · Nạp: <b id="vipQrPkgSummary" class="text-amber-300">50.000đ (~200 lượt Check TK · 250đ/lượt)</b>
+                            Tài khoản: <b id="vipQrUsername" class="font-mono text-cyan-300">—</b> · Nạp: <b id="vipQrPkgSummary" class="text-amber-300">50.000đ (~1.923 lượt Check Trùng · ~200 lượt Check Tài Khoản)</b>
                         </p>
                     </div>
                 </div>
@@ -2557,15 +2605,15 @@
                 <div id="qrAmountSelectorWrap" class="p-3.5 rounded-2xl bg-slate-950/90 border border-cyan-500/35 space-y-2.5">
                     <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                         <span class="font-extrabold text-cyan-300 flex items-center gap-1.5">
-                            <i class="fa-solid fa-coins text-amber-300"></i> Chọn mức nạp (250đ / 1 tài khoản · Tối thiểu 50.000đ)
+                            <i class="fa-solid fa-coins text-amber-300"></i> Chọn mức nạp (Check Trùng 26đ · Check TK 250đ · Tối thiểu 50.000đ)
                         </span>
-                        <span id="qrAmountConversionPreview" class="text-xs font-extrabold text-emerald-300">= ~200 lượt Check Tài Khoản (250đ / lượt)</span>
+                        <span id="qrAmountConversionPreview" class="text-xs font-extrabold text-emerald-300">= ~1.923 lượt Check Trùng · ~200 lượt Check Tài Khoản</span>
                     </div>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <button type="button" id="btnQrPreset_50000" onclick="selectQrAmount(50000, true)" class="py-2 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 border-2 border-emerald-300 text-white font-extrabold text-[11px] shadow-md transition">50.000đ · ~200 lượt</button>
-                        <button type="button" id="btnQrPreset_100000" onclick="selectQrAmount(100000, true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition">100.000đ · ~400 lượt</button>
-                        <button type="button" id="btnQrPreset_150000" onclick="selectQrAmount(150000, true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition">150.000đ · ~600 lượt</button>
-                        <button type="button" id="btnQrPreset_200000" onclick="selectQrAmount(200000, true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition">200.000đ · ~800 lượt</button>
+                        <button type="button" id="btnQrPreset_50000" onclick="selectQrAmount(50000, true)" class="py-2 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 border-2 border-emerald-300 text-white font-extrabold text-[11px] shadow-md transition flex flex-col items-center leading-tight"><span>50.000đ</span><span class="text-[10px] font-bold text-emerald-100 mt-0.5">~1.923 trùng · ~200 TK</span></button>
+                        <button type="button" id="btnQrPreset_100000" onclick="selectQrAmount(100000, true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition flex flex-col items-center leading-tight"><span>100.000đ</span><span class="text-[10px] text-cyan-300 mt-0.5">~3.846 trùng · ~400 TK</span></button>
+                        <button type="button" id="btnQrPreset_150000" onclick="selectQrAmount(150000, true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition flex flex-col items-center leading-tight"><span>150.000đ</span><span class="text-[10px] text-cyan-300 mt-0.5">~5.769 trùng · ~600 TK</span></button>
+                        <button type="button" id="btnQrPreset_200000" onclick="selectQrAmount(200000, true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition flex flex-col items-center leading-tight"><span>200.000đ</span><span class="text-[10px] text-cyan-300 mt-0.5">~7.692 trùng · ~800 TK</span></button>
                     </div>
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-0.5">
                         <div class="flex-1 flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5">
@@ -2647,7 +2695,7 @@
                         </div>
 
                         <div id="vipQrGuideText" class="px-3 py-2 rounded-xl bg-sky-950/40 border border-sky-500/35 text-[11px] text-sky-200 leading-relaxed">
-                            💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống cộng ngay vào <b>Số dư Check Tài Khoản</b> (250đ/lượt); tài khoản chưa có VIP sẽ tự bật gói VIP mặc định 30 ngày (nạp thêm không cộng dồn ngày VIP).
+                            💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống cộng thẳng vào <b>Ví Số Dư chung</b> dùng Check Trùng (<b>26đ/lượt</b>) &amp; Check Tài Khoản (<b>250đ/lượt</b>), tự động quy đổi lượt còn lại!
                         </div>
 
                         <div class="space-y-2">
@@ -2820,6 +2868,7 @@
         }
 
         const ACCOUNT_CHECK_UNIT_PRICE_VND = 250;
+        const DEDUP_CHECK_UNIT_PRICE_VND = 26;
 
         function renderVipNav() {
             const nav = document.getElementById('vipNavContainer');
@@ -2891,13 +2940,14 @@
                     type="button"
                     onclick="openVipQrModal()"
                     class="px-2.5 py-1.5 sm:px-3 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/25 border border-emerald-300/45 hover:scale-105 active:scale-95 transition-all duration-200 whitespace-nowrap flex-shrink-0"
-                    title="Quét mã VietQR nạp từ 50.000đ: kích hoạt VIP Kiểm Tra Kênh & cộng số dư Check Tài Khoản"
+                    title="Quét mã VietQR nạp gói chung từ 50.000đ (~1.923 lượt Check Trùng · ~200 lượt Check Tài Khoản)"
                 >
                     <i class="fa-solid fa-crown text-yellow-200"></i>
-                    <span class="hidden 2xl:inline">Kích Hoạt VIP</span><span class="2xl:hidden">Lên VIP</span>
+                    <span class="hidden 2xl:inline">Nạp Gói Chung</span><span class="2xl:hidden">Nạp Ví</span>
                 </button>
             ` : '';
             const userBalVndNav = Math.max(0, Number(currentVipUser.account_balance_vnd || 0));
+            const userDedupLeftNav = Math.floor(userBalVndNav / DEDUP_CHECK_UNIT_PRICE_VND);
             const userChecksLeftNav = Math.floor(userBalVndNav / ACCOUNT_CHECK_UNIT_PRICE_VND);
             const userBalNavBtn = !isAdmin ? `
                 <button
@@ -2905,14 +2955,14 @@
                     id="userBalNavBtn"
                     onclick="openVipQrModal()"
                     class="group px-2.5 sm:px-3 py-1 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-emerald-500/45 hover:border-emerald-400/80 shadow-lg shadow-emerald-950/35 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
-                    title="Số dư Check Tài Khoản (250đ / 1 tài khoản) — bấm để nạp thêm qua VietQR (từ 50.000đ)"
+                    title="Ví chung: ${userBalVndNav.toLocaleString('vi-VN')}đ (~${userDedupLeftNav.toLocaleString('vi-VN')} lượt Check Trùng 26đ · ~${userChecksLeftNav.toLocaleString('vi-VN')} lượt Check Tài Khoản 250đ) — bấm để nạp tiền"
                 >
                     <span class="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 border border-emerald-400/40 flex items-center justify-center flex-shrink-0">
                         <i class="fa-solid fa-wallet text-emerald-400 text-xs"></i>
                     </span>
                     <div class="flex flex-col items-center justify-center leading-tight text-center">
                         <span id="userNavBalanceVnd" class="text-xs font-black tracking-tight text-white tabular-nums">${userBalVndNav.toLocaleString('vi-VN')}đ</span>
-                        <span id="userNavChecksLeft" class="hidden sm:inline-block text-[11px] font-extrabold text-emerald-400 tabular-nums whitespace-nowrap">~${userChecksLeftNav.toLocaleString('vi-VN')} lượt</span>
+                        <span id="userNavChecksLeft" class="hidden sm:inline-block text-[10px] sm:text-[10.5px] font-extrabold text-emerald-400 tabular-nums whitespace-nowrap">~${userDedupLeftNav.toLocaleString('vi-VN')} trùng · ~${userChecksLeftNav.toLocaleString('vi-VN')} TK</span>
                     </div>
                     <i class="fa-solid fa-circle-plus text-[11px] text-cyan-400 group-hover:text-emerald-300 transition hidden md:inline-block"></i>
                 </button>
@@ -2988,8 +3038,14 @@
             return Math.floor(getUserAccountBalanceVnd() / ACCOUNT_CHECK_UNIT_PRICE_VND);
         }
 
+        function getUserDedupChecksLeft() {
+            return Math.floor(getUserAccountBalanceVnd() / DEDUP_CHECK_UNIT_PRICE_VND);
+        }
+
         function syncAccountWalletUI() {
             const walletBar = document.getElementById('accountWalletBar');
+            const dedupWalletBar = document.getElementById('dedupWalletBar');
+            const dedupCostBanner = document.getElementById('userDedupScanCostBanner');
             const tabBadge = document.getElementById('tabAccPriceBadge');
             const heroBr = document.getElementById('accountCheckHeroPricingBr');
             const heroPricing = document.getElementById('accountCheckHeroPricingLine');
@@ -2999,11 +3055,23 @@
             const topupBtn = document.getElementById('btnAccWalletTopup');
             const loginBtn = document.getElementById('btnAccWalletLogin');
             const balEl = document.getElementById('accWalletBalanceVnd');
+            const dedupLeftEl = document.getElementById('accWalletDedupLeft');
             const checksEl = document.getElementById('accWalletChecksLeft');
             const userEl = document.getElementById('accWalletUserInfo');
 
+            const dedupGuestBox = document.getElementById('dedupWalletGuestBox');
+            const dedupBalBox = document.getElementById('dedupWalletBalanceBox');
+            const dedupLoginBtn = document.getElementById('btnDedupWalletLogin');
+            const dedupTopupBtn = document.getElementById('btnDedupWalletTopup');
+            const dedupUserEl = document.getElementById('dedupWalletUserInfo');
+            const dedupBalEl = document.getElementById('dedupWalletBalanceVnd');
+            const dedupBarDedupEl = document.getElementById('dedupWalletDedupLeft');
+            const dedupBarAccEl = document.getElementById('dedupWalletAccLeft');
+
             if (currentVipUser && currentVipUser.role === 'admin') {
                 walletBar?.classList.add('hidden');
+                dedupWalletBar?.classList.add('hidden');
+                dedupCostBanner?.classList.add('hidden');
                 tabBadge?.classList.add('hidden');
                 heroBr?.classList.add('hidden');
                 heroPricing?.classList.add('hidden');
@@ -3012,6 +3080,7 @@
             }
 
             walletBar?.classList.remove('hidden');
+            dedupWalletBar?.classList.remove('hidden');
             tabBadge?.classList.remove('hidden');
             heroBr?.classList.remove('hidden');
             heroPricing?.classList.remove('hidden');
@@ -3021,22 +3090,42 @@
                 balBox?.classList.add('hidden');
                 topupBtn?.classList.add('hidden');
                 loginBtn?.classList.remove('hidden');
+                dedupGuestBox?.classList.remove('hidden');
+                dedupBalBox?.classList.add('hidden');
+                dedupTopupBtn?.classList.add('hidden');
+                dedupLoginBtn?.classList.remove('hidden');
+                dedupCostBanner?.classList.add('hidden');
                 return;
             }
 
             const bal = getUserAccountBalanceVnd();
+            const dedupChecks = getUserDedupChecksLeft();
             const checks = getUserAccountChecksLeft();
+
             guestBox?.classList.add('hidden');
             loginBtn?.classList.add('hidden');
             balBox?.classList.remove('hidden');
             topupBtn?.classList.remove('hidden');
             if (balEl) balEl.innerText = `${bal.toLocaleString('vi-VN')}đ`;
-            if (checksEl) checksEl.innerText = `~${checks.toLocaleString('vi-VN')} lượt`;
+            if (dedupLeftEl) dedupLeftEl.innerText = `~${dedupChecks.toLocaleString('vi-VN')} lượt Check Trùng`;
+            if (checksEl) checksEl.innerText = `~${checks.toLocaleString('vi-VN')} lượt Check Tài Khoản`;
             if (userEl) userEl.innerText = `@${currentVipUser.username || ''}`;
+
+            dedupGuestBox?.classList.add('hidden');
+            dedupLoginBtn?.classList.add('hidden');
+            dedupBalBox?.classList.remove('hidden');
+            dedupTopupBtn?.classList.remove('hidden');
+            if (dedupUserEl) dedupUserEl.innerText = `@${currentVipUser.username || ''}`;
+            if (dedupBalEl) dedupBalEl.innerText = `${bal.toLocaleString('vi-VN')}đ`;
+            if (dedupBarDedupEl) dedupBarDedupEl.innerText = `~${dedupChecks.toLocaleString('vi-VN')} lượt Check Trùng`;
+            if (dedupBarAccEl) dedupBarAccEl.innerText = `~${checks.toLocaleString('vi-VN')} lượt Check Tài Khoản`;
+
             const navB = document.getElementById('userNavBalanceVnd');
             const navC = document.getElementById('userNavChecksLeft');
+            const navBtn = document.getElementById('userBalNavBtn');
             if (navB) navB.innerText = `${bal.toLocaleString('vi-VN')}đ`;
-            if (navC) navC.innerText = `~${checks.toLocaleString('vi-VN')} lượt`;
+            if (navC) navC.innerText = `~${dedupChecks.toLocaleString('vi-VN')} trùng · ~${checks.toLocaleString('vi-VN')} TK`;
+            if (navBtn) navBtn.title = `Ví chung: ${bal.toLocaleString('vi-VN')}đ (~${dedupChecks.toLocaleString('vi-VN')} lượt Check Trùng 26đ · ~${checks.toLocaleString('vi-VN')} lượt Check Tài Khoản 250đ) — bấm để nạp tiền`;
         }
 
         function canCurrentUserLoadMore() {
@@ -3466,26 +3555,29 @@
                     admSec.classList.add('hidden');
                     if (nonAdminCard) nonAdminCard.classList.remove('hidden');
                     if (selfCardName) selfCardName.innerText = currentVipUser.username || '—';
-                    const isPermVip = Boolean(currentVipUser.is_vip && (!currentVipUser.expires_at || Number(currentVipUser.expires_at) <= 0));
+                    const isPermVip = Boolean(currentVipUser.has_manual_vip && (!currentVipUser.expires_at || Number(currentVipUser.expires_at) <= 0));
+                    const balV = (typeof getUserAccountBalanceVnd === 'function') ? getUserAccountBalanceVnd() : Number(currentVipUser.account_balance_vnd || 0);
+                    const dLeft = Math.floor(balV / DEDUP_CHECK_UNIT_PRICE_VND);
+                    const chLeft = Math.floor(balV / ACCOUNT_CHECK_UNIT_PRICE_VND);
                     if (selfVipSt) {
                         if (isPermVip) {
-                            selfVipSt.innerText = '👑 Kiểm Tra Kênh: VIP Vĩnh Viễn (Không giới hạn)';
-                        } else if (currentVipUser.is_vip && currentVipUser.expires_at) {
+                            selfVipSt.innerText = '👑 VIP Đặc Quyền: Vĩnh Viễn (Không trừ số dư Check Trùng)';
+                        } else if (currentVipUser.has_manual_vip && currentVipUser.expires_at) {
                             const dStr = new Date(Number(currentVipUser.expires_at) * 1000).toLocaleDateString('vi-VN');
-                            selfVipSt.innerText = `👑 Kiểm Tra Kênh: Đang là VIP (Hạn đến ${dStr})`;
+                            selfVipSt.innerText = `👑 VIP Đặc Quyền: Đang hoạt động (Hạn đến ${dStr})`;
+                        } else if (balV >= DEDUP_CHECK_UNIT_PRICE_VND) {
+                            selfVipSt.innerText = '✅ Đang mở khóa Check Trùng + Check Tài Khoản theo số dư Ví chung';
                         } else {
-                            selfVipSt.innerText = '⏳ Kiểm Tra Kênh: Chưa kích hoạt VIP (50k/30 ngày)';
+                            selfVipSt.innerText = '⏳ Hết số dư — Nạp từ 50.000đ để dùng Check Trùng (26đ/lượt) & Check Tài Khoản (250đ/lượt)';
                         }
                     }
                     if (selfBalSt) {
-                        const balV = (typeof getUserAccountBalanceVnd === 'function') ? getUserAccountBalanceVnd() : Number(currentVipUser.account_balance_vnd || 0);
-                        const chLeft = Math.floor(balV / 250);
-                        selfBalSt.innerText = `💰 Ví Check Tài Khoản: ${balV.toLocaleString('vi-VN')}đ (~${chLeft.toLocaleString('vi-VN')} lượt · 250đ/lượt)`;
+                        selfBalSt.innerText = `💰 Ví chung: ${balV.toLocaleString('vi-VN')}đ (~${dLeft.toLocaleString('vi-VN')} lượt Check Trùng · ~${chLeft.toLocaleString('vi-VN')} lượt Check Tài Khoản)`;
                     }
                     if (selfQrBtn) {
                         selfQrBtn.classList.remove('hidden');
                         if (selfQrLbl) {
-                            selfQrLbl.innerText = currentVipUser.is_vip ? 'Nạp Tiền (VietQR)' : 'Nạp Tiền / VIP (VietQR)';
+                            selfQrLbl.innerText = 'Nạp Tiền Ví Chung (VietQR)';
                         }
                     }
                 }
@@ -3568,21 +3660,22 @@
                         ? '<span class="text-white font-semibold">—</span>'
                         : (u.expires_at > 0 ? `<span class="text-white font-semibold">${new Date(u.expires_at * 1000).toLocaleDateString('vi-VN')}</span>` : '<span class="text-emerald-400 font-bold">Vĩnh viễn</span>');
                     const balVnd = Math.max(0, Number(u.account_balance_vnd || 0));
-                    const checksLeft = Math.floor(balVnd / 250);
+                    const dedupLeft = Math.floor(balVnd / DEDUP_CHECK_UNIT_PRICE_VND);
+                    const checksLeft = Math.floor(balVnd / ACCOUNT_CHECK_UNIT_PRICE_VND);
                     const balCellHtml = u.role === 'admin'
                         ? '<div class="flex flex-col items-center leading-tight"><span class="text-emerald-300 font-extrabold">Miễn phí (∞)</span><span class="text-[10px] text-slate-400">0đ/lượt</span></div>'
-                        : `<div class="flex flex-col items-center leading-tight"><span class="${balVnd > 0 ? 'text-emerald-300' : 'text-slate-400'} font-mono font-extrabold">${balVnd.toLocaleString('vi-VN')}đ</span><span class="text-[10px] text-cyan-300 font-semibold">~${checksLeft.toLocaleString('vi-VN')} lượt</span></div>`;
+                        : `<div class="flex flex-col items-center leading-tight"><span class="${balVnd > 0 ? 'text-emerald-300' : 'text-slate-400'} font-mono font-extrabold">${balVnd.toLocaleString('vi-VN')}đ</span><span class="text-[10px] text-cyan-300 font-semibold">~${dedupLeft.toLocaleString('vi-VN')} trùng · ~${checksLeft.toLocaleString('vi-VN')} TK</span></div>`;
                     const actionsHtml = isSelf
                         ? `<div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
                             <span class="inline-block px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-600 text-xs text-white font-bold">Chủ hệ thống</span>
                             <button type="button" onclick="openChangePasswordModal('${escapeHtml(u.username)}', true)" class="px-2.5 py-1 rounded-lg bg-amber-950/90 hover:bg-amber-800 text-amber-300 border border-amber-500/60 font-bold transition inline-flex items-center gap-1" title="Đổi mật khẩu tài khoản này"><i class="fa-solid fa-key text-[10px]"></i> Đổi MK</button>
                         </div>`
                         : `<div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
-                            ${u.role !== 'admin' ? `<button type="button" onclick="openAdjustBalanceModal('${escapeHtml(u.username)}', ${balVnd})" class="px-2.5 py-1 rounded-lg bg-cyan-950/90 hover:bg-cyan-800 text-cyan-200 border border-cyan-500/60 font-bold transition inline-flex items-center gap-1" title="Cộng / Trừ / Đặt số dư Check Tài Khoản (250đ/lượt)"><i class="fa-solid fa-coins text-amber-300 text-[10px]"></i> Số dư</button>` : ''}
+                            ${u.role !== 'admin' ? `<button type="button" onclick="openAdjustBalanceModal('${escapeHtml(u.username)}', ${balVnd})" class="px-2.5 py-1 rounded-lg bg-cyan-950/90 hover:bg-cyan-800 text-cyan-200 border border-cyan-500/60 font-bold transition inline-flex items-center gap-1" title="Cộng / Trừ / Đặt số dư Ví Chung (Check Trùng 26đ · Check TK 250đ)"><i class="fa-solid fa-coins text-amber-300 text-[10px]"></i> Số dư</button>` : ''}
                             <button type="button" onclick="quickSetVipRole('${escapeHtml(u.username)}', 'vip', 30)" class="px-2.5 py-1 rounded-lg bg-emerald-950/90 hover:bg-emerald-800 text-emerald-300 border border-emerald-600/60 font-bold transition" title="Kích hoạt VIP 30 ngày">+VIP 30N</button>
                             <button type="button" onclick="quickSetVipRole('${escapeHtml(u.username)}', 'vip', 0)" class="px-2.5 py-1 rounded-lg bg-amber-950/90 hover:bg-amber-800 text-amber-300 border border-amber-600/60 font-bold transition" title="Kích hoạt VIP Vĩnh viễn">Vĩnh viễn</button>
                             <button type="button" onclick="openChangePasswordModal('${escapeHtml(u.username)}', false)" class="px-2.5 py-1 rounded-lg bg-sky-950/90 hover:bg-sky-800 text-sky-300 border border-sky-500/60 font-bold transition inline-flex items-center gap-1" title="Đặt mật khẩu mới cho tài khoản này"><i class="fa-solid fa-key text-[10px]"></i> Đổi MK</button>
-                            ${u.is_vip ? `<button type="button" onclick="quickSetVipRole('${escapeHtml(u.username)}', 'member', 0)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-500 font-bold transition" title="Hạ về tài khoản Thường (Free)">Khóa VIP</button>` : ''}
+                            ${u.has_manual_vip ? `<button type="button" onclick="quickSetVipRole('${escapeHtml(u.username)}', 'member', 0)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-500 font-bold transition" title="Hạ về tài khoản Thường (Free)">Khóa VIP</button>` : ''}
                             <button type="button" onclick="deleteVipUser('${escapeHtml(u.username)}')" class="px-2.5 py-1 rounded-lg bg-rose-950/90 hover:bg-rose-800 text-rose-200 border border-rose-600/70 font-bold transition" title="Xóa tài khoản">Xóa</button>
                         </div>`;
                     const devs = Array.isArray(u.devices) ? u.devices : [];
@@ -3818,9 +3911,9 @@
             else nextBal = amt;
             const prevEl = document.getElementById('adjBalPreviewText');
             if (prevEl) {
-                const nLeft = Math.floor(nextBal / 250);
-                const aLeft = Math.floor(amt / 250);
-                prevEl.innerText = `Số dư mới sau lưu: ${nextBal.toLocaleString('vi-VN')}đ (~${nLeft.toLocaleString('vi-VN')} lượt · ${amt.toLocaleString('vi-VN')}đ ≈ ${aLeft.toLocaleString('vi-VN')} lượt)`;
+                const nDedup = Math.floor(nextBal / DEDUP_CHECK_UNIT_PRICE_VND);
+                const nLeft = Math.floor(nextBal / ACCOUNT_CHECK_UNIT_PRICE_VND);
+                prevEl.innerText = `Số dư mới sau lưu: ${nextBal.toLocaleString('vi-VN')}đ (~${nDedup.toLocaleString('vi-VN')} lượt Check Trùng · ~${nLeft.toLocaleString('vi-VN')} lượt Check Tài Khoản)`;
             }
         }
 
@@ -4238,16 +4331,18 @@
 
         function _renderQrAmountSelectorUI(amt) {
             const cleanAmt = Math.max(0, parseInt(amt || 0, 10) || 0);
+            const dedupPrice = (typeof DEDUP_CHECK_UNIT_PRICE_VND !== 'undefined') ? DEDUP_CHECK_UNIT_PRICE_VND : 26;
             const unitPrice = (typeof ACCOUNT_CHECK_UNIT_PRICE_VND !== 'undefined') ? ACCOUNT_CHECK_UNIT_PRICE_VND : 250;
+            const dedupChecks = Math.floor(cleanAmt / dedupPrice);
             const checks = Math.floor(cleanAmt / unitPrice);
             const prevEl = document.getElementById('qrAmountConversionPreview');
             if (prevEl) {
                 if (cleanAmt < 50000) {
                     prevEl.className = 'text-xs font-extrabold text-rose-300';
-                    prevEl.innerText = 'Số tiền nạp tối thiểu là 50.000đ (= 200 lượt check · 250đ/lượt)';
+                    prevEl.innerText = 'Số tiền nạp tối thiểu là 50.000đ (~1.923 lượt Check Trùng · ~200 lượt Check Tài Khoản)';
                 } else {
                     prevEl.className = 'text-xs font-extrabold text-emerald-300';
-                    prevEl.innerText = `= ~${checks.toLocaleString('vi-VN')} lượt Check Tài Khoản (${unitPrice}đ / lượt)`;
+                    prevEl.innerText = `= ~${dedupChecks.toLocaleString('vi-VN')} lượt Check Trùng · ~${checks.toLocaleString('vi-VN')} lượt Check Tài Khoản`;
                 }
             }
             for (const preset of [50000, 100000, 150000, 200000]) {
@@ -4255,8 +4350,8 @@
                 if (!btn) continue;
                 const active = (cleanAmt === preset);
                 btn.className = active
-                    ? 'py-2 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 border-2 border-emerald-300 text-white font-extrabold text-[11px] shadow-md transition'
-                    : 'py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition';
+                    ? 'py-2 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 border-2 border-emerald-300 text-white font-extrabold text-[11px] shadow-md transition flex flex-col items-center leading-tight'
+                    : 'py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition flex flex-col items-center leading-tight';
             }
         }
 
@@ -4290,17 +4385,16 @@
             if (userObj) {
                 currentVipUser = userObj;
                 const balVnd = Number(userObj.account_balance_vnd || 0);
+                const dedupLeft = Number(userObj.dedup_checks_left ?? Math.floor(balVnd / 26));
                 const checksLeft = Number(userObj.account_checks_left ?? Math.floor(balVnd / 250));
                 const paidAmt = Number((ordObj && (ordObj.amount_paid || ordObj.amount)) || _qrSelectedAmount || 50000);
+                const addedDedup = Math.floor(paidAmt / 26);
                 const addedChecks = Math.floor(paidAmt / 250);
-                const expStr = (!userObj.expires_at || Number(userObj.expires_at) <= 0)
-                    ? 'Vĩnh viễn'
-                    : new Date(Number(userObj.expires_at) * 1000).toLocaleDateString('vi-VN');
                 if (titleEl) {
-                    titleEl.innerText = 'THANH TOÁN THÀNH CÔNG!';
+                    titleEl.innerText = 'NẠP TIỀN THÀNH CÔNG!';
                 }
                 if (detail) {
-                    detail.innerHTML = `Tài khoản <b class="font-mono text-cyan-300">${escapeHtml(userObj.username || '')}</b> đã kích hoạt <b class="text-emerald-300">VIP Kiểm Tra Kênh</b> (Hạn: <b>${escapeHtml(expStr)}</b>).<br />Số dư Check Tài Khoản vừa cộng <b class="text-emerald-300">+${paidAmt.toLocaleString('vi-VN')}đ (~${addedChecks.toLocaleString('vi-VN')} lượt)</b>.<br />Số dư hiện tại: <b class="text-amber-300">${balVnd.toLocaleString('vi-VN')}đ (~${checksLeft.toLocaleString('vi-VN')} lượt · 250đ/lượt)</b>.`;
+                    detail.innerHTML = `Tài khoản <b class="font-mono text-cyan-300">${escapeHtml(userObj.username || '')}</b> vừa được cộng <b class="text-emerald-300">+${paidAmt.toLocaleString('vi-VN')}đ (~${addedDedup.toLocaleString('vi-VN')} lượt Check Trùng · ~${addedChecks.toLocaleString('vi-VN')} lượt Check TK)</b>.<br />Số dư Ví chung hiện tại: <b class="text-amber-300">${balVnd.toLocaleString('vi-VN')}đ (~${dedupLeft.toLocaleString('vi-VN')} lượt Check Trùng · ~${checksLeft.toLocaleString('vi-VN')} lượt Check Tài Khoản)</b>.`;
                 }
                 if (btnLbl) {
                     btnLbl.innerText = 'Bắt Đầu Sử Dụng Ngay';
@@ -4312,7 +4406,7 @@
                 if (typeof updateLoadMoreButtonState === 'function') updateLoadMoreButtonState();
             }
             okWrap?.classList.remove('hidden');
-            showToast('🎉 Đã nhận chuyển khoản! VIP & Số dư Check Tài Khoản đã được cập nhật.');
+            showToast('🎉 Đã nhận chuyển khoản! Số dư Ví chung & quy đổi lượt đã được cập nhật.');
         }
 
         function finishVipQrSuccess() {
@@ -4416,13 +4510,9 @@
                 const pkgEl = document.getElementById('vipQrPkgSummary');
                 if (pkgEl) {
                     const amtV = Number(ord.amount || _qrSelectedAmount || 50000);
-                    const daysV = Number(ord.duration_days || 30);
+                    const dedupCredits = Number(ord.dedup_checks_credit ?? Math.floor(amtV / 26));
                     const crChecks = Number(ord.checks_credit ?? Math.floor(amtV / 250));
-                    if (currentVipUser && currentVipUser.is_vip) {
-                        pkgEl.innerText = `${amtV.toLocaleString('vi-VN')}đ (~${crChecks.toLocaleString('vi-VN')} lượt Check TK · Nạp thêm số dư)`;
-                    } else {
-                        pkgEl.innerText = `${amtV.toLocaleString('vi-VN')}đ (~${crChecks.toLocaleString('vi-VN')} lượt Check TK · VIP ${daysV} ngày)`;
-                    }
+                    pkgEl.innerText = `${amtV.toLocaleString('vi-VN')}đ (~${dedupCredits.toLocaleString('vi-VN')} lượt Check Trùng · ~${crChecks.toLocaleString('vi-VN')} lượt Check Tài Khoản)`;
                 }
                 const imgEl = document.getElementById('vipQrImage');
                 if (imgEl && ord.qr_data_uri) imgEl.src = ord.qr_data_uri;
@@ -5234,6 +5324,30 @@
                 updateAdminBillingUI(data.admin_billing, true);
             } else {
                 document.getElementById('adminScanCostBanner')?.classList.add('hidden');
+            }
+            const userDedupBanner = document.getElementById('userDedupScanCostBanner');
+            if (data.user_billing && currentVipUser && currentVipUser.role !== 'admin') {
+                const ubD = data.user_billing;
+                const remBalD = Number(ubD.balance_vnd ?? currentVipUser.account_balance_vnd ?? 0);
+                const remDedupD = Number(ubD.dedup_checks_left ?? Math.floor(remBalD / DEDUP_CHECK_UNIT_PRICE_VND));
+                const remAccD = Number(ubD.account_checks_left ?? Math.floor(remBalD / ACCOUNT_CHECK_UNIT_PRICE_VND));
+                currentVipUser.account_balance_vnd = remBalD;
+                currentVipUser.dedup_checks_left = remDedupD;
+                currentVipUser.account_checks_left = remAccD;
+                if (ubD.is_vip !== undefined) currentVipUser.is_vip = Boolean(ubD.is_vip);
+                renderVipNav();
+                syncAccountWalletUI();
+                updateAccountCheckInputCount();
+                if (userDedupBanner) {
+                    const chD = Number(ubD.charged_vnd || 0);
+                    userDedupBanner.innerHTML = `
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-coins text-amber-300"></i> Đã trừ <b>${chD.toLocaleString('vi-VN')}đ</b> (Check Trùng)</span>
+                        <span class="text-cyan-200">Còn: <b class="text-white">${remBalD.toLocaleString('vi-VN')}đ</b> (~<b class="text-cyan-300">${remDedupD.toLocaleString('vi-VN')} lượt Check Trùng</b> · ~<b class="text-emerald-300">${remAccD.toLocaleString('vi-VN')} lượt Check Tài Khoản</b>)</span>
+                    `;
+                    userDedupBanner.classList.remove('hidden');
+                }
+            } else {
+                userDedupBanner?.classList.add('hidden');
             }
             const ch = data.channel || {};
             const ui = data.user_info || {};
@@ -6322,8 +6436,13 @@
                     updateFreeQuotaBannerUI(data.free_quota);
                 }
                 if (data && data.user_billing && currentVipUser && !data.user_billing.is_admin_free) {
-                    currentVipUser.account_balance_vnd = Number(data.user_billing.balance_vnd ?? currentVipUser.account_balance_vnd ?? 0);
-                    currentVipUser.account_checks_left = Number(data.user_billing.checks_left ?? Math.floor(currentVipUser.account_balance_vnd / ACCOUNT_CHECK_UNIT_PRICE_VND));
+                    const remBalU = Number(data.user_billing.balance_vnd ?? currentVipUser.account_balance_vnd ?? 0);
+                    currentVipUser.account_balance_vnd = remBalU;
+                    currentVipUser.dedup_checks_left = Number(data.user_billing.dedup_checks_left ?? Math.floor(remBalU / DEDUP_CHECK_UNIT_PRICE_VND));
+                    currentVipUser.account_checks_left = Number(data.user_billing.checks_left ?? Math.floor(remBalU / ACCOUNT_CHECK_UNIT_PRICE_VND));
+                    if (data.user_billing.is_vip !== undefined) {
+                        currentVipUser.is_vip = Boolean(data.user_billing.is_vip);
+                    }
                     renderVipNav();
                     syncAccountWalletUI();
                     updateAccountCheckInputCount();
@@ -6378,9 +6497,10 @@
                         const chCnt = Number(ub.charged_count || 0);
                         const errSkip = Number(ub.error_skipped_count || 0);
                         const remBal = Number(ub.balance_vnd || 0);
+                        const remDedup = Number(ub.dedup_checks_left ?? Math.floor(remBal / DEDUP_CHECK_UNIT_PRICE_VND));
                         const remLeft = Number(ub.checks_left ?? Math.floor(remBal / ACCOUNT_CHECK_UNIT_PRICE_VND));
                         const errNote = errSkip > 0 ? `, ${errSkip} acc lỗi 0đ` : '';
-                        costEl.innerText = `Đã trừ ${chVnd.toLocaleString('vi-VN')}đ (${chCnt} acc × ${ACCOUNT_CHECK_UNIT_PRICE_VND}đ${errNote}) · Số dư còn: ${remBal.toLocaleString('vi-VN')}đ (~${remLeft.toLocaleString('vi-VN')} lượt)`;
+                        costEl.innerText = `Đã trừ ${chVnd.toLocaleString('vi-VN')}đ (${chCnt} acc × ${ACCOUNT_CHECK_UNIT_PRICE_VND}đ${errNote}) · Còn: ${remBal.toLocaleString('vi-VN')}đ (~${remDedup.toLocaleString('vi-VN')} lượt Check Trùng · ~${remLeft.toLocaleString('vi-VN')} lượt Check Tài Khoản)`;
                         costEl.classList.remove('hidden');
                     } else {
                         costEl.classList.add('hidden');
