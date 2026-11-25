@@ -62,3 +62,5 @@ Sửa thumbnail: mobile response có HEIC đứng trước JPEG; ảnh HEIC tả
 Live adapter và route `/api/check` với lớp xác thực/dữ liệu ví fixture: seitezhm99d → 18 video, 5 trùng, 2 cờ hạn chế, source independent, 0 API trả phí và không chạy hàm fallback. MuMu đang tắt ở lượt kiểm tra này. Admin status: không token 403; fixture Admin 200, không lộ cookie/token. Chưa cố ý làm hỏng tài khoản/session thật để thử đình chỉ; việc chuyển phiên lỗi được kiểm chứng bằng fixture.
 
 Đã kiểm tra thêm trên worker PC đang chạy bằng xác thực Admin thật: `/api/check` trả đúng 18/5/2, source independent, `admin_billing.api_calls=0`; status báo healthy trong lúc MuMu tắt. HTML mới và bảo vệ Admin 403 đã xác nhận qua domain công khai. Giao diện panel được kiểm tra bằng trình duyệt với fixture Admin, gồm trạng thái xanh, dự phòng cam và banner cảnh báo; không đăng nhập Admin giả vào backend thật và không gọi API trả phí trong test fallback.
+
+VIP expiry now uses a separate two-line header box (remaining days / expiry date); the account button keeps only its title and username. Browser verification on PC-served checktiktok.site confirmed both boxes have two rows.
