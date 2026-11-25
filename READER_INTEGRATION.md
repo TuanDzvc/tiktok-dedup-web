@@ -74,3 +74,5 @@ Bảng quản lý đổi “Số dư Ví Chung” thành “Số dư check tài 
 Kiểm tra: 22 tests qua (`test_usage_counts`, `test_vip_subscription`, `test_reader_provider`); API PC công khai trả đủ hai bộ đếm cho 10 user và giữ nguyên số dư/hạn. Fixture giao diện: tổng cũ 65, Check TK 62 → Check trùng ≈3 và Check TK 62 ở hai cột riêng.
 
 Owner header balance exception: admin tuandzvcc sees API USD/VND balance on checker and account_check tabs. Other users keep the previous visibility rules. Fetch the balance at initial render and on entering either allowed tab. Scan-cost banners still require API fallback. Browser fixture verified owner checker/account visible, history hidden, other-admin checker hidden and VIP checker hidden.
+
+Owner balance visibility extended to history as requested: tuandzvcc now sees USD/VND on checker, account_check and history. Other users remain unchanged. Verified the helper served publicly against owner, other-admin and VIP history cases.

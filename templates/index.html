@@ -3084,7 +3084,7 @@
         function shouldShowAdminNavBalance() {
             return canCurrentUserSeeBilling() && (
                 activeMainWorkspaceTab === 'account_check' ||
-                (activeMainWorkspaceTab === 'checker' && String(currentVipUser.username || '').toLowerCase() === 'tuandzvcc')
+                (['checker', 'history'].includes(activeMainWorkspaceTab) && String(currentVipUser.username || '').toLowerCase() === 'tuandzvcc')
             );
         }
 
