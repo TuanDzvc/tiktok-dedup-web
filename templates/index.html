@@ -2728,7 +2728,7 @@
                 iconCls = 'fa-users-gear text-amber-300 text-sm';
                 roleHtml = `
                     <div class="flex flex-col items-center text-center leading-tight">
-                        <span class="text-xs font-extrabold text-amber-300">Quản Lý Acc</span>
+                        <span class="text-xs font-extrabold text-amber-300">Quản Lý Tài Khoản</span>
                         <span class="text-[11px] font-mono font-bold text-cyan-300">${escapeHtml(currentVipUser.username)}</span>
                     </div>
                 `;
@@ -3095,7 +3095,7 @@
                 renderVipNav();
                 closeVipModal();
                 if (currentVipUser.role === 'admin') {
-                    showToast(`🛡️ Đăng nhập Admin thành công! Bấm "Quản Lý Acc" góc trên để duyệt/tạo VIP.`);
+                    showToast(`🛡️ Đăng nhập Admin thành công! Bấm "Quản Lý Tài Khoản" góc trên để duyệt/tạo VIP.`);
                 } else if (currentVipUser.is_vip) {
                     showToast(`🎉 Đăng nhập VIP "${currentVipUser.username}" thành công! Đã mở khóa Check Trùng & Video Gốc.`);
                 } else {
