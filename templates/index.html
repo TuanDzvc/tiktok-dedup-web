@@ -2543,7 +2543,7 @@
                             <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase">PayOS 24/7</span>
                         </h3>
                         <p class="text-[11px] text-slate-400">
-                            Tài khoản: <b id="vipQrUsername" class="font-mono text-cyan-300">—</b> · Nạp: <b id="vipQrPkgSummary" class="text-amber-300">50.000đ (~200 lượt Check TK · VIP 30 ngày)</b>
+                            Tài khoản: <b id="vipQrUsername" class="font-mono text-cyan-300">—</b> · Nạp: <b id="vipQrPkgSummary" class="text-amber-300">50.000đ (~200 lượt Check TK · 250đ/lượt)</b>
                         </p>
                     </div>
                 </div>
@@ -2559,7 +2559,7 @@
                         <span class="font-extrabold text-cyan-300 flex items-center gap-1.5">
                             <i class="fa-solid fa-coins text-amber-300"></i> Chọn mức nạp (250đ / 1 tài khoản · Tối thiểu 50.000đ)
                         </span>
-                        <span id="qrAmountConversionPreview" class="text-xs font-extrabold text-emerald-300">= ~200 lượt Check Tài Khoản · VIP 30 ngày</span>
+                        <span id="qrAmountConversionPreview" class="text-xs font-extrabold text-emerald-300">= ~200 lượt Check Tài Khoản (250đ / lượt)</span>
                     </div>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <button type="button" id="btnQrPreset_50000" onclick="selectQrAmount(50000, true)" class="py-2 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 border-2 border-emerald-300 text-white font-extrabold text-[11px] shadow-md transition">50.000đ · ~200 lượt</button>
@@ -2647,7 +2647,7 @@
                         </div>
 
                         <div id="vipQrGuideText" class="px-3 py-2 rounded-xl bg-sky-950/40 border border-sky-500/35 text-[11px] text-sky-200 leading-relaxed">
-                            💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống tự bật <b>VIP</b> và cộng ngay vào <b>Số dư Check Tài Khoản</b> (250đ/lượt)!
+                            💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống cộng ngay vào <b>Số dư Check Tài Khoản</b> (250đ/lượt); tài khoản chưa có VIP sẽ tự bật gói VIP mặc định 30 ngày (nạp thêm không cộng dồn ngày VIP).
                         </div>
 
                         <div class="space-y-2">
@@ -4240,7 +4240,6 @@
             const cleanAmt = Math.max(0, parseInt(amt || 0, 10) || 0);
             const unitPrice = (typeof ACCOUNT_CHECK_UNIT_PRICE_VND !== 'undefined') ? ACCOUNT_CHECK_UNIT_PRICE_VND : 250;
             const checks = Math.floor(cleanAmt / unitPrice);
-            const vipDays = Math.max(1, Math.floor(cleanAmt / 50000)) * 30;
             const prevEl = document.getElementById('qrAmountConversionPreview');
             if (prevEl) {
                 if (cleanAmt < 50000) {
@@ -4248,7 +4247,7 @@
                     prevEl.innerText = 'Số tiền nạp tối thiểu là 50.000đ (= 200 lượt check · 250đ/lượt)';
                 } else {
                     prevEl.className = 'text-xs font-extrabold text-emerald-300';
-                    prevEl.innerText = `= ~${checks.toLocaleString('vi-VN')} lượt Check Tài Khoản · VIP ${vipDays} ngày`;
+                    prevEl.innerText = `= ~${checks.toLocaleString('vi-VN')} lượt Check Tài Khoản (${unitPrice}đ / lượt)`;
                 }
             }
             for (const preset of [50000, 100000, 150000, 200000]) {
@@ -4419,7 +4418,11 @@
                     const amtV = Number(ord.amount || _qrSelectedAmount || 50000);
                     const daysV = Number(ord.duration_days || 30);
                     const crChecks = Number(ord.checks_credit ?? Math.floor(amtV / 250));
-                    pkgEl.innerText = `${amtV.toLocaleString('vi-VN')}đ (~${crChecks.toLocaleString('vi-VN')} lượt Check TK · VIP ${daysV} ngày)`;
+                    if (currentVipUser && currentVipUser.is_vip) {
+                        pkgEl.innerText = `${amtV.toLocaleString('vi-VN')}đ (~${crChecks.toLocaleString('vi-VN')} lượt Check TK · Nạp thêm số dư)`;
+                    } else {
+                        pkgEl.innerText = `${amtV.toLocaleString('vi-VN')}đ (~${crChecks.toLocaleString('vi-VN')} lượt Check TK · VIP ${daysV} ngày)`;
+                    }
                 }
                 const imgEl = document.getElementById('vipQrImage');
                 if (imgEl && ord.qr_data_uri) imgEl.src = ord.qr_data_uri;

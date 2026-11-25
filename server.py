@@ -1286,15 +1286,17 @@ def _fulfill_vip_order_unlocked(
         old_exp = int(u_rec.get("expires_at") or 0)
 
         if old_role != "admin":
+            has_active_vip = (old_role == "vip") and (old_exp <= 0 or old_exp > now_ts)
             u_rec["role"] = "vip"
             u_rec["active"] = True
             if u_rec.get("max_devices") is None:
                 u_rec["max_devices"] = _default_max_devices_for_user(uname)
-            if old_role == "vip" and old_exp <= 0:
-                u_rec["expires_at"] = 0
+            if has_active_vip:
+                # Đang có VIP (còn hạn hoặc vĩnh viễn): nạp thêm chỉ cộng số dư Check Tài Khoản, không tăng hạn VIP Check Trùng
+                u_rec["expires_at"] = old_exp
             else:
-                base_ts = max(now_ts, old_exp) if (old_role == "vip" and old_exp > now_ts) else now_ts
-                u_rec["expires_at"] = base_ts + days * 86400
+                # Chưa có VIP hoặc VIP đã hết hạn: kích hoạt đúng gói VIP mặc định (30 ngày)
+                u_rec["expires_at"] = now_ts + days * 86400
             credit_vnd = max(0, int(amount_paid))
             u_rec["account_balance_vnd"] = max(0, int(u_rec.get("account_balance_vnd") or 0)) + credit_vnd
             u_rec["account_balance_updated_at"] = now_ts
@@ -2567,7 +2569,7 @@ async def api_vip_payos_create_order(req: Request):
             status_code=400,
             content={"success": False, "error": f"Số tiền nạp tối thiểu là {base_price:,}đ (tối đa 50,000,000đ)!"},
         )
-    days = max(1, amount // base_price) * base_days
+    days = base_days
 
     force_new = bool(body.get("force_new", False))
     now_ts = int(time.time())
@@ -2642,7 +2644,7 @@ async def api_vip_payos_create_order(req: Request):
     return_url = f"{base_url}/payos/return?orderCode={order_code}"
     cancel_url = f"{base_url}/payos/cancel?orderCode={order_code}"
     desc = f"VIP{order_code}"
-    item_name = f"Nap {amount:,}d (VIP {days}N + {_calc_account_checks_left(amount)} luot) - {uname}"[:75]
+    item_name = f"Nap {amount:,}d ({_calc_account_checks_left(amount)} luot Check TK) - {uname}"[:75]
     exp_ts = now_ts + 900
     sign_payload = {
         "amount": amount,
