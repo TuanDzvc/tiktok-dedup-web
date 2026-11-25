@@ -2316,7 +2316,6 @@
                         <span class="text-[11px] font-bold text-slate-300 hidden md:inline">Ví API:</span>
                         <span id="adminModalBalanceUsd" class="text-sm font-black font-mono text-emerald-300 tabular-nums">$—</span>
                         <span id="adminModalBalanceVnd" class="text-xs font-extrabold text-amber-300 tabular-nums">≈ — VNĐ</span>
-                        <span id="adminModalEstScans" class="text-[11px] font-semibold text-cyan-300 bg-cyan-950/85 border border-cyan-700/60 px-2 py-0.5 rounded-lg whitespace-nowrap">Còn ~— lượt quét</span>
                         <button type="button" onclick="refreshAdminApiBalance(true)" class="px-2.5 py-1 rounded-xl bg-emerald-900/70 hover:bg-emerald-800 border border-emerald-500/50 text-emerald-200 text-[11px] font-bold flex items-center gap-1 transition active:scale-95 whitespace-nowrap" title="Làm mới số dư ví TikHub API">
                             <i class="fa-solid fa-rotate"></i>
                             <span class="hidden sm:inline">Làm mới</span>
@@ -2823,6 +2822,8 @@
         let currentVideoNotice = '';
         let currentVipUser = null;
         let lastScanVipMode = false;
+        let lastDedupUsedApi = false;
+        let lastDedupBilling = null;
         let lastScanDedupLocked = false;
         let currentFreeQuota = null;
         let _cachedHwDeviceId = '';
@@ -3085,8 +3086,9 @@
             const adminBalBtn = canSeeBilling ? `
                 <button
                     type="button"
+                    id="adminApiBalanceNav"
                     onclick="refreshAdminApiBalance(true)"
-                    class="group px-3 py-1 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-cyan-500/35 hover:border-cyan-400/75 shadow-lg shadow-cyan-950/40 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
+                    class="hidden group px-3 py-1 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-cyan-500/35 hover:border-cyan-400/75 shadow-lg shadow-cyan-950/40 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
                     title="Số dư ví API hiện tại — bấm để làm mới"
                 >
                     <span class="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 border border-emerald-400/40 flex items-center justify-center flex-shrink-0">
@@ -3098,7 +3100,6 @@
                             <span class="hidden sm:inline-block w-px h-3 bg-slate-600/80"></span>
                             <span id="adminNavBalanceVnd" class="hidden sm:inline-block text-xs font-extrabold text-cyan-300 tabular-nums">${window._lastAdminBal ? (Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : '...'}</span>
                         </div>
-                        <span id="adminNavEstScans" class="hidden sm:inline-block text-[11px] font-extrabold text-emerald-400 tabular-nums whitespace-nowrap">${window._lastAdminBal ? ('~' + Number(window._lastAdminBal.est_scans_left || 0).toLocaleString('vi-VN') + ' lượt') : '~... lượt'}</span>
                     </div>
                     <i class="fa-solid fa-arrows-rotate text-[11px] text-slate-500 group-hover:text-cyan-300 group-hover:rotate-180 transition-all duration-300 hidden md:inline-block"></i>
                 </button>
@@ -3128,7 +3129,8 @@
                     </button>
                 </div>
             `;
-            if (canSeeBilling && !window._adminBalFetchedOnce) {
+            syncAdminBillingVisibility();
+            if (canSeeBilling && activeMainWorkspaceTab === 'account_check' && !window._adminBalFetchedOnce) {
                 window._adminBalFetchedOnce = true;
                 refreshAdminApiBalance(false);
             }
@@ -3138,6 +3140,22 @@
 
         function canCurrentUserSeeBilling() {
             return Boolean(currentVipUser && currentVipUser.role === 'admin');
+        }
+
+        function syncAdminBillingVisibility() {
+            const admin = canCurrentUserSeeBilling();
+            const accountTab = activeMainWorkspaceTab === 'account_check';
+            document.getElementById('adminApiBalanceNav')?.classList.toggle('hidden', !admin || !accountTab);
+            document.getElementById('vipApiBalanceCard')?.classList.toggle('hidden', !admin || !accountTab);
+            document.getElementById('adminScanCostBanner')?.classList.toggle('hidden', !admin || activeMainWorkspaceTab !== 'checker' || !lastDedupUsedApi || !lastDedupBilling);
+            document.getElementById('adminScanCostRight')?.classList.add('hidden');
+            if (!lastDedupUsedApi && admin) document.getElementById('loadMoreCostBadge')?.classList.add('hidden');
+        }
+
+        function rememberDedupProvider(data) {
+            lastDedupUsedApi = data?.reader_provider?.fallback === true;
+            lastDedupBilling = lastDedupUsedApi ? (data?.admin_billing || null) : null;
+            syncAdminBillingVisibility();
         }
 
         function canCurrentUserUseAccountCheck() {
@@ -3327,7 +3345,7 @@
             if (modVnd) modVnd.innerText = `≈ ${balVnd.toLocaleString('vi-VN')} VNĐ`;
             if (modEst) modEst.innerText = `Còn ~${estLeft.toLocaleString('vi-VN')} lượt quét`;
 
-            if (isScanResult && banner) {
+            if (isScanResult && banner && lastDedupUsedApi) {
                 const cUsd = Number(b.scan_cost_usd || 0);
                 const cVnd = Number(b.scan_cost_vnd || 0);
                 const calls = Number(b.api_calls || 0);
@@ -3346,6 +3364,7 @@
                 }
                 banner.classList.remove('hidden');
             }
+            syncAdminBillingVisibility();
         }
 
         async function refreshAdminApiBalance(showMsg = false) {
@@ -3357,7 +3376,7 @@
                     updateAdminBillingUI(data.billing, false);
                     if (showMsg) {
                         const b = data.billing;
-                        showToast(`💰 Số dư API: $${Number(b.total_usd || 0).toFixed(4)} (~${Number(b.total_vnd || 0).toLocaleString('vi-VN')} VNĐ • còn ~${Number(b.est_scans_left || 0).toLocaleString('vi-VN')} lượt)`);
+                        showToast(`💰 Số dư API: $${Number(b.total_usd || 0).toFixed(4)} (~${Number(b.total_vnd || 0).toLocaleString('vi-VN')} VNĐ)`);
                     }
                 }
             } catch (e) {}
@@ -3700,7 +3719,7 @@
                     : 'Xem trạng thái VIP & đổi mật khẩu cá nhân';
             }
             if (balCard) {
-                if (isAdmin) {
+                if (isAdmin && activeMainWorkspaceTab === 'account_check') {
                     balCard.classList.remove('hidden');
                     refreshAdminApiBalance(false);
                 } else {
@@ -5193,6 +5212,7 @@
                 });
 
                 const data = await safeParseJson(response);
+                rememberDedupProvider(data);
                 if (data.free_quota) {
                     updateFreeQuotaBannerUI(data.free_quota);
                 }
@@ -5295,6 +5315,7 @@
                 });
 
                 const data = await safeParseJson(response);
+                rememberDedupProvider(data);
                 if (data.free_quota) {
                     updateFreeQuotaBannerUI(data.free_quota);
                 }
@@ -5390,7 +5411,9 @@
                 endMsg.classList.add('hidden');
                 const costBadge = document.getElementById('loadMoreCostBadge');
                 if (costBadge) {
-                    if (canCurrentUserSeeBilling() && lastScanVipMode) {
+                    if (canCurrentUserSeeBilling() && !lastDedupUsedApi) {
+                        costBadge.classList.add('hidden');
+                    } else if (canCurrentUserSeeBilling() && lastScanVipMode && lastDedupUsedApi) {
                         costBadge.innerHTML = `⚡ $0.0010 • ~26đ <span class="text-emerald-300 font-semibold">(0đ nếu đã cache)</span>`;
                         costBadge.classList.remove('hidden');
                     } else if (!lastScanVipMode && currentFreeQuota && typeof currentFreeQuota.remaining === 'number') {
@@ -5491,6 +5514,7 @@
         }
 
         function renderResults(data) {
+            rememberDedupProvider(data);
             if (currentVipUser?.role === 'admin' && data.reader_provider) {
                 if (data.reader_provider.fallback) showToast('⚠️ Lượt này dùng API dự phòng. Xem Quản lý tài khoản → Phiên TikTok.');
                 loadReaderStatus();
@@ -6280,6 +6304,9 @@
             }
 
             if (typeof syncAccountWalletUI === 'function') syncAccountWalletUI();
+
+            syncAdminBillingVisibility();
+            if (targetTab === 'account_check' && canCurrentUserSeeBilling()) refreshAdminApiBalance(false);
 
             if (targetTab === 'account_check') {
                 updateAccountCheckInputCount();

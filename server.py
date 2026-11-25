@@ -3846,7 +3846,7 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
             if has_vip_access:
                 res_scan["vip_mode"] = True
                 res_scan["dedup_locked"] = False
-                if is_admin_user:
+                if is_admin_user and bool((res_scan.get("reader_provider") or {}).get("fallback")):
                     cost_obj = internal_cost if isinstance(internal_cost, dict) else {}
                     c_usd = round(float(cost_obj.get("cost_usd") or 0.0), 4)
                     c_calls = int(cost_obj.get("api_calls") or 0)
