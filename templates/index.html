@@ -2051,8 +2051,8 @@
                 </div>
 
                 <div class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center space-y-1">
-                    <p>💡 Khách nạp từ <b class="text-amber-300">50.000đ (VietQR)</b>; xem quy đổi <b class="text-rose-300">Check Tài Khoản (250đ/lượt)</b> theo số dư.</p>
-                    <p class="text-[11px] text-cyan-200">🔄 Tự quy đổi số dư thành lượt Check Tài Khoản còn lại · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>.</p>
+                    <p>💡 Khách nạp từ <b class="text-amber-300">50.000đ (VietQR)</b> · <b class="text-rose-300">Check Tài Khoản 250đ/lượt</b>.</p>
+                    <p class="text-[11px] text-cyan-200">Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>.</p>
                 </div>
 
                 <!-- Hàng nút dưới cùng: Tắt thông báo + Zalo + Facebook + Đăng Ký trên cùng 1 hàng -->
@@ -3779,6 +3779,12 @@
             }
         }
 
+        function displayAccountNote(note) {
+            return String(note || '').split(/\r?\n/)
+                .filter(line => !/qu[yi]\s+đổi/i.test(line))
+                .join('\n').trim() || '—';
+        }
+
         async function loadVipUsersList() {
             const tbody = document.getElementById('vipUsersTableBody');
             if (!tbody) return;
@@ -3860,7 +3866,7 @@
                         }).join('');
                         devicesHtml = `<div>${headerChip}<div class="space-y-1 max-h-24 overflow-y-auto custom-scrollbar">${rowsChip}</div></div>`;
                     }
-                    const rawNote = String(u.note || '—').replace(' (Super Admin', '\n(Super Admin');
+                    const rawNote = displayAccountNote(u.note).replace(' (Super Admin', '\n(Super Admin');
                     const pwVal = String(u.password_plain || '—');
                     return `
                         <tr class="hover:bg-slate-900/60 align-middle">
@@ -4550,7 +4556,7 @@
                 if (typeof updateLoadMoreButtonState === 'function') updateLoadMoreButtonState();
             }
             okWrap?.classList.remove('hidden');
-            showToast('🎉 Đã nhận chuyển khoản! Số dư Ví chung & quy đổi lượt đã được cập nhật.');
+            showToast('🎉 Đã nhận chuyển khoản! Số dư đã được cập nhật.');
         }
 
         function finishVipQrSuccess() {
