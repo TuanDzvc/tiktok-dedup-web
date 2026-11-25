@@ -118,21 +118,12 @@ class ReaderRouter:
         except (OSError,ValueError,TypeError):pass
 
     def settings(self):
-        defaults={'enabled':True,'fallback_enabled':True}
-        try:
-            data=json.loads(self.settings_file.read_text('utf-8'))
-            return {key:bool(data.get(key,value)) for key,value in defaults.items()}
-        except (OSError,ValueError):return defaults
+        # Fixed operating policy. Ignore legacy toggle files from the earlier UI.
+        return {'enabled':True,'fallback_enabled':True}
 
     def save_settings(self,body):
-        config=self.settings()
-        for key in config:
-            if key in body:
-                if type(body[key]) is not bool:raise ValueError('Cấu hình phải là bật/tắt.')
-                config[key]=body[key]
-        with self.lock:
-            tmp=self.settings_file.with_suffix('.tmp');tmp.write_text(json.dumps(config),'utf-8');tmp.replace(self.settings_file)
-        return config
+        # Compatibility for old clients; neither preference can be turned off.
+        return self.settings()
 
     def _bridge(self,path,body=None):
         cloud=os.getenv('IS_CLOUD','').lower() in ('1','true') or bool(os.getenv('RENDER'))

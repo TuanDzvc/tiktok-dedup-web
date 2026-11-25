@@ -2290,12 +2290,7 @@
                         </div>
                         <p id="readerStatusMessage" class="text-xs text-slate-200"></p>
                         <p id="readerSessionMeta" class="text-[11px] text-slate-400"></p>
-                        <div class="flex flex-wrap gap-4 text-xs text-slate-200">
-                            <label class="flex items-center gap-2"><input type="checkbox" id="readerEnabled" checked> Ưu tiên reader TikTok riêng</label>
-                            <label class="flex items-center gap-2"><input type="checkbox" id="readerFallbackEnabled" checked> Dùng API dự phòng khi reader lỗi</label>
-                        </div>
                         <div class="flex flex-wrap gap-2">
-                            <button type="button" onclick="saveReaderSettings()" class="rounded-xl bg-cyan-700 hover:bg-cyan-600 px-3 py-2 text-xs font-bold text-white">Lưu chế độ</button>
                             <button type="button" onclick="refreshReaderSession(false)" class="rounded-xl bg-emerald-700 hover:bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Nạp phiên mới từ MuMu</button>
                             <button type="button" onclick="refreshReaderSession(true)" class="rounded-xl bg-slate-700 hover:bg-slate-600 px-3 py-2 text-xs font-bold text-white">Kiểm tra phiên</button>
                         </div>
@@ -2303,23 +2298,7 @@
                         <p id="readerActionMessage" class="text-xs text-cyan-200" role="status"></p>
                         <div id="readerRecentEvents" class="text-[11px] text-slate-400 space-y-1"></div>
                     </section>
-                    <form onsubmit="submitAdminSaveUser(event); return false;" class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-3">
-                        <div class="text-xs font-extrabold text-cyan-300 flex items-center gap-1.5">
-                            <i class="fa-solid fa-user-plus"></i> Tạo Mới / Cập Nhật Tài Khoản Khách VIP
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
-                            <input type="text" id="admNewUser" placeholder="Username (vd: khach01)" required class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
-                            <input type="text" id="admNewPass" minlength="6" placeholder="Mật khẩu (từ 6 ký tự)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
-                            <input type="number" id="admNewDays" placeholder="Số ngày (0 = Vĩnh viễn)" min="0" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
-                            <input type="number" id="admNewMaxDevs" placeholder="Số máy tối đa (mặc định: 1)" min="0" max="100" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
-                            <input type="text" id="admNewNote" placeholder="Ghi chú (tên khách/Zalo)" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" />
-                        </div>
-                        <div class="flex justify-end">
-                            <button type="submit" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs transition flex items-center gap-1.5">
-                                <i class="fa-solid fa-floppy-disk"></i> Lưu / Cấp Tài Khoản VIP
-                            </button>
-                        </div>
-                    </form>
+
 
                     <!-- Danh sách tài khoản -->
                     <div class="rounded-2xl border border-slate-800 overflow-hidden bg-slate-950/70">
@@ -2882,9 +2861,7 @@
         const DEDUP_CHECK_UNIT_PRICE_VND = 26;
 
         let readerStatusBusy = false;
-        let readerSettingsDirty = false;
         let readerLastFallbackAt = 0;
-        ['readerEnabled', 'readerFallbackEnabled'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { readerSettingsDirty = true; }));
         const readerDate = timestamp => timestamp ? new Date(Number(timestamp) * 1000).toLocaleString('vi-VN') : 'Chưa có';
         async function loadReaderStatus() {
             if (!currentVipUser || currentVipUser.role !== 'admin' || readerStatusBusy) return;
@@ -2892,17 +2869,13 @@
             try {
                 const response = await fetch('/api/vip/admin/reader-status', { headers: { 'Authorization': 'Bearer ' + getVipToken() } });
                 if (!response.ok) return;
-                const data = await response.json(), engine = data.engine || {}, settings = data.settings || {};
+                const data = await response.json(), engine = data.engine || {};
                 const healthy = data.active_provider === 'independent';
                 const fallback = data.active_provider === 'api_fallback';
                 document.getElementById('readerStatusBadge').textContent = healthy ? '🟢 Reader riêng đang hoạt động' : fallback ? '🟠 API dự phòng' : '🔴 Tạm ngừng đọc';
                 document.getElementById('readerStatusMessage').textContent = healthy ? (engine.message || 'Phiên TikTok đang đọc được dữ liệu.') : fallback ? 'Đang dùng API dự phòng; lượt đọc qua API có chi phí nội bộ. ' + (engine.message || '') : 'Reader chưa dùng được và API dự phòng đang tắt.';
                 const mumuLabels = { connected: 'Đã kết nối', unavailable: 'Chưa kết nối (phiên lưu vẫn được giữ)', candidate_unusable: 'Phiên mới chưa qua kiểm tra', not_checked: 'Chưa kiểm tra' };
                 document.getElementById('readerSessionMeta').textContent = `Đọc thành công gần nhất: ${readerDate(engine.last_good)} · Nạp MuMu: ${readerDate(engine.last_imported)} · MuMu: ${mumuLabels[engine.mumu_state] || engine.mumu_state || '—'} · Lượt dự phòng đã ghi: ${data.fallback_count || 0}`;
-                if (!readerSettingsDirty) {
-                    document.getElementById('readerEnabled').checked = settings.enabled !== false;
-                    document.getElementById('readerFallbackEnabled').checked = settings.fallback_enabled !== false;
-                }
                 if (engine.refresh_message) document.getElementById('readerActionMessage').textContent = engine.refresh_message;
                 const notice = document.getElementById('readerFallbackNotice');
                 const lastUsedFallback = data.last_source === 'api_fallback';
@@ -2921,15 +2894,6 @@
             } catch (_) {
                 document.getElementById('readerStatusBadge').textContent = 'Chưa tải được trạng thái';
             } finally { readerStatusBusy = false; }
-        }
-        async function saveReaderSettings() {
-            try {
-                const response = await fetch('/api/vip/admin/reader-settings', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getVipToken() }, body: JSON.stringify({ enabled: document.getElementById('readerEnabled').checked, fallback_enabled: document.getElementById('readerFallbackEnabled').checked }) });
-                if (!response.ok) throw new Error('Chưa lưu được chế độ đọc.');
-                readerSettingsDirty = false;
-                document.getElementById('readerActionMessage').textContent = 'Đã lưu chế độ đọc và API dự phòng.';
-                await loadReaderStatus();
-            } catch (error) { showToast(error.message); }
         }
         async function refreshReaderSession(checkOnly) {
             document.getElementById('readerActionMessage').textContent = checkOnly ? 'Đang kiểm tra phiên đang lưu…' : 'Đang đọc phiên từ MuMu; bạn cần hoàn tất đăng nhập/xác minh trong app TikTok.';

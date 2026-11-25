@@ -16,9 +16,9 @@ Bảng quản lý tài khoản, chỉnh số dư, chọn mức nạp QR và thô
 
 Ghi chú cũ kiểu “Quy đổi gói 50k sang Ví chung (đã quét … lượt)” được lọc khỏi bảng quản lý. Giữ các ghi chú khác như tự đăng ký trên web hoặc ghi chú thủ công; không sửa dữ liệu ví.
 
-Đăng nhập Admin → Quản Lý Tài Khoản → Phiên TikTok. Có trạng thái reader, lần đọc thành công/nạp phiên, kết nối MuMu, lịch sử nguồn đọc và số lượt dự phòng; bật/tắt ưu tiên reader/API dự phòng; nút kiểm tra và nạp phiên.
+Đăng nhập Admin → Quản Lý Tài Khoản → Phiên TikTok. Có trạng thái reader, lần đọc thành công/nạp phiên, kết nối MuMu, lịch sử nguồn đọc và số lượt dự phòng; nút kiểm tra và nạp phiên. Luôn ưu tiên reader và luôn fallback API khi reader lỗi; không còn checkbox hay nút lưu chế độ. Cấu hình tắt cũ được bỏ qua. Khung tạo/cập nhật tài khoản VIP đã được bỏ khỏi giao diện, bảng quản lý và thao tác trên tài khoản hiện có vẫn giữ.
 
-Reader tốt → lấy aweme_list/group_id/cờ FYP trực tiếp, không gọi TikHub cho dữ liệu check. Reader lỗi/thiếu group_id/không kết nối được → dùng engine API cũ nếu bật dự phòng, có cảnh báo riêng cho Admin. Nếu API cũng lỗi, kết quả vẫn lỗi và luồng ví cũ không thu phí thành công giả.
+Reader tốt → lấy aweme_list/group_id/cờ FYP trực tiếp, không gọi TikHub cho dữ liệu check. Reader lỗi/thiếu group_id/không kết nối được → dùng engine API cũ, có cảnh báo riêng cho Admin. Nếu API cũng lỗi, kết quả vẫn lỗi và luồng ví cũ không thu phí thành công giả.
 
 Reader riêng nhận username/link kênh. Link một video, link rút gọn và ID video giữ engine cũ để không biến yêu cầu kiểm tra một video thành quét cả kênh. Các lượt này được ghi rõ nguồn API dự phòng, không gán nhầm phiên hỏng.
 
@@ -37,7 +37,7 @@ Nếu cần gấp, bấm Nạp phiên mới từ MuMu. Nếu candidate chưa đ�
 
 - `dedup_provider.py`: adapter schema web, router nguồn đọc, circuit 30 giây, settings/history đã lọc và giám sát sidecar PC.
 - `independent_reader/`: source reader/signer, resolver Chrome và watcher.
-- `reader_settings.json`, `reader_runtime.json`: runtime ignored, không sync peer.
+- `reader_settings.json`: cấu hình cũ không còn tác dụng; `reader_runtime.json`: lịch sử nguồn đọc đã lọc, ignored và không sync peer.
 - `independent_reader/.private/`: session/khóa riêng, loại khỏi Git/Docker; tuyệt đối không đưa vào zip source.
 - Biến tùy chọn: `INDEPENDENT_READER_DIR`, `INDEPENDENT_READER_URL`, `INDEPENDENT_READER_KEY_FILE`, `INDEPENDENT_READER_AUTOSTART=0` để tắt tự khởi động. Mặc định dùng reader bundled tại localhost:8767.
 - Admin APIs: GET `/api/vip/admin/reader-status`; POST `/reader-settings`, `/reader-refresh` cùng prefix admin. Tất cả yêu cầu Admin thật từ token hiện có.
@@ -48,7 +48,7 @@ Source reader dựa trên MIT signer; LICENSE giữ nguyên trong vendor. Không
 
 Sửa thumbnail: mobile response có HEIC đứng trước JPEG; ảnh HEIC tải được nhưng không hiển thị trong trình duyệt đang dùng. Adapter nay ưu tiên URL JPEG/PNG/WebP từ toàn bộ cover/origin_cover/dynamic_cover, giữ nguyên chữ ký URL. Đã xác nhận 18/18 URL JPEG và proxy trả image/jpeg thật cho ảnh mẫu. Kết quả lịch sử lưu URL HEIC cũ cần quét lại kênh để lấy URL mới; không xóa lịch sử khách.
 
-13 test router/watcher/thumbnail bằng fixture, không tiêu tốn API: reader tốt không gọi fallback, fallback một lần khi lỗi, tắt fallback không gọi API, circuit phục hồi khi session khỏe, candidate xấu giữ file cũ, candidate tốt đổi file, MuMu offline giữ phiên, lỗi mục tiêu không gán nhầm phiên hết hạn, link video giữ đúng phạm vi một video, chọn đúng URL ảnh trình duyệt đọc được và giữ nguyên chữ ký.
+13 test router/watcher/thumbnail bằng fixture, không tiêu tốn API: reader tốt không gọi fallback, fallback một lần khi lỗi, reader/fallback luôn bật bất kể cấu hình cũ, circuit phục hồi khi session khỏe, candidate xấu giữ file cũ, candidate tốt đổi file, MuMu offline giữ phiên, lỗi mục tiêu không gán nhầm phiên hết hạn, link video giữ đúng phạm vi một video, chọn đúng URL ảnh trình duyệt đọc được và giữ nguyên chữ ký.
 
 Live adapter và route `/api/check` với lớp xác thực/dữ liệu ví fixture: seitezhm99d → 18 video, 5 trùng, 2 cờ hạn chế, source independent, 0 API trả phí và không chạy hàm fallback. MuMu đang tắt ở lượt kiểm tra này. Admin status: không token 403; fixture Admin 200, không lộ cookie/token. Chưa cố ý làm hỏng tài khoản/session thật để thử đình chỉ; việc chuyển phiên lỗi được kiểm chứng bằng fixture.
 

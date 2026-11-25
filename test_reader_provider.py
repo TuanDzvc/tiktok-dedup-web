@@ -48,11 +48,13 @@ class ProviderTests(unittest.TestCase):
         self.assertTrue(result['reader_provider']['fallback'])
         self.assertEqual(self.router.fallback_count,1)
 
-    def test_disabled_fallback_does_not_spend_api(self):
-        self.router.save_settings({'fallback_enabled':False})
+    def test_reader_and_fallback_are_always_enabled(self):
+        self.router.settings_file.write_text(json.dumps({'enabled':False,'fallback_enabled':False}))
+        self.assertEqual(self.router.settings(),{'enabled':True,'fallback_enabled':True})
+        self.assertEqual(self.router.save_settings({'enabled':False,'fallback_enabled':False}),{'enabled':True,'fallback_enabled':True})
         self.router._bridge=Mock(side_effect=RuntimeError('offline'))
-        self.assertFalse(self.router.check(self.legacy,'fixture')['success'])
-        self.legacy.assert_not_called()
+        self.assertTrue(self.router.check(self.legacy,'fixture')['reader_provider']['fallback'])
+        self.legacy.assert_called_once()
 
     def test_healthy_refreshed_session_closes_circuit(self):
         self.router.blocked_until=1030;self.router.last_error_at=999
@@ -62,7 +64,7 @@ class ProviderTests(unittest.TestCase):
         self.legacy.assert_not_called()
 
     def test_failed_legacy_result_still_marks_fallback(self):
-        self.router.save_settings({'enabled':False})
+        self.router._bridge=Mock(side_effect=RuntimeError('offline'))
         self.legacy.return_value={'success':False,'error':'synthetic failure'}
         self.assertTrue(self.router.check(self.legacy,'fixture')['reader_provider']['fallback'])
 
