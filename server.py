@@ -56,6 +56,7 @@ import core_dedup
 from core_dedup import fetch_channel_info_and_posts, check_accounts_batch_tikhub, DEFAULT_UA, get_borrowed_cookie
 import studio_engine
 import dedup_provider
+from vip_subscription import activate_paid_membership, restore_paid_memberships
 
 # Cấu hình Google Sheet Webhook lưu vết người dùng
 SHEET_WEBHOOK_URL = os.getenv(
@@ -1282,6 +1283,10 @@ def _fulfill_vip_order_unlocked(
     old_role = str(u_rec.get("role") or "member").lower()
 
     if old_role != "admin":
+        cfg = _get_payos_config()
+        if (str(ord_rec.get("order_type") or "vip").lower() == "vip"
+                and req_amount >= int(cfg["price_vnd"])):
+            activate_paid_membership(u_rec, now_ts, int(ord_rec.get("duration_days") or cfg["duration_days"]))
         credit_vnd = max(0, int(amount_paid))
         u_rec["account_balance_vnd"] = max(0, int(u_rec.get("account_balance_vnd") or 0)) + credit_vnd
         u_rec["account_balance_updated_at"] = now_ts
@@ -1306,7 +1311,7 @@ def _public_order_view(ord_rec: Dict[str, Any]) -> Dict[str, Any]:
         "order_type": ord_type,
         "username": str(ord_rec.get("username") or ""),
         "amount": amt_val,
-        "duration_days": 0,
+        "duration_days": int(ord_rec.get("duration_days") or _get_payos_config()["duration_days"]),
         "dedup_checks_credit": _calc_dedup_checks_left(amt_val),
         "dedup_unit_price_vnd": DEDUP_CHECK_UNIT_PRICE_VND,
         "checks_credit": _calc_account_checks_left(amt_val),
@@ -1395,6 +1400,10 @@ def _load_vip_users_unlocked() -> Dict[str, Dict[str, Any]]:
         }
         changed = True
 
+    cfg = _get_payos_config()
+    if restore_paid_memberships(users, _load_vip_orders_unlocked(), int(time.time()),
+                                cfg["duration_days"], cfg["price_vnd"]):
+        changed = True
     if changed:
         _save_vip_users_unlocked(users)
     return users
@@ -2068,7 +2077,7 @@ def _has_manual_vip_privilege(u: Optional[Dict[str, Any]]) -> bool:
     if role != "vip":
         return False
     exp_at = int(u.get("expires_at") or 0)
-    return exp_at <= 0 or exp_at >= int(time.time())
+    return exp_at <= 0 or exp_at > int(time.time())
 
 
 def _has_vip_privilege(u: Optional[Dict[str, Any]]) -> bool:
@@ -2076,7 +2085,7 @@ def _has_vip_privilege(u: Optional[Dict[str, Any]]) -> bool:
         return False
     if _has_manual_vip_privilege(u):
         return True
-    return int(u.get("account_balance_vnd") or 0) >= DEDUP_CHECK_UNIT_PRICE_VND
+    return False
 
 
 def _extract_vip_user(req: Request, body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
@@ -2568,7 +2577,7 @@ async def api_vip_payos_create_order(req: Request):
             status_code=400,
             content={"success": False, "error": f"Số tiền nạp tối thiểu là {base_price:,}đ (tối đa 50,000,000đ)!"},
         )
-    days = 0
+    days = base_days
 
     force_new = bool(body.get("force_new", False))
     now_ts = int(time.time())
@@ -3761,13 +3770,8 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                 is_admin_user = str(u_rec.get("role") or "").lower() == "admin"
                 has_manual_vip = _has_manual_vip_privilege(u_rec)
                 cur_bal = max(0, int(u_rec.get("account_balance_vnd") or 0))
-                charge_dedup_balance = bool(
-                    not is_admin_user
-                    and not has_manual_vip
-                    and cur_bal >= DEDUP_CHECK_UNIT_PRICE_VND
-                    and max_cursor == 0
-                )
-                has_vip_access = bool(has_manual_vip or charge_dedup_balance)
+                charge_dedup_balance = False
+                has_vip_access = has_manual_vip
                 if has_manual_vip and max_cursor == 0:
                     u_rec["scan_count"] = int(u_rec.get("scan_count") or 0) + 1
                 _save_vip_users_unlocked(users_db)

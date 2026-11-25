@@ -16,6 +16,14 @@ Bảng quản lý tài khoản, chỉnh số dư, chọn mức nạp QR và thô
 
 Ghi chú cũ kiểu “Quy đổi gói 50k sang Ví chung (đã quét … lượt)” được lọc khỏi bảng quản lý. Giữ các ghi chú khác như tự đăng ký trên web hoặc ghi chú thủ công; không sửa dữ liệu ví.
 
+### Hạn VIP tháng (sửa ngày 25/11/2026)
+
+- Gói PayOS từ 50.000đ kích hoạt VIP 30 ngày (theo cấu hình PayOS), lưu `vip_started_at`, `expires_at`, `vip_source`. Nạp khi gói còn hạn chỉ cộng ví, không kéo dài hạn. Thanh toán sau khi hết hạn bắt đầu kỳ mới.
+- Quyền VIP dựa vào vai trò, trạng thái và hạn dùng; số dư ví không tự cấp VIP. Check Trùng của VIP không trừ ví; hết hạn quay về giới hạn miễn phí. Ví Check Tài Khoản vẫn giữ nguyên.
+- Khôi phục tài khoản bị mất hạn bằng ngày `paid_at` của đơn PAID, không cộng ví lần nữa và không tạo lại người dùng đã xóa. Admin và VIP vĩnh viễn cấp thủ công được giữ nguyên. Bảng quản lý hiển thị hạn thực tế theo giờ Việt Nam.
+- Đã khôi phục `voitenlua1`, `virgo0805`, `ducson2222` theo đơn thanh toán. Theo xác nhận chủ web, `cutinhaque01` và `123456` bắt đầu từ 00:00 ngày 24/11/2026, hết hạn 00:00 ngày 24/12/2026. Bản sao dữ liệu trước sửa nằm trong `independent_reader/.private/backups/` (không đưa vào Git).
+- Kiểm tra hồi quy: `python -m unittest test_vip_subscription test_reader_provider -q`.
+
 Đăng nhập Admin → Quản Lý Tài Khoản → Phiên TikTok. Có trạng thái reader, lần đọc thành công/nạp phiên, kết nối MuMu, lịch sử nguồn đọc và số lượt dự phòng; nút kiểm tra và nạp phiên. Luôn ưu tiên reader và luôn fallback API khi reader lỗi; không còn checkbox hay nút lưu chế độ. Cấu hình tắt cũ được bỏ qua. Khung tạo/cập nhật tài khoản VIP đã được bỏ khỏi giao diện, bảng quản lý và thao tác trên tài khoản hiện có vẫn giữ.
 
 Reader tốt → lấy aweme_list/group_id/cờ FYP trực tiếp, không gọi TikHub cho dữ liệu check. Reader lỗi/thiếu group_id/không kết nối được → dùng engine API cũ, có cảnh báo riêng cho Admin. Nếu API cũng lỗi, kết quả vẫn lỗi và luồng ví cũ không thu phí thành công giả.

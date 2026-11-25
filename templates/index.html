@@ -3770,9 +3770,9 @@
                     } else if (u.role === 'vip') {
                         roleBadge = '<span class="px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-600/50 font-bold">Hết hạn</span>';
                     }
-                    const expStr = u.role === 'member'
-                        ? '<span class="text-white font-semibold">—</span>'
-                        : (u.expires_at > 0 ? `<span class="text-white font-semibold">${new Date(u.expires_at * 1000).toLocaleDateString('vi-VN')}</span>` : '<span class="text-emerald-400 font-bold">Vĩnh viễn</span>');
+                    const expStr = u.expires_at > 0
+                        ? `<span class="${u.is_vip ? 'text-white' : 'text-rose-300'} font-semibold">${new Date(u.expires_at * 1000).toLocaleDateString('vi-VN', {timeZone: 'Asia/Ho_Chi_Minh'})}</span>`
+                        : (u.role === 'admin' || u.role === 'vip' ? '<span class="text-emerald-400 font-bold">Vĩnh viễn</span>' : '<span class="text-white font-semibold">—</span>');
                     const balVnd = Math.max(0, Number(u.account_balance_vnd || 0));
                     const dedupLeft = Math.floor(balVnd / DEDUP_CHECK_UNIT_PRICE_VND);
                     const checksLeft = Math.floor(balVnd / ACCOUNT_CHECK_UNIT_PRICE_VND);
