@@ -3069,7 +3069,7 @@
                 </div>
             `;
             syncAdminBillingVisibility();
-            if (canSeeBilling && activeMainWorkspaceTab === 'account_check' && !window._adminBalFetchedOnce) {
+            if (shouldShowAdminNavBalance() && !window._adminBalFetchedOnce) {
                 window._adminBalFetchedOnce = true;
                 refreshAdminApiBalance(false);
             }
@@ -3081,13 +3081,20 @@
             return Boolean(currentVipUser && currentVipUser.role === 'admin');
         }
 
+        function shouldShowAdminNavBalance() {
+            return canCurrentUserSeeBilling() && (
+                activeMainWorkspaceTab === 'account_check' ||
+                (activeMainWorkspaceTab === 'checker' && String(currentVipUser.username || '').toLowerCase() === 'tuandzvcc')
+            );
+        }
+
         function syncAdminBillingVisibility() {
             const admin = canCurrentUserSeeBilling();
             const accountTab = activeMainWorkspaceTab === 'account_check';
             document.getElementById('userBalNavBtn')?.classList.toggle('hidden', !currentVipUser || admin || !accountTab);
             document.getElementById('dedupWalletBar')?.classList.add('hidden');
             document.getElementById('historyWalletBar')?.classList.add('hidden');
-            document.getElementById('adminApiBalanceNav')?.classList.toggle('hidden', !admin || !accountTab);
+            document.getElementById('adminApiBalanceNav')?.classList.toggle('hidden', !shouldShowAdminNavBalance());
             document.getElementById('vipApiBalanceCard')?.classList.toggle('hidden', !admin || !accountTab);
             document.getElementById('adminScanCostBanner')?.classList.toggle('hidden', !admin || activeMainWorkspaceTab !== 'checker' || !lastDedupUsedApi || !lastDedupBilling);
             document.getElementById('adminScanCostRight')?.classList.add('hidden');
@@ -6254,7 +6261,7 @@
             if (typeof syncAccountWalletUI === 'function') syncAccountWalletUI();
 
             syncAdminBillingVisibility();
-            if (targetTab === 'account_check' && canCurrentUserSeeBilling()) refreshAdminApiBalance(false);
+            if (shouldShowAdminNavBalance()) refreshAdminApiBalance(false);
 
             if (targetTab === 'account_check') {
                 updateAccountCheckInputCount();
