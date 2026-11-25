@@ -2758,21 +2758,21 @@
                 <button
                     type="button"
                     onclick="refreshAdminApiBalance(true)"
-                    class="group px-2.5 py-1 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-cyan-500/35 hover:border-cyan-400/75 shadow-lg shadow-cyan-950/40 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
+                    class="group px-3 py-1 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-cyan-500/35 hover:border-cyan-400/75 shadow-lg shadow-cyan-950/40 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
                     title="Số dư ví API hiện tại — bấm để làm mới"
                 >
-                    <span class="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 border border-emerald-400/40 flex items-center justify-center flex-shrink-0">
-                        <i class="fa-solid fa-wallet text-emerald-400 text-[11px]"></i>
+                    <span class="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 border border-emerald-400/40 flex items-center justify-center flex-shrink-0">
+                        <i class="fa-solid fa-wallet text-emerald-400 text-xs"></i>
                     </span>
-                    <div class="flex flex-col items-center justify-center leading-tight gap-0.5 text-center">
-                        <div class="flex items-center gap-1.5 leading-none">
-                            <span id="adminNavBalanceUsd" class="text-[11px] font-black tracking-tight text-white tabular-nums">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd || 0).toFixed(4)) : 'Ví API'}</span>
-                            <span class="hidden sm:inline-block w-px h-2.5 bg-slate-600/80"></span>
-                            <span id="adminNavBalanceVnd" class="hidden sm:inline-block text-[11px] font-extrabold text-cyan-300 tabular-nums">${window._lastAdminBal ? (Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : '...'}</span>
+                    <div class="flex flex-col items-center justify-center leading-tight text-center">
+                        <div class="flex items-center gap-1.5">
+                            <span id="adminNavBalanceUsd" class="text-xs font-black tracking-tight text-white tabular-nums">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd || 0).toFixed(4)) : 'Ví API'}</span>
+                            <span class="hidden sm:inline-block w-px h-3 bg-slate-600/80"></span>
+                            <span id="adminNavBalanceVnd" class="hidden sm:inline-block text-xs font-extrabold text-cyan-300 tabular-nums">${window._lastAdminBal ? (Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : '...'}</span>
                         </div>
-                        <span id="adminNavEstScans" class="hidden sm:inline-block text-[10px] font-extrabold text-emerald-400 tabular-nums leading-none whitespace-nowrap">${window._lastAdminBal ? ('~' + Number(window._lastAdminBal.est_scans_left || 0).toLocaleString('vi-VN') + ' lượt') : '~... lượt'}</span>
+                        <span id="adminNavEstScans" class="hidden sm:inline-block text-[11px] font-extrabold text-emerald-400 tabular-nums whitespace-nowrap">${window._lastAdminBal ? ('~' + Number(window._lastAdminBal.est_scans_left || 0).toLocaleString('vi-VN') + ' lượt') : '~... lượt'}</span>
                     </div>
-                    <i class="fa-solid fa-arrows-rotate text-[10px] text-slate-500 group-hover:text-cyan-300 group-hover:rotate-180 transition-all duration-300 hidden md:inline-block"></i>
+                    <i class="fa-solid fa-arrows-rotate text-[11px] text-slate-500 group-hover:text-cyan-300 group-hover:rotate-180 transition-all duration-300 hidden md:inline-block"></i>
                 </button>
             ` : '';
             nav.innerHTML = `
