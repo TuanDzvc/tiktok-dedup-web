@@ -1075,8 +1075,6 @@ def _save_payos_file_config_unlocked(cfg: Dict[str, Any]) -> None:
 
 
 ACCOUNT_CHECK_UNIT_PRICE_VND = 250
-ACCOUNT_TOPUP_MIN_VND = 10000
-ACCOUNT_TOPUP_MAX_VND = 50000000
 _ACCOUNT_CHECK_USER_LOCKS: Dict[str, asyncio.Lock] = {}
 
 
@@ -1297,6 +1295,9 @@ def _fulfill_vip_order_unlocked(
             else:
                 base_ts = max(now_ts, old_exp) if (old_role == "vip" and old_exp > now_ts) else now_ts
                 u_rec["expires_at"] = base_ts + days * 86400
+            credit_vnd = max(0, int(amount_paid))
+            u_rec["account_balance_vnd"] = max(0, int(u_rec.get("account_balance_vnd") or 0)) + credit_vnd
+            u_rec["account_balance_updated_at"] = now_ts
             old_note = str(u_rec.get("note") or "").strip()
             if not old_note or old_note == "Tự đăng ký trên web":
                 u_rec["note"] = f"VIP QR PayOS ({req_amount:,}đ/{days}N)"
@@ -1319,7 +1320,7 @@ def _public_order_view(ord_rec: Dict[str, Any]) -> Dict[str, Any]:
         "username": str(ord_rec.get("username") or ""),
         "amount": amt_val,
         "duration_days": 0 if ord_type == "topup" else int(ord_rec.get("duration_days") or 30),
-        "checks_credit": _calc_account_checks_left(amt_val) if ord_type == "topup" else 0,
+        "checks_credit": _calc_account_checks_left(amt_val),
         "unit_price_vnd": ACCOUNT_CHECK_UNIT_PRICE_VND,
         "description": str(ord_rec.get("description") or ""),
         "status": str(ord_rec.get("status") or "PENDING"),
@@ -2474,7 +2475,6 @@ async def api_vip_me(req: Request):
                 and str(o.get("username") or "").lower() == cur["username"]
                 and str(o.get("status") or "").upper() == "PENDING"
                 and (now_ts - int(o.get("created_at") or 0)) < 86400
-                and (str(o.get("order_type") or "vip").strip().lower() == "topup" or not has_vip)
             ]
             if cands:
                 cands.sort(key=lambda x: -int(x.get("created_at") or 0))
@@ -2548,33 +2548,17 @@ async def api_vip_payos_create_order(req: Request):
         return JSONResponse(status_code=503, content={"success": False, "error": "Hệ thống thanh toán PayOS chưa được cấu hình. Vui lòng liên hệ Admin qua Zalo/Facebook!"})
 
     uname = str(u_obj["username"]).strip().lower()
-    order_type = str(body.get("order_type") or "vip").strip().lower()
-    if order_type not in ("vip", "topup"):
-        order_type = "vip"
+    if str(u_obj.get("role") or "").lower() == "admin":
+        return JSONResponse(status_code=400, content={"success": False, "error": "Tài khoản Admin không cần thanh toán."})
 
-    if order_type == "topup":
-        if str(u_obj.get("role") or "").lower() == "admin":
-            return JSONResponse(status_code=400, content={"success": False, "error": "Tài khoản Admin được miễn phí Check Tài Khoản (0đ/lượt), không cần nạp số dư!"})
-        try:
-            amount = int(body.get("amount") or 50000)
-        except Exception:
-            amount = 0
-        if amount < ACCOUNT_TOPUP_MIN_VND or amount > ACCOUNT_TOPUP_MAX_VND:
-            return JSONResponse(
-                status_code=400,
-                content={"success": False, "error": f"Số tiền nạp phải từ {ACCOUNT_TOPUP_MIN_VND:,}đ đến {ACCOUNT_TOPUP_MAX_VND:,}đ!"},
-            )
-        days = 0
-    else:
-        if str(u_obj.get("role") or "").lower() == "admin" or (str(u_obj.get("role") or "").lower() == "vip" and int(u_obj.get("expires_at") or 0) <= 0):
-            return JSONResponse(status_code=400, content={"success": False, "error": "Tài khoản của bạn đã có quyền VIP Vĩnh Viễn rồi!"})
-        amount = int(cfg["price_vnd"])
-        days = int(cfg["duration_days"])
+    order_type = "vip"
+    amount = int(cfg["price_vnd"])
+    days = int(cfg["duration_days"])
 
     force_new = bool(body.get("force_new", False))
     now_ts = int(time.time())
 
-    # Tái sử dụng đơn PENDING cùng loại còn hạn (< 10 phút) để tránh tạo nhiều link dư thừa trên PayOS
+    # Tái sử dụng đơn PENDING còn hạn (< 10 phút) để tránh tạo nhiều link dư thừa trên PayOS
     reuse_ord: Optional[Dict[str, Any]] = None
     if not force_new:
         with _VIP_LOCK:
@@ -2616,17 +2600,12 @@ async def api_vip_payos_create_order(req: Request):
                         reuse_ord = dict(res_f["order"])
                 if newly_paid and pub_user:
                     init_user_sheet_async(pub_user["username"], role=pub_user["role"], note=sheet_note)
-                paid_msg = (
-                    "🎉 Đơn nạp trước đó đã thanh toán xong! Số dư Check Tài Khoản đã được cộng."
-                    if order_type == "topup"
-                    else "🎉 Đơn trước đó đã thanh toán xong! Tài khoản VIP đã được kích hoạt."
-                )
                 return JSONResponse(content={
                     "success": True,
                     "paid": True,
                     "order": _public_order_view(reuse_ord),
                     "user": pub_user,
-                    "message": paid_msg,
+                    "message": "🎉 Đơn trước đó đã thanh toán xong! Tài khoản đã kích hoạt VIP Check Trùng và cộng số dư Check Tài Khoản.",
                 })
             if p_status == "PENDING":
                 return JSONResponse(content={"success": True, "paid": False, "reused": True, "order": _public_order_view(reuse_ord)})
@@ -2648,12 +2627,8 @@ async def api_vip_payos_create_order(req: Request):
     base_url = _public_base_url_from_request(req)
     return_url = f"{base_url}/payos/return?orderCode={order_code}"
     cancel_url = f"{base_url}/payos/cancel?orderCode={order_code}"
-    desc = f"NAP{order_code}" if order_type == "topup" else f"VIP{order_code}"
-    item_name = (
-        f"Nap Check TK {amount:,}d (~{_calc_account_checks_left(amount)} luot) - {uname}"[:75]
-        if order_type == "topup"
-        else f"Goi VIP {days} ngay ({uname})"[:75]
-    )
+    desc = f"VIP{order_code}"
+    item_name = f"Goi VIP {days}N + {amount:,}d Check TK ({uname})"[:75]
     exp_ts = now_ts + 900
     sign_payload = {
         "amount": amount,
@@ -3981,7 +3956,7 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
                         "error": (
                             f"Số dư Check Tài Khoản không đủ! Cần {required_vnd:,}đ "
                             f"({req_count} tài khoản × {ACCOUNT_CHECK_UNIT_PRICE_VND}đ), "
-                            f"số dư hiện có {cur_bal:,}đ (tối đa {checks_left} lượt). Vui lòng nạp thêm số dư!"
+                            f"số dư hiện có {cur_bal:,}đ (tối đa {checks_left} lượt). Vui lòng nạp gói 50.000đ qua VietQR!"
                         ),
                     },
                 )

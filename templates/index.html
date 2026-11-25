@@ -215,7 +215,7 @@
                 >
                     <i class="fa-solid fa-user-shield text-rose-400"></i>
                     <span>Check Tài Khoản</span>
-                    <span class="px-1.5 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500/45 text-emerald-300 font-mono text-[10px] font-extrabold">250đ/lượt</span>
+                    <span id="tabAccPriceBadge" class="px-1.5 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500/45 text-emerald-300 font-mono text-[10px] font-extrabold">250đ/lượt</span>
                     <span id="accountCheckNavCount" class="hidden px-1.5 py-0.5 rounded-md bg-cyan-950 border border-cyan-500/40 text-cyan-300 font-mono text-[11px] font-extrabold tabular-nums">0</span>
                 </button>
                 <button
@@ -805,12 +805,12 @@
                             <span class="bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent"> &amp; Cảnh Báo Đề Xuất</span>
                         </h1>
                         <p class="text-sm sm:text-base text-slate-400 leading-relaxed">
-                            Soi nhanh cảnh báo đỏ <b class="text-rose-300">⚠️ Tài khoản không được đề xuất</b>, ngày tạo, quốc gia và lượt follower hàng loạt.<br />
-                            <span class="text-emerald-300 font-semibold">Phí riêng: 250đ / 1 tài khoản check thành công (Nạp 50.000đ = 200 lượt · Acc lỗi 0đ · Xem lịch sử 0đ).</span>
+                            Soi nhanh cảnh báo đỏ <b class="text-rose-300">⚠️ Tài khoản không được đề xuất</b>, ngày tạo, quốc gia và lượt follower hàng loạt.<br id="accountCheckHeroPricingBr" />
+                            <span id="accountCheckHeroPricingLine" class="text-emerald-300 font-semibold">Phí riêng: 250đ / 1 tài khoản check thành công (Nạp mặc định 50.000đ có VIP Check Trùng 30 ngày miễn phí + 50.000đ = 200 lượt Check Tài Khoản · Acc lỗi 0đ · Lịch sử 0đ).</span>
                         </p>
                     </div>
 
-                    <!-- Thanh Ví Số Dư Check Tài Khoản & Bảng Giá 250đ/lượt -->
+                    <!-- Thanh Ví Số Dư Check Tài Khoản & Bảng Giá 250đ/lượt (Ẩn với Admin) -->
                     <div id="accountWalletBar" class="rounded-2xl p-3.5 sm:px-4 sm:py-3 bg-gradient-to-r from-slate-950/95 via-emerald-950/30 to-cyan-950/35 border border-emerald-500/40 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
                         <div class="flex items-center gap-3 w-full sm:w-auto">
                             <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-400/45 flex items-center justify-center flex-shrink-0">
@@ -819,7 +819,7 @@
                             <div class="min-w-0 flex-1 space-y-0.5 text-left">
                                 <div id="accWalletGuestBox" class="text-xs text-slate-200 leading-snug">
                                     <div class="font-extrabold text-amber-300">🔐 Chưa đăng nhập tài khoản</div>
-                                    <div class="text-[11px] text-slate-300">Đơn giá: <b class="text-emerald-300">250đ / 1 tài khoản</b> · Nạp <b class="text-cyan-300">50.000đ = 200 lượt</b> · Acc lỗi <b>0đ</b></div>
+                                    <div class="text-[11px] text-slate-300">Đơn giá: <b class="text-emerald-300">250đ / 1 tài khoản</b> · Nạp gói <b class="text-cyan-300">50.000đ = VIP Check Trùng 30 ngày + 50.000đ (200 lượt)</b> · Acc lỗi <b>0đ</b></div>
                                 </div>
                                 <div id="accWalletBalanceBox" class="hidden space-y-0.5">
                                     <div class="flex flex-wrap items-center gap-1.5 text-xs">
@@ -829,11 +829,8 @@
                                         <span id="accWalletChecksLeft" class="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-extrabold text-[11px] tabular-nums">~0 lượt</span>
                                     </div>
                                     <div class="text-[11px] text-slate-400">
-                                        Phí: <b class="text-slate-200">250đ / 1 tài khoản check thành công</b> · Nạp <b class="text-cyan-300">50.000đ = 200 lượt</b> · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>
+                                        Phí: <b class="text-slate-200">250đ / 1 tài khoản check thành công</b> · Nạp gói <b class="text-cyan-300">50.000đ = VIP Check Trùng + 200 lượt</b> · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>
                                     </div>
-                                </div>
-                                <div id="accWalletAdminBadge" class="hidden text-xs font-extrabold text-emerald-300">
-                                    🛡️ Tài khoản Admin · Miễn phí Check Tài Khoản (0đ / lượt · Không trừ số dư)
                                 </div>
                             </div>
                         </div>
@@ -851,12 +848,12 @@
                             <button
                                 type="button"
                                 id="btnAccWalletTopup"
-                                onclick="openAccountTopupModal()"
+                                onclick="openVipQrModal()"
                                 class="hidden w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-500/25 border border-emerald-300/40 transition active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                                title="Mở mã VietQR nạp số dư Check Tài Khoản (250đ/lượt)"
+                                title="Mở mã VietQR nạp gói 50.000đ (VIP Check Trùng 30 ngày + 50.000đ Check Tài Khoản)"
                             >
                                 <i class="fa-solid fa-qrcode"></i>
-                                <span>Nạp Số Dư (VietQR)</span>
+                                <span>Nạp 50.000đ (VietQR)</span>
                             </button>
                         </div>
                     </div>
@@ -919,8 +916,8 @@
                     <div id="accountCheckError" class="hidden max-w-2xl mx-auto p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-200 text-xs sm:text-sm font-semibold flex flex-wrap items-center justify-center gap-2.5 text-center shadow-lg">
                         <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
                         <span id="accountCheckErrorMsg"></span>
-                        <button type="button" id="btnAccountCheckTopupInline" onclick="openAccountTopupModal(_suggestedShortageTopupVnd)" class="hidden px-3 py-1 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs shadow transition whitespace-nowrap">
-                            <i class="fa-solid fa-qrcode mr-1"></i> Nạp Số Dư Ngay
+                        <button type="button" id="btnAccountCheckTopupInline" onclick="openVipQrModal()" class="hidden px-3 py-1 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs shadow transition whitespace-nowrap">
+                            <i class="fa-solid fa-qrcode mr-1"></i> Nạp 50.000đ (VietQR)
                         </button>
                     </div>
                 </div>
@@ -2016,8 +2013,8 @@
                 </div>
 
                 <div class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center space-y-1">
-                    <p>💡 Khách có tài khoản bấm nút <b class="text-amber-300">👑 Đăng Ký/Đăng Nhập VIP</b> ở góc phải trên màn hình để mở khóa <b>Kiểm Tra Kênh (50K/tháng không giới hạn)</b>.</p>
-                    <p class="text-[11px] text-cyan-200">🛡️ Tính năng <b class="text-rose-300">Check Tài Khoản</b> tách riêng dùng Ví Số Dư: <b class="text-emerald-300">250đ / 1 tài khoản check thành công</b> (Nạp <b>50.000đ = 200 lượt</b> qua VietQR · Acc lỗi <b>0đ</b> · Xem lịch sử <b>0đ</b>).</p>
+                    <p>💡 Khách nạp mặc định <b class="text-amber-300">50.000đ (VietQR)</b> sẽ tự động có <b class="text-emerald-300">VIP Kiểm Tra Kênh / Check Trùng 30 ngày miễn phí không giới hạn</b>.</p>
+                    <p class="text-[11px] text-cyan-200">🛡️ Đồng thời toàn bộ <b class="text-emerald-300">50.000đ</b> đó được cộng vào Số Dư dùng riêng bên <b class="text-rose-300">Check Tài Khoản</b> (trừ dần <b>250đ / 1 tài khoản check thành công</b> = <b>200 lượt</b> · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>).</p>
                 </div>
 
                 <!-- Hàng nút dưới cùng: Tắt thông báo + Zalo + Facebook + Đăng Ký trên cùng 1 hàng -->
@@ -2401,7 +2398,7 @@
                     </div>
                 </div>
 
-                <!-- Khối thông tin + nút Kích Hoạt QR VIP, Nạp Số Dư & Đổi mật khẩu dành riêng cho tài khoản khách -->
+                <!-- Khối thông tin + nút Nạp QR 50K (VIP + Check Tài Khoản) & Đổi mật khẩu dành riêng cho tài khoản khách -->
                 <div id="nonAdminSelfAccountCard" class="hidden p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-3.5">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300 flex-shrink-0">
@@ -2409,16 +2406,13 @@
                         </div>
                         <div class="min-w-0 space-y-0.5">
                             <div class="text-xs sm:text-sm font-extrabold text-white">Tài khoản: <span id="selfCardUsername" class="font-mono text-cyan-300">—</span></div>
-                            <div id="selfCardVipStatus" class="text-[11px] text-slate-300">Quét mã QR VietQR để kích hoạt VIP Kiểm Tra Kênh</div>
+                            <div id="selfCardVipStatus" class="text-[11px] text-slate-300">Nạp gói 50.000đ để có VIP Check Trùng + 50.000đ Check Tài Khoản</div>
                             <div id="selfCardBalanceStatus" class="text-[11px] font-bold text-emerald-300">💰 Ví Check Tài Khoản: 0đ (~0 lượt · 250đ/lượt)</div>
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 pt-2.5 border-t border-slate-800/80">
-                        <button type="button" id="btnSelfTopupAccountQr" onclick="closeVipAdminModal(); openAccountTopupModal();" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25 whitespace-nowrap">
-                            <i class="fa-solid fa-coins"></i> <span>Nạp Số Dư Check Acc</span>
-                        </button>
                         <button type="button" id="btnSelfActivateVipQr" onclick="closeVipAdminModal(); openVipQrModal();" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/25 whitespace-nowrap">
-                            <i class="fa-solid fa-qrcode"></i> <span id="lblSelfActivateVipQr">Kích Hoạt VIP Kênh (QR)</span>
+                            <i class="fa-solid fa-qrcode"></i> <span id="lblSelfActivateVipQr">Nạp 50.000đ (VIP + 200 Lượt)</span>
                         </button>
                         <button type="button" onclick="openChangePasswordModal(currentVipUser ? currentVipUser.username : '', true)" class="flex-1 py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow whitespace-nowrap">
                             <i class="fa-solid fa-key"></i> Đổi Mật Khẩu
@@ -2533,7 +2527,7 @@
     </div>
 
     <!-- ============================================================================== -->
-    <!-- 5. MODAL QUÉT MÃ QR PAYOS TỰ ĐỘNG (KÍCH HOẠT VIP KÊNH / NẠP SỐ DƯ CHECK ACC) -->
+    <!-- 5. MODAL QUÉT MÃ QR PAYOS TỰ ĐỘNG (NẠP GÓI 50K: VIP KÊNH + CHECK TÀI KHOẢN) -->
     <!-- ============================================================================== -->
     <div id="vipQrPaymentModal" onclick="if(event.target===this) closeVipQrModal()" class="fixed inset-0 z-[99] bg-black/75 backdrop-blur-lg flex items-center justify-center p-3 sm:p-4 transition-all duration-200 hidden">
         <div class="relative max-w-2xl w-full bg-dark-900/98 border border-emerald-500/45 rounded-3xl shadow-2xl shadow-emerald-950/40 overflow-hidden max-h-[94vh] flex flex-col">
@@ -2545,11 +2539,11 @@
                     </div>
                     <div>
                         <h3 class="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
-                            <span id="vipQrModalTitle">Kích Hoạt VIP Kiểm Tra Kênh (VietQR)</span>
+                            <span id="vipQrModalTitle">Nạp Gói 50.000đ (VIP + Check Tài Khoản)</span>
                             <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase">PayOS 24/7</span>
                         </h3>
                         <p class="text-[11px] text-slate-400">
-                            Tài khoản: <b id="vipQrUsername" class="font-mono text-cyan-300">—</b> · <span id="vipQrPkgPrefix">Gói:</span> <b id="vipQrPkgSummary" class="text-amber-300">50.000đ / 30 ngày</b>
+                            Tài khoản: <b id="vipQrUsername" class="font-mono text-cyan-300">—</b> · Gói: <b id="vipQrPkgSummary" class="text-amber-300">50.000đ (VIP 30 ngày + 200 lượt Check TK)</b>
                         </p>
                     </div>
                 </div>
@@ -2559,32 +2553,6 @@
             </div>
 
             <div class="p-4 sm:p-5 overflow-y-auto custom-scrollbar space-y-4">
-                <!-- Bộ chọn mệnh giá nạp tiền Check Tài Khoản (chỉ hiện ở mode topup) -->
-                <div id="topupAmountSelectorWrap" class="hidden p-3.5 rounded-2xl bg-slate-950/90 border border-cyan-500/35 space-y-2.5">
-                    <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                        <span class="font-extrabold text-cyan-300 flex items-center gap-1.5">
-                            <i class="fa-solid fa-coins text-amber-300"></i> Chọn số tiền nạp (250đ / 1 tài khoản · Nạp 50.000đ = 200 lượt)
-                        </span>
-                        <span id="topupConversionPreview" class="text-xs font-extrabold text-emerald-300">= ~200 lượt Check Tài Khoản (250đ / lượt)</span>
-                    </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <button type="button" id="btnTopupPreset_20000" onclick="selectTopupAmount(20000, true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition">20.000đ · ~80 lượt</button>
-                        <button type="button" id="btnTopupPreset_50000" onclick="selectTopupAmount(50000, true)" class="py-2 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 border-2 border-emerald-300 text-white font-extrabold text-[11px] shadow-md transition">50.000đ · ~200 lượt</button>
-                        <button type="button" id="btnTopupPreset_100000" onclick="selectTopupAmount(100000, true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition">100.000đ · ~400 lượt</button>
-                        <button type="button" id="btnTopupPreset_200000" onclick="selectTopupAmount(200000, true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition">200.000đ · ~800 lượt</button>
-                    </div>
-                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-0.5">
-                        <div class="flex-1 flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5">
-                            <span class="text-[11px] text-slate-400 whitespace-nowrap">Số tiền khác:</span>
-                            <input type="number" id="topupCustomAmountInput" min="10000" max="50000000" step="5000" value="50000" oninput="onTopupCustomInput(this.value)" class="w-full bg-transparent text-sm font-mono font-bold text-white focus:outline-none" />
-                            <span class="text-xs font-bold text-cyan-300">đ</span>
-                        </div>
-                        <button type="button" onclick="loadVipQrOrder(false)" class="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs shadow transition whitespace-nowrap flex items-center justify-center gap-1.5">
-                            <i class="fa-solid fa-qrcode"></i> Tạo Mã QR Nạp
-                        </button>
-                    </div>
-                </div>
-
                 <!-- Trạng thái đang tải -->
                 <div id="vipQrLoading" class="py-10 flex flex-col items-center justify-center gap-3 text-center">
                     <div class="w-10 h-10 rounded-full border-4 border-emerald-500/30 border-t-emerald-400 animate-spin"></div>
@@ -2636,7 +2604,7 @@
                                 </div>
                             </div>
                             <div class="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
-                                <span id="vipQrAmtLabel" class="text-slate-400">Số tiền VIP:</span>
+                                <span id="vipQrAmtLabel" class="text-slate-400">Số tiền nạp:</span>
                                 <div class="flex items-center gap-1.5">
                                     <span id="vipQrAmount" class="font-mono font-black text-emerald-300 text-sm">—</span>
                                     <button type="button" onclick="copyPayField('vipQrAmountRaw', 'Số tiền')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[10px] font-bold border border-slate-700 transition">Copy</button>
@@ -2653,7 +2621,7 @@
                         </div>
 
                         <div id="vipQrGuideText" class="px-3 py-2 rounded-xl bg-sky-950/40 border border-sky-500/35 text-[11px] text-sky-200 leading-relaxed">
-                            💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống tự bật <b>VIP ngay lập tức</b> không cần chờ Admin!
+                            💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống tự bật <b>VIP Check Trùng 30 ngày (miễn phí không giới hạn)</b> và cộng ngay <b>50.000đ (~200 lượt · 250đ/lượt)</b> dùng riêng bên Check Tài Khoản!
                         </div>
 
                         <div class="space-y-2">
@@ -2678,12 +2646,12 @@
                     <div class="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 flex items-center justify-center text-3xl mx-auto shadow-lg shadow-emerald-500/20">
                         <i class="fa-solid fa-crown"></i>
                     </div>
-                    <h4 id="vipQrSuccessTitle" class="text-lg font-black text-emerald-300">KÍCH HOẠT VIP THÀNH CÔNG!</h4>
+                    <h4 id="vipQrSuccessTitle" class="text-lg font-black text-emerald-300">THANH TOÁN THÀNH CÔNG!</h4>
                     <p id="vipQrSuccessDetail" class="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                        Tài khoản đã được mở khóa toàn bộ tính năng VIP không giới hạn.
+                        Tài khoản đã được kích hoạt VIP Check Trùng không giới hạn và cộng số dư Check Tài Khoản.
                     </p>
                     <button type="button" onclick="finishVipQrSuccess()" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-white font-extrabold text-xs sm:text-sm shadow-lg transition active:scale-95 inline-flex items-center gap-2">
-                        <i class="fa-solid fa-rocket"></i> <span id="vipQrSuccessBtnLbl">Bắt Đầu Quét VIP Ngay</span>
+                        <i class="fa-solid fa-rocket"></i> <span id="vipQrSuccessBtnLbl">Bắt Đầu Sử Dụng Ngay</span>
                     </button>
                 </div>
             </div>
@@ -2897,7 +2865,7 @@
                     type="button"
                     onclick="openVipQrModal()"
                     class="px-2.5 py-1.5 sm:px-3 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/25 border border-emerald-300/45 hover:scale-105 active:scale-95 transition-all duration-200 whitespace-nowrap flex-shrink-0"
-                    title="Quét mã QR VietQR để tự động kích hoạt VIP Kiểm Tra Kênh (50k/30 ngày)"
+                    title="Quét mã VietQR nạp gói 50.000đ: VIP Check Trùng 30 ngày không giới hạn + 50.000đ (200 lượt) Check Tài Khoản"
                 >
                     <i class="fa-solid fa-crown text-yellow-200"></i>
                     <span class="hidden 2xl:inline">Kích Hoạt VIP</span><span class="2xl:hidden">Lên VIP</span>
@@ -2909,9 +2877,9 @@
                 <button
                     type="button"
                     id="userBalNavBtn"
-                    onclick="openAccountTopupModal()"
+                    onclick="openVipQrModal()"
                     class="group px-2.5 sm:px-3 py-1 rounded-xl bg-gradient-to-r from-[#0b1324] via-[#111c33] to-[#0b1324] hover:from-[#101c36] hover:to-[#152647] border border-emerald-500/45 hover:border-emerald-400/80 shadow-lg shadow-emerald-950/35 flex items-center gap-2 transition-all duration-200 active:scale-95 whitespace-nowrap flex-shrink-0"
-                    title="Số dư Ví Check Tài Khoản (250đ / 1 tài khoản) — bấm để nạp thêm qua VietQR"
+                    title="Số dư Check Tài Khoản (250đ / 1 tài khoản) — bấm để nạp gói 50.000đ (VIP Check Trùng + 200 lượt Check TK)"
                 >
                     <span class="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 border border-emerald-400/40 flex items-center justify-center flex-shrink-0">
                         <i class="fa-solid fa-wallet text-emerald-400 text-xs"></i>
@@ -2995,37 +2963,45 @@
         }
 
         function syncAccountWalletUI() {
+            const walletBar = document.getElementById('accountWalletBar');
+            const tabBadge = document.getElementById('tabAccPriceBadge');
+            const heroBr = document.getElementById('accountCheckHeroPricingBr');
+            const heroPricing = document.getElementById('accountCheckHeroPricingLine');
+            const pricePreview = document.getElementById('accountCheckPricePreview');
             const guestBox = document.getElementById('accWalletGuestBox');
             const balBox = document.getElementById('accWalletBalanceBox');
-            const admBadge = document.getElementById('accWalletAdminBadge');
             const topupBtn = document.getElementById('btnAccWalletTopup');
             const loginBtn = document.getElementById('btnAccWalletLogin');
             const balEl = document.getElementById('accWalletBalanceVnd');
             const checksEl = document.getElementById('accWalletChecksLeft');
             const userEl = document.getElementById('accWalletUserInfo');
 
+            if (currentVipUser && currentVipUser.role === 'admin') {
+                walletBar?.classList.add('hidden');
+                tabBadge?.classList.add('hidden');
+                heroBr?.classList.add('hidden');
+                heroPricing?.classList.add('hidden');
+                pricePreview?.classList.add('hidden');
+                return;
+            }
+
+            walletBar?.classList.remove('hidden');
+            tabBadge?.classList.remove('hidden');
+            heroBr?.classList.remove('hidden');
+            heroPricing?.classList.remove('hidden');
+
             if (!currentVipUser) {
                 guestBox?.classList.remove('hidden');
                 balBox?.classList.add('hidden');
-                admBadge?.classList.add('hidden');
                 topupBtn?.classList.add('hidden');
                 loginBtn?.classList.remove('hidden');
                 return;
             }
 
-            const isAdm = currentVipUser.role === 'admin';
-            guestBox?.classList.add('hidden');
-            loginBtn?.classList.add('hidden');
-            if (isAdm) {
-                balBox?.classList.add('hidden');
-                admBadge?.classList.remove('hidden');
-                topupBtn?.classList.add('hidden');
-                return;
-            }
-
             const bal = getUserAccountBalanceVnd();
             const checks = getUserAccountChecksLeft();
-            admBadge?.classList.add('hidden');
+            guestBox?.classList.add('hidden');
+            loginBtn?.classList.add('hidden');
             balBox?.classList.remove('hidden');
             topupBtn?.classList.remove('hidden');
             if (balEl) balEl.innerText = `${bal.toLocaleString('vi-VN')}đ`;
@@ -3278,11 +3254,8 @@
                     _pendingAuthAction = null;
                     showToast(`✅ Đã tạo tài khoản "${currentVipUser.username}" thành công!`);
                     act();
-                } else if (activeMainWorkspaceTab === 'account_check') {
-                    showToast(`✅ Đã tạo tài khoản "${currentVipUser.username}"! Chọn gói nạp để bắt đầu Check Tài Khoản (250đ/lượt)...`);
-                    openAccountTopupModal();
                 } else {
-                    showToast(`✅ Đã tạo tài khoản "${currentVipUser.username}"! Đang mở mã QR kích hoạt VIP tự động...`);
+                    showToast(`✅ Đã tạo tài khoản "${currentVipUser.username}"! Đang mở mã QR nạp gói 50.000đ (VIP + 200 lượt Check TK)...`);
                     openVipQrModal();
                 }
             } catch (err) {
@@ -3484,12 +3457,14 @@
                         selfBalSt.innerText = `💰 Ví Check Tài Khoản: ${balV.toLocaleString('vi-VN')}đ (~${chLeft.toLocaleString('vi-VN')} lượt · 250đ/lượt)`;
                     }
                     if (selfQrBtn) {
-                        if (isPermVip) {
-                            selfQrBtn.classList.add('hidden');
-                        } else {
-                            selfQrBtn.classList.remove('hidden');
-                            if (selfQrLbl) {
-                                selfQrLbl.innerText = currentVipUser.is_vip ? 'Gia Hạn VIP Kênh (QR)' : 'Kích Hoạt VIP Kênh (QR)';
+                        selfQrBtn.classList.remove('hidden');
+                        if (selfQrLbl) {
+                            if (isPermVip) {
+                                selfQrLbl.innerText = 'Nạp 50.000đ (+200 Lượt)';
+                            } else if (currentVipUser.is_vip) {
+                                selfQrLbl.innerText = 'Nạp 50.000đ (Gia Hạn + 200 Lượt)';
+                            } else {
+                                selfQrLbl.innerText = 'Nạp 50.000đ (VIP + 200 Lượt)';
                             }
                         }
                     }
@@ -4220,8 +4195,6 @@
         let _vipQrPollTimer = null;
         let _vipQrTickTimer = null;
         let _vipQrChecking = false;
-        let _qrModalMode = 'vip';
-        let _topupSelectedAmount = 50000;
         let _pendingAuthAction = null;
 
         function stopVipQrTimers() {
@@ -4241,123 +4214,46 @@
             showToast(`📋 Đã sao chép ${label}: ${txt}`);
         }
 
-        function _renderTopupSelectorUI(amt) {
-            const cleanAmt = Math.max(0, parseInt(amt || 0, 10) || 0);
-            const unitPrice = (typeof ACCOUNT_CHECK_UNIT_PRICE_VND !== 'undefined') ? ACCOUNT_CHECK_UNIT_PRICE_VND : 250;
-            const checks = Math.floor(cleanAmt / unitPrice);
-            const prevEl = document.getElementById('topupConversionPreview');
-            if (prevEl) {
-                if (cleanAmt < 10000) {
-                    prevEl.className = 'text-xs font-extrabold text-rose-300';
-                    prevEl.innerText = 'Số tiền nạp tối thiểu là 10.000đ (= 40 lượt check · 250đ/lượt)';
-                } else {
-                    prevEl.className = 'text-xs font-extrabold text-emerald-300';
-                    prevEl.innerText = `= ~${checks.toLocaleString('vi-VN')} lượt Check Tài Khoản (${unitPrice}đ / lượt)`;
-                }
-            }
-            for (const preset of [20000, 50000, 100000, 200000]) {
-                const btn = document.getElementById(`btnTopupPreset_${preset}`);
-                if (!btn) continue;
-                const active = (cleanAmt === preset);
-                btn.className = active
-                    ? 'py-2 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 border-2 border-emerald-300 text-white font-extrabold text-[11px] shadow-md transition'
-                    : 'py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[11px] transition';
-            }
-        }
-
-        function selectTopupAmount(amt, autoReload = false) {
-            const parsed = Math.min(50000000, Math.max(10000, parseInt(amt || 50000, 10) || 50000));
-            _topupSelectedAmount = parsed;
-            const inp = document.getElementById('topupCustomAmountInput');
-            if (inp) inp.value = String(parsed);
-            _renderTopupSelectorUI(parsed);
-            if (autoReload && _qrModalMode === 'topup') {
-                loadVipQrOrder(false);
-            }
-        }
-
-        function onTopupCustomInput(val) {
-            const parsed = parseInt(String(val || '').replace(/[^0-9]/g, ''), 10) || 0;
-            _topupSelectedAmount = parsed;
-            _renderTopupSelectorUI(parsed);
-        }
-
-        function _configurePayModalUi(mode) {
-            const isTopup = (mode === 'topup');
-            _qrModalMode = isTopup ? 'topup' : 'vip';
-            const titleEl = document.getElementById('vipQrModalTitle');
-            const prefixEl = document.getElementById('vipQrPkgPrefix');
-            const amtLblEl = document.getElementById('vipQrAmtLabel');
-            const guideEl = document.getElementById('vipQrGuideText');
-            const topupWrap = document.getElementById('topupAmountSelectorWrap');
-            if (titleEl) {
-                titleEl.innerText = isTopup ? 'Nạp Số Dư Check Tài Khoản (VietQR)' : 'Kích Hoạt VIP Kiểm Tra Kênh (VietQR)';
-            }
-            if (prefixEl) {
-                prefixEl.innerText = isTopup ? 'Nạp:' : 'Gói:';
-            }
-            if (amtLblEl) {
-                amtLblEl.innerText = isTopup ? 'Số tiền nạp:' : 'Số tiền VIP:';
-            }
-            if (guideEl) {
-                guideEl.innerHTML = isTopup
-                    ? '💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống <b>tự cộng ngay vào Số Dư Check Tài Khoản</b> (250đ / 1 tài khoản)!'
-                    : '💡 Mở App Ngân hàng bất kỳ <b>quét mã QR bên trái</b> (giữ nguyên số tiền &amp; nội dung). Tiền vào hệ thống tự bật <b>VIP Kiểm Tra Kênh ngay lập tức</b> không cần chờ Admin!';
-            }
-            if (topupWrap) {
-                topupWrap.classList.toggle('hidden', !isTopup);
-            }
-        }
-
         function _showVipQrPaidSuccess(userObj, ordObj = null) {
             stopVipQrTimers();
-            const isTopup = (ordObj && ordObj.order_type === 'topup') || (_qrModalMode === 'topup');
             document.getElementById('vipQrLoading')?.classList.add('hidden');
             document.getElementById('vipQrErrorWrap')?.classList.add('hidden');
             document.getElementById('vipQrReadyWrap')?.classList.add('hidden');
-            document.getElementById('topupAmountSelectorWrap')?.classList.add('hidden');
             const okWrap = document.getElementById('vipQrSuccessWrap');
             const titleEl = document.getElementById('vipQrSuccessTitle');
             const detail = document.getElementById('vipQrSuccessDetail');
             const btnLbl = document.getElementById('vipQrSuccessBtnLbl');
             if (userObj) {
                 currentVipUser = userObj;
+                const balVnd = Number(userObj.account_balance_vnd || 0);
+                const checksLeft = Number(userObj.account_checks_left ?? Math.floor(balVnd / 250));
+                const paidAmt = Number((ordObj && (ordObj.amount_paid || ordObj.amount)) || 50000);
+                const addedChecks = Math.floor(paidAmt / 250);
+                const expStr = (!userObj.expires_at || Number(userObj.expires_at) <= 0)
+                    ? 'Vĩnh viễn'
+                    : new Date(Number(userObj.expires_at) * 1000).toLocaleDateString('vi-VN');
                 if (titleEl) {
-                    titleEl.innerText = isTopup ? 'NẠP SỐ DƯ THÀNH CÔNG!' : 'KÍCH HOẠT VIP THÀNH CÔNG!';
+                    titleEl.innerText = 'THANH TOÁN THÀNH CÔNG!';
                 }
                 if (detail) {
-                    if (isTopup) {
-                        const balVnd = Number(userObj.account_balance_vnd || 0);
-                        const checksLeft = Number(userObj.account_checks_left ?? Math.floor(balVnd / 250));
-                        const paidAmt = Number((ordObj && (ordObj.amount_paid || ordObj.amount)) || _topupSelectedAmount || 0);
-                        const addedChecks = Math.floor(paidAmt / 250);
-                        detail.innerHTML = `Tài khoản <b class="font-mono text-cyan-300">${escapeHtml(userObj.username || '')}</b> vừa được cộng <b class="text-emerald-300">+${paidAmt.toLocaleString('vi-VN')}đ (~${addedChecks.toLocaleString('vi-VN')} lượt)</b>.<br />Số dư hiện tại: <b class="text-amber-300">${balVnd.toLocaleString('vi-VN')}đ (~${checksLeft.toLocaleString('vi-VN')} lượt · 250đ/lượt)</b>.`;
-                    } else {
-                        const expStr = (!userObj.expires_at || Number(userObj.expires_at) <= 0)
-                            ? 'Vĩnh viễn'
-                            : new Date(Number(userObj.expires_at) * 1000).toLocaleDateString('vi-VN');
-                        detail.innerHTML = `Tài khoản <b class="font-mono text-cyan-300">${escapeHtml(userObj.username || '')}</b> đã tự động lên <b class="text-emerald-300">VIP Kiểm Tra Kênh</b> (Hạn dùng: <b>${escapeHtml(expStr)}</b>).`;
-                    }
+                    detail.innerHTML = `Tài khoản <b class="font-mono text-cyan-300">${escapeHtml(userObj.username || '')}</b> đã kích hoạt <b class="text-emerald-300">VIP Check Trùng miễn phí</b> (Hạn: <b>${escapeHtml(expStr)}</b>).<br />Đồng thời đã cộng <b class="text-emerald-300">+${paidAmt.toLocaleString('vi-VN')}đ (~${addedChecks.toLocaleString('vi-VN')} lượt)</b> vào Check Tài Khoản.<br />Số dư hiện tại: <b class="text-amber-300">${balVnd.toLocaleString('vi-VN')}đ (~${checksLeft.toLocaleString('vi-VN')} lượt · 250đ/lượt)</b>.`;
                 }
                 if (btnLbl) {
-                    btnLbl.innerText = isTopup ? 'Check Tài Khoản Ngay' : 'Bắt Đầu Quét VIP Ngay';
+                    btnLbl.innerText = 'Bắt Đầu Sử Dụng Ngay';
                 }
                 renderVipNav();
-                if (!isTopup) {
-                    document.getElementById('freeModeUpgradeBanner')?.classList.add('hidden');
-                }
+                syncAccountWalletUI();
+                updateAccountCheckInputCount();
+                document.getElementById('freeModeUpgradeBanner')?.classList.add('hidden');
                 if (typeof updateLoadMoreButtonState === 'function') updateLoadMoreButtonState();
             }
             okWrap?.classList.remove('hidden');
-            showToast(isTopup ? '🎉 Đã nhận chuyển khoản & cộng Số Dư Check Tài Khoản thành công!' : '🎉 Đã nhận chuyển khoản & kích hoạt VIP tự động thành công!');
+            showToast('🎉 Đã nhận chuyển khoản! VIP Check Trùng & Số dư Check Tài Khoản đã được kích hoạt.');
         }
 
         function finishVipQrSuccess() {
-            const wasTopup = (_qrModalMode === 'topup');
             closeVipQrModal();
-            if (wasTopup) {
-                switchMainWorkspaceTab('account_check');
-            } else if (currentQuery && !document.getElementById('resultSection')?.classList.contains('hidden')) {
+            if (activeMainWorkspaceTab === 'checker' && currentQuery && !document.getElementById('resultSection')?.classList.contains('hidden')) {
                 handleCheck();
             }
         }
@@ -4381,41 +4277,17 @@
             _vipQrTickTimer = setInterval(updateCd, 1000);
         }
 
-        async function openAccountTopupModal(suggestedAmount = 50000) {
-            const amtInit = Math.min(50000000, Math.max(10000, parseInt(suggestedAmount || 50000, 10) || 50000));
-            if (!currentVipUser || !getVipToken()) {
-                _pendingAuthAction = () => openAccountTopupModal(amtInit);
-                openVipModal(true, 'register');
-                return;
-            }
-            if (currentVipUser.role === 'admin') {
-                showToast('🛡️ Tài khoản Admin được miễn phí Check Tài Khoản (0đ/lượt), không cần nạp số dư!');
-                return;
-            }
-            closeNoticeModal();
-            closeVipModal();
-            _configurePayModalUi('topup');
-            selectTopupAmount(amtInit, false);
-            const m = document.getElementById('vipQrPaymentModal');
-            const uEl = document.getElementById('vipQrUsername');
-            if (uEl) uEl.innerText = currentVipUser.username || '—';
-            m?.classList.remove('hidden');
-            await loadVipQrOrder(false);
-        }
-
         async function openVipQrModal(checkExistingOrderCode = null) {
             if (!currentVipUser || !getVipToken()) {
                 _pendingAuthAction = () => openVipQrModal(checkExistingOrderCode);
                 openVipModal(true, 'register');
                 return;
             }
-            if (!checkExistingOrderCode && (currentVipUser.role === 'admin' || (currentVipUser.is_vip && (!currentVipUser.expires_at || Number(currentVipUser.expires_at) <= 0)))) {
-                showToast('👑 Tài khoản của bạn đã có quyền VIP Kiểm Tra Kênh Vĩnh Viễn rồi!');
+            if (!checkExistingOrderCode && currentVipUser.role === 'admin') {
                 return;
             }
             closeNoticeModal();
             closeVipModal();
-            _configurePayModalUi('vip');
             const m = document.getElementById('vipQrPaymentModal');
             const uEl = document.getElementById('vipQrUsername');
             if (uEl) uEl.innerText = currentVipUser.username || '—';
@@ -4436,35 +4308,19 @@
             const ready = document.getElementById('vipQrReadyWrap');
             const okWrap = document.getElementById('vipQrSuccessWrap');
 
-            if (_qrModalMode === 'topup') {
-                const rawAmt = parseInt(document.getElementById('topupCustomAmountInput')?.value || _topupSelectedAmount || 0, 10) || 0;
-                if (rawAmt < 10000 || rawAmt > 50000000) {
-                    loading?.classList.add('hidden');
-                    ready?.classList.add('hidden');
-                    okWrap?.classList.add('hidden');
-                    if (errTxt) errTxt.innerText = 'Số tiền nạp phải từ 10.000đ đến 50.000.000đ!';
-                    errWrap?.classList.remove('hidden');
-                    return;
-                }
-                _topupSelectedAmount = rawAmt;
-            }
-
             loading?.classList.remove('hidden');
             errWrap?.classList.add('hidden');
             ready?.classList.add('hidden');
             okWrap?.classList.add('hidden');
 
             try {
-                const reqBody = (_qrModalMode === 'topup')
-                    ? { order_type: 'topup', amount: _topupSelectedAmount, force_new: Boolean(forceNew) }
-                    : { order_type: 'vip', force_new: Boolean(forceNew) };
                 const resp = await fetch('/api/vip/payos/create-order', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': 'Bearer ' + getVipToken()
                     },
-                    body: JSON.stringify(reqBody)
+                    body: JSON.stringify({ force_new: Boolean(forceNew) })
                 });
                 const data = await resp.json();
                 if (!data.success) {
@@ -4479,18 +4335,12 @@
                 }
                 const ord = data.order || {};
                 _vipQrActiveOrder = ord;
-                if (ord.order_type === 'topup') {
-                    _configurePayModalUi('topup');
-                }
                 const pkgEl = document.getElementById('vipQrPkgSummary');
                 if (pkgEl) {
-                    if (ord.order_type === 'topup') {
-                        const amtV = Number(ord.amount || _topupSelectedAmount || 50000);
-                        const crChecks = Number(ord.checks_credit ?? Math.floor(amtV / 250));
-                        pkgEl.innerText = `${amtV.toLocaleString('vi-VN')}đ (~${crChecks.toLocaleString('vi-VN')} lượt · 250đ/lượt)`;
-                    } else {
-                        pkgEl.innerText = `${Number(ord.amount || 50000).toLocaleString('vi-VN')}đ / ${ord.duration_days || 30} ngày`;
-                    }
+                    const amtV = Number(ord.amount || 50000);
+                    const daysV = Number(ord.duration_days || 30);
+                    const crChecks = Number(ord.checks_credit ?? Math.floor(amtV / 250));
+                    pkgEl.innerText = `${amtV.toLocaleString('vi-VN')}đ (VIP ${daysV} ngày + ~${crChecks.toLocaleString('vi-VN')} lượt Check TK)`;
                 }
                 const imgEl = document.getElementById('vipQrImage');
                 if (imgEl && ord.qr_data_uri) imgEl.src = ord.qr_data_uri;
@@ -4551,19 +4401,12 @@
                     body: JSON.stringify({ order_code: _vipQrActiveOrder.order_code })
                 });
                 const data = await resp.json();
-                if (data && data.order && data.order.order_type === 'topup') {
-                    _configurePayModalUi('topup');
-                }
                 if (data && data.paid && data.user) {
                     _showVipQrPaidSuccess(data.user, data.order || null);
                     return;
                 }
                 if (data && data.order && !data.paid) {
-                    const ord = data.order;
                     if (document.getElementById('vipQrReadyWrap')?.classList.contains('hidden')) {
-                        if (ord.order_type === 'topup' && ord.amount) {
-                            selectTopupAmount(ord.amount, false);
-                        }
                         await loadVipQrOrder(false);
                     }
                 }
@@ -6146,29 +5989,30 @@
             if (priceEl) {
                 const unitPrice = (typeof ACCOUNT_CHECK_UNIT_PRICE_VND !== 'undefined') ? ACCOUNT_CHECK_UNIT_PRICE_VND : 250;
                 priceEl.onclick = null;
-                if (unique.length === 0) {
-                    priceEl.className = 'px-2.5 py-1 rounded-xl bg-slate-900/90 border border-emerald-500/35 text-emerald-300 font-bold tabular-nums';
-                    priceEl.innerText = `Đơn giá: ${unitPrice}đ / tài khoản`;
-                } else if (currentVipUser && currentVipUser.role === 'admin') {
-                    priceEl.className = 'px-2.5 py-1 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 font-bold tabular-nums';
-                    priceEl.innerText = 'Admin miễn phí (0đ)';
+                if (currentVipUser && currentVipUser.role === 'admin') {
+                    priceEl.classList.add('hidden');
                 } else {
-                    const est = unique.length * unitPrice;
-                    if (!currentVipUser) {
-                        priceEl.className = 'px-2.5 py-1 rounded-xl bg-amber-950/70 border border-amber-500/50 text-amber-200 font-bold tabular-nums cursor-pointer hover:bg-amber-900/70 transition';
-                        priceEl.innerText = `Phí dự kiến: ${est.toLocaleString('vi-VN')}đ (${unique.length} × ${unitPrice}đ) · Bấm đăng nhập`;
-                        priceEl.onclick = () => openVipModal(true, 'login');
+                    priceEl.classList.remove('hidden');
+                    if (unique.length === 0) {
+                        priceEl.className = 'px-2.5 py-1 rounded-xl bg-slate-900/90 border border-emerald-500/35 text-emerald-300 font-bold tabular-nums';
+                        priceEl.innerText = `Đơn giá: ${unitPrice}đ / tài khoản`;
                     } else {
-                        const bal = (typeof getUserAccountBalanceVnd === 'function') ? getUserAccountBalanceVnd() : Number(currentVipUser.account_balance_vnd || 0);
-                        if (est > bal) {
-                            const deficit = est - bal;
-                            const sug = Math.max(10000, Math.ceil(deficit / 10000) * 10000);
-                            priceEl.className = 'px-2.5 py-1 rounded-xl bg-rose-950/85 border border-rose-500/70 text-rose-200 font-extrabold tabular-nums cursor-pointer hover:bg-rose-900/90 transition';
-                            priceEl.innerText = `Phí ${est.toLocaleString('vi-VN')}đ · Thiếu ${deficit.toLocaleString('vi-VN')}đ — Bấm nạp thêm`;
-                            priceEl.onclick = () => openAccountTopupModal(sug);
+                        const est = unique.length * unitPrice;
+                        if (!currentVipUser) {
+                            priceEl.className = 'px-2.5 py-1 rounded-xl bg-amber-950/70 border border-amber-500/50 text-amber-200 font-bold tabular-nums cursor-pointer hover:bg-amber-900/70 transition';
+                            priceEl.innerText = `Phí dự kiến: ${est.toLocaleString('vi-VN')}đ (${unique.length} × ${unitPrice}đ) · Bấm đăng nhập`;
+                            priceEl.onclick = () => openVipModal(true, 'login');
                         } else {
-                            priceEl.className = 'px-2.5 py-1 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 font-bold tabular-nums';
-                            priceEl.innerText = `Phí dự kiến: ${est.toLocaleString('vi-VN')}đ (${unique.length} × ${unitPrice}đ)`;
+                            const bal = (typeof getUserAccountBalanceVnd === 'function') ? getUserAccountBalanceVnd() : Number(currentVipUser.account_balance_vnd || 0);
+                            if (est > bal) {
+                                const deficit = est - bal;
+                                priceEl.className = 'px-2.5 py-1 rounded-xl bg-rose-950/85 border border-rose-500/70 text-rose-200 font-extrabold tabular-nums cursor-pointer hover:bg-rose-900/90 transition';
+                                priceEl.innerText = `Phí ${est.toLocaleString('vi-VN')}đ · Thiếu ${deficit.toLocaleString('vi-VN')}đ — Bấm nạp 50.000đ`;
+                                priceEl.onclick = () => openVipQrModal();
+                            } else {
+                                priceEl.className = 'px-2.5 py-1 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 font-bold tabular-nums';
+                                priceEl.innerText = `Phí dự kiến: ${est.toLocaleString('vi-VN')}đ (${unique.length} × ${unitPrice}đ)`;
+                            }
                         }
                     }
                 }
@@ -6322,8 +6166,6 @@
             handleCheck();
         }
 
-        let _suggestedShortageTopupVnd = 50000;
-
         async function runBulkAccountCheck() {
             if (!canCurrentUserUseAccountCheck()) {
                 showToast('🔐 Vui lòng đăng nhập tài khoản để sử dụng Check Tài Khoản (250đ / tài khoản)!');
@@ -6334,10 +6176,9 @@
             const errBox = document.getElementById('accountCheckError');
             const errMsg = document.getElementById('accountCheckErrorMsg');
             const inlineTopupBtn = document.getElementById('btnAccountCheckTopupInline');
-            const showAccErr = (msg, showTopupBtn = false, suggestedAmt = 50000) => {
+            const showAccErr = (msg, showTopupBtn = false) => {
                 if (errMsg) errMsg.innerText = msg;
                 if (inlineTopupBtn) {
-                    _suggestedShortageTopupVnd = Math.max(10000, Number(suggestedAmt) || 50000);
                     inlineTopupBtn.classList.toggle('hidden', !showTopupBtn);
                 }
                 if (errBox) errBox.classList.remove('hidden');
@@ -6360,11 +6201,9 @@
             const curBalVnd = getUserAccountBalanceVnd();
             if (!isAdminUser && curBalVnd < reqCostVnd) {
                 const deficit = reqCostVnd - curBalVnd;
-                const suggested = Math.max(10000, Math.ceil(deficit / 10000) * 10000);
                 showAccErr(
-                    `Số dư ví không đủ! Cần ${reqCostVnd.toLocaleString('vi-VN')}đ (${unique.length} acc × ${ACCOUNT_CHECK_UNIT_PRICE_VND}đ), số dư hiện có ${curBalVnd.toLocaleString('vi-VN')}đ (thiếu ${deficit.toLocaleString('vi-VN')}đ). Vui lòng nạp thêm số dư!`,
-                    true,
-                    suggested
+                    `Số dư ví không đủ! Cần ${reqCostVnd.toLocaleString('vi-VN')}đ (${unique.length} acc × ${ACCOUNT_CHECK_UNIT_PRICE_VND}đ), số dư hiện có ${curBalVnd.toLocaleString('vi-VN')}đ (thiếu ${deficit.toLocaleString('vi-VN')}đ). Vui lòng nạp gói 50.000đ qua VietQR!`,
+                    true
                 );
                 return;
             }
@@ -6411,8 +6250,6 @@
                     }
                     if (data && data.insufficient_balance) {
                         const bal = Number(data.balance_vnd || 0);
-                        const reqV = Number(data.required_vnd || reqCostVnd);
-                        const suggested = Math.max(10000, Math.ceil(Math.max(0, reqV - bal) / 10000) * 10000);
                         if (currentVipUser) {
                             currentVipUser.account_balance_vnd = bal;
                             currentVipUser.account_checks_left = Number(data.checks_left ?? Math.floor(bal / ACCOUNT_CHECK_UNIT_PRICE_VND));
@@ -6420,7 +6257,7 @@
                             syncAccountWalletUI();
                             updateAccountCheckInputCount();
                         }
-                        showAccErr(data.error || 'Số dư Check Tài Khoản không đủ!', true, suggested);
+                        showAccErr(data.error || 'Số dư Check Tài Khoản không đủ!', true);
                         return;
                     }
                     showAccErr((data && data.error) || 'Không thể kiểm tra danh sách tài khoản.');
@@ -6440,11 +6277,11 @@
                         if (data.admin_billing && canCurrentUserSeeBilling()) {
                             const cUsd = Number(data.admin_billing.scan_cost_usd || 0);
                             const cVnd = Number(data.admin_billing.scan_cost_vnd || 0);
-                            costEl.innerText = `Admin miễn phí (0đ) · Chi phí API: $${cUsd.toFixed(4)} (~${cVnd.toLocaleString('vi-VN')}đ)`;
+                            costEl.innerText = `Chi phí: $${cUsd.toFixed(4)} (~${cVnd.toLocaleString('vi-VN')}đ)`;
+                            costEl.classList.remove('hidden');
                         } else {
-                            costEl.innerText = `Admin miễn phí (0đ/lượt)`;
+                            costEl.classList.add('hidden');
                         }
-                        costEl.classList.remove('hidden');
                     } else if (ub) {
                         const chVnd = Number(ub.charged_vnd || 0);
                         const chCnt = Number(ub.charged_count || 0);
