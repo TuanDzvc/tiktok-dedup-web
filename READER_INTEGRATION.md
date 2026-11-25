@@ -6,6 +6,18 @@ Trạng thái triển khai: PC đã cập nhật và domain trả `X-Served-By: 
 
 ## Vận hành trên web
 
+### Thanh toán tách riêng từ 26/11/2026 (quy tắc hiện hành)
+
+- **VIP Check Trùng:** 50.000đ / 30 ngày theo cấu hình PayOS. Chỉ cấp/gia hạn VIP, không cộng ví Check tài khoản. Mua khi còn hạn nối thêm 30 ngày từ hạn hiện tại; hết hạn tính từ lúc thanh toán. VIP vĩnh viễn không cần mua thêm.
+- **Ví Check Tài Khoản:** nạp riêng từ 50.000đ, cộng toàn bộ khoản nhận vào ví; 250đ/tài khoản thành công, lỗi không trừ. Tài khoản thường dùng được, không cần VIP; nạp ví không cấp/gia hạn VIP.
+- Màn QR có hai lựa chọn rõ ràng. Tab Check tài khoản mặc định mở nạp ví; tab kiểm tra kênh mặc định mở VIP. VIP ẩn bộ chọn số tiền; ví có mức nạp tùy chọn. Thông báo, đăng ký và kết quả thanh toán đều phân biệt hai khoản. Xử lý phản hồi cũ khi đổi lựa chọn; mở lại đơn đang chờ giữ đúng đơn và loại thanh toán, không tự tạo đơn mới.
+- Đơn mới bắt buộc `order_type` là `vip` hoặc `account`, chụp `billing_policy=split_v1`, số tiền và thời hạn. Không tái dùng đơn cơ chế cũ. Xác nhận thanh toán dùng loại của đơn đã lưu, không tin loại do client gửi. Gọi lại webhook/check-order không cộng/gia hạn lần nữa. Public order có `wallet_credit_vnd`; VIP mới bằng 0, ví mới có `duration_days=0`.
+- Giữ nguyên số dư, hạn hiện có và đơn cũ: đơn chưa có `split_v1` tiếp tục được hưởng cơ chế lúc tạo (VIP kèm cộng ví). Không trừ lại tiền hoặc hủy quyền cũ. Backup trước cập nhật tại `independent_reader/.private/backups/split_payments_*`.
+- 38 kiểm thử qua (`test_split_payments`, `test_vip_subscription`, `test_usage_counts`, `test_reader_provider`). Kiểm thử giao diện dùng fixture chặn toàn bộ request API: cả hai loại, tài khoản thường nạp ví, kết quả thanh toán, mở lại đơn ví, đổi lựa chọn nhanh, màn hình 390px. Không tạo QR PayOS thật hoặc chuyển tiền để thử.
+- **Phạm vi triển khai: PC. Render chưa cập nhật theo lựa chọn trước của người dùng.** Khi PC tắt/chuyển sang Render, bản dự phòng còn cơ chế cũ; không coi thanh toán tách khoản đã được triển khai toàn bộ hai runtime. Cần cập nhật Render cùng phiên bản trước khi dựa vào cơ chế này trên nhánh dự phòng.
+
+Các ghi chú phí/gia hạn ghi trước mục này là lịch sử; quy tắc tách khoản trên áp dụng cho đơn mới.
+
 Hiển thị chi phí cho Admin: tab Check trùng không hiện số dư API hoặc số lượt check trùng quy đổi. Reader riêng không hiện banner chi phí hay nhãn giá Quét thêm. Chỉ khi kết quả thật dùng API dự phòng mới hiện chi phí lượt quét; số dư API chỉ xuất hiện ở tab Check tài khoản. Backend không gọi API tra số dư cho lượt đọc bằng reader riêng. Giá/quota/ví khách hàng không thay đổi.
 
 Ví header của VIP/khách cũng chỉ hiện ở tab Check tài khoản, gồm số dư và lượt check tài khoản; ẩn ở Kiểm tra kênh và Lịch sử. Thanh ví kênh/lịch sử được ẩn; banner chi phí khách không hiện số dư/lượt check trùng và chỉ hiện khi dùng API dự phòng. Đã test bằng fixture role user/VIP: kênh ẩn → tài khoản hiện 199.870đ / 799 lượt check tài khoản → trở lại kênh ẩn.

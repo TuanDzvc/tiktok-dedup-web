@@ -1282,15 +1282,20 @@ def _fulfill_vip_order_unlocked(
 
     now_ts = int(time.time())
     old_role = str(u_rec.get("role") or "member").lower()
+    ord_type = str(ord_rec.get('order_type') or 'vip').lower()
+    split = ord_rec.get('billing_policy') == 'split_v1'
+    if split and ord_type not in ('vip', 'account'):
+        return {'ok': False, 'reason': 'invalid_order_type'}
 
     if old_role != "admin":
         cfg = _get_payos_config()
-        if (str(ord_rec.get("order_type") or "vip").lower() == "vip"
-                and req_amount >= int(cfg["price_vnd"])):
-            activate_paid_membership(u_rec, now_ts, int(ord_rec.get("duration_days") or cfg["duration_days"]))
-        credit_vnd = max(0, int(amount_paid))
-        u_rec["account_balance_vnd"] = max(0, int(u_rec.get("account_balance_vnd") or 0)) + credit_vnd
-        u_rec["account_balance_updated_at"] = now_ts
+        if (ord_type == "vip"
+                and (split or req_amount >= int(cfg["price_vnd"]))):
+            activate_paid_membership(u_rec, now_ts, int(ord_rec.get("duration_days") or cfg["duration_days"]), extend_active=split)
+        credit_vnd = 0 if split and ord_type == 'vip' else max(0, int(amount_paid))
+        if credit_vnd:
+            u_rec["account_balance_vnd"] = max(0, int(u_rec.get("account_balance_vnd") or 0)) + credit_vnd
+            u_rec["account_balance_updated_at"] = now_ts
         old_note = str(u_rec.get("note") or "").strip()
         if not old_note or old_note == "Tự đăng ký trên web":
             u_rec["note"] = f"Nạp QR PayOS ({req_amount:,}đ)"
@@ -1307,15 +1312,18 @@ def _fulfill_vip_order_unlocked(
 def _public_order_view(ord_rec: Dict[str, Any]) -> Dict[str, Any]:
     ord_type = str(ord_rec.get("order_type") or "vip").strip().lower()
     amt_val = int(ord_rec.get("amount") or 0)
+    wallet_credit = 0 if ord_rec.get('billing_policy') == 'split_v1' and ord_type == 'vip' else amt_val
     return {
         "order_code": int(ord_rec.get("order_code") or 0),
         "order_type": ord_type,
+        "billing_policy": ord_rec.get('billing_policy') or 'legacy_combined',
+        "wallet_credit_vnd": wallet_credit,
         "username": str(ord_rec.get("username") or ""),
         "amount": amt_val,
-        "duration_days": int(ord_rec.get("duration_days") or _get_payos_config()["duration_days"]),
-        "dedup_checks_credit": _calc_dedup_checks_left(amt_val),
+        "duration_days": int(ord_rec.get("duration_days") or _get_payos_config()["duration_days"]) if ord_type == 'vip' else 0,
+        "dedup_checks_credit": 0,
         "dedup_unit_price_vnd": DEDUP_CHECK_UNIT_PRICE_VND,
-        "checks_credit": _calc_account_checks_left(amt_val),
+        "checks_credit": _calc_account_checks_left(wallet_credit),
         "unit_price_vnd": ACCOUNT_CHECK_UNIT_PRICE_VND,
         "description": str(ord_rec.get("description") or ""),
         "status": str(ord_rec.get("status") or "PENDING"),
@@ -2571,23 +2579,30 @@ async def api_vip_payos_create_order(req: Request):
     if str(u_obj.get("role") or "").lower() == "admin":
         return JSONResponse(status_code=400, content={"success": False, "error": "Tài khoản Admin không cần thanh toán."})
 
-    order_type = "vip"
+    order_type = str(body.get('order_type') or '').strip().lower()
+    if order_type not in ('vip', 'account'):
+        return JSONResponse(status_code=400, content={'success': False, 'error': 'Chọn thanh toán VIP hoặc nạp ví Check tài khoản. Vui lòng tải lại trang nếu đang dùng giao diện cũ.'})
+    if order_type == 'vip' and u_obj.get('role') == 'vip' and int(u_obj.get('expires_at') or 0) <= 0:
+        return JSONResponse(status_code=400, content={'success': False, 'error': 'Tài khoản đã có VIP vĩnh viễn; không cần mua thêm VIP.'})
     base_price = max(2000, int(cfg["price_vnd"]))
     base_days = max(1, int(cfg["duration_days"]))
+    minimum_amount = base_price if order_type == 'vip' else 50000
     raw_amt = body.get("amount")
     if raw_amt is None or str(raw_amt).strip() == "":
-        amount = base_price
+        amount = minimum_amount
     else:
         try:
             amount = int(raw_amt)
         except Exception:
             amount = 0
-    if amount < base_price or amount > 50_000_000:
+    if amount < minimum_amount or amount > 50_000_000:
         return JSONResponse(
             status_code=400,
-            content={"success": False, "error": f"Số tiền nạp tối thiểu là {base_price:,}đ (tối đa 50,000,000đ)!"},
+            content={"success": False, "error": f"Số tiền nạp tối thiểu là {minimum_amount:,}đ (tối đa 50,000,000đ)!"},
         )
-    days = base_days
+    if order_type == 'vip' and amount != base_price:
+        return JSONResponse(status_code=400, content={'success': False, 'error': f'Gói VIP có giá {base_price:,}đ / {base_days} ngày. Nạp ví Check tài khoản là khoản riêng.'})
+    days = base_days if order_type == 'vip' else 0
 
     force_new = bool(body.get("force_new", False))
     now_ts = int(time.time())
@@ -2602,6 +2617,7 @@ async def api_vip_payos_create_order(req: Request):
                 if isinstance(o, dict)
                 and str(o.get("username") or "").lower() == uname
                 and str(o.get("order_type") or "vip").strip().lower() == order_type
+                and o.get('billing_policy') == 'split_v1'
                 and str(o.get("status") or "").upper() == "PENDING"
                 and int(o.get("amount") or 0) == amount
                 and int(o.get("duration_days") or 0) == days
@@ -2639,7 +2655,7 @@ async def api_vip_payos_create_order(req: Request):
                     "paid": True,
                     "order": _public_order_view(reuse_ord),
                     "user": pub_user,
-                    "message": "🎉 Đơn trước đó đã thanh toán xong! Số dư Ví chung đã được cộng.",
+                    "message": "🎉 Đơn trước đó đã thanh toán xong! Quyền lợi của đơn đã được cập nhật.",
                 })
             if p_status == "PENDING":
                 return JSONResponse(content={"success": True, "paid": False, "reused": True, "order": _public_order_view(reuse_ord)})
@@ -2661,8 +2677,8 @@ async def api_vip_payos_create_order(req: Request):
     base_url = _public_base_url_from_request(req)
     return_url = f"{base_url}/payos/return?orderCode={order_code}"
     cancel_url = f"{base_url}/payos/cancel?orderCode={order_code}"
-    desc = f"VIP{order_code}"
-    item_name = f"Nap goi chung {amount:,}d ({_calc_dedup_checks_left(amount)} trung / {_calc_account_checks_left(amount)} TK) - {uname}"[:75]
+    desc = f"{'VIP' if order_type == 'vip' else 'ACC'}{order_code}"
+    item_name = (f"VIP Check trung {days} ngay - {uname}" if order_type == 'vip' else f"Nap vi Check tai khoan {amount:,}d - {uname}")[:75]
     exp_ts = now_ts + 900
     sign_payload = {
         "amount": amount,
@@ -2694,6 +2710,7 @@ async def api_vip_payos_create_order(req: Request):
     ord_rec = {
         "order_code": order_code,
         "order_type": order_type,
+        "billing_policy": "split_v1",
         "username": uname,
         "amount": amount,
         "duration_days": days,
