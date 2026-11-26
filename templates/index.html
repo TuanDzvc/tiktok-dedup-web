@@ -5217,10 +5217,11 @@
 
         function showToast(msg) {
             const toast = document.createElement('div');
-            toast.className = "tikflow-toast fixed top-3 left-1/2 -translate-x-1/2 z-[999999] px-5 py-2.5 rounded-2xl bg-dark-950/95 border border-cyan-500/70 text-cyan-100 text-xs font-bold shadow-2xl backdrop-blur-md flex items-center gap-2.5 transition-all duration-300 max-w-[92vw] sm:whitespace-nowrap pointer-events-none select-none";
-            toast.style.transform = 'translate(-50%, -15px)';
+            toast.className = "tikflow-toast fixed left-1/2 -translate-x-1/2 z-[999999] px-4 py-1 rounded-xl bg-dark-950/95 border border-cyan-500/70 text-cyan-100 text-[11px] font-bold shadow-2xl backdrop-blur-md flex items-center gap-2 transition-all duration-300 max-w-[92vw] sm:whitespace-nowrap pointer-events-none select-none";
+            toast.style.top = `${(document.querySelector('header')?.getBoundingClientRect().bottom || 64) + 4}px`;
+            toast.style.transform = 'translate(-50%, 0)';
             toast.style.opacity = '0';
-            toast.innerHTML = `<i class="fa-solid fa-circle-check text-cyan-400 text-base flex-shrink-0"></i> <span class="leading-snug">${msg}</span>`;
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-cyan-400 text-sm flex-shrink-0"></i> <span class="leading-tight">${msg}</span>`;
             document.body.appendChild(toast);
             requestAnimationFrame(() => {
                 toast.style.opacity = '1';
@@ -5228,7 +5229,7 @@
             });
             setTimeout(() => {
                 toast.style.opacity = '0';
-                toast.style.transform = 'translate(-50%, -15px)';
+                toast.style.transform = 'translate(-50%, 0)';
                 setTimeout(() => toast.remove(), 300);
             }, 2600);
         }
