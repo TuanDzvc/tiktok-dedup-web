@@ -6,6 +6,14 @@ Trạng thái triển khai: PC đã cập nhật và domain trả `X-Served-By: 
 
 ## Vận hành trên web
 
+### Chẩn đoán lỗi hồ sơ kênh ngày 26/11/2026
+
+Đối chiếu log: `@beverlyzwssg65403` lỗi hồ sơ cả 18:06 và 18:09; các kênh khác vẫn chuyển lại reader thành công. Mở TikTok công khai trực tiếp cho kênh này thấy “Couldn't find this account”, dữ liệu `webapp.user-detail.statusCode=10221`, không có user. Gọi sidecar độc lập cũng nhận thiếu user/mã 10221; kênh đối chứng `seitezhm99d` vẫn đọc được video. Đây là lỗi hồ sơ kênh ở lần thử, không có bằng chứng phiên đọc hết hạn; không suy ra tài khoản bị xóa/đình chỉ hay nguyên nhân của log cũ không có username.
+
+Resolver cũ bắt mọi exception rồi ghi chung “có thể cần xác minh trình duyệt”, nên log không phân biệt được nguyên nhân. `resolve_public.cjs` nay giữ mã hồ sơ và phân biệt lỗi Chrome, timeout điều hướng, thiếu script, HTTP lỗi, JSON lỗi, hồ sơ không khớp username và trang xác minh có bằng chứng từ tiêu đề. Không giải CAPTCHA, không sửa/tạo dữ liệu cho log cũ. Sidecar gọi script mới mỗi lần cần tra hồ sơ nên thay đổi có hiệu lực mà không khởi động lại web/sidecar.
+
+Kiểm tra: `node --test independent_reader/test_resolve_public.cjs` (7 tests); thử thật hai kênh trực tiếp qua sidecar, không dùng paid API. Không thay bộ thanh toán hay các thay đổi quản lý nhóm kênh đang có trong working tree.
+
 ### Thanh toán tách riêng từ 26/11/2026 (quy tắc hiện hành)
 
 - **VIP Check Trùng:** 50.000đ / 30 ngày theo cấu hình PayOS. Chỉ cấp/gia hạn VIP, không cộng ví Check tài khoản. Mua khi còn hạn nối thêm 30 ngày từ hạn hiện tại; hết hạn tính từ lúc thanh toán. VIP vĩnh viễn không cần mua thêm.
