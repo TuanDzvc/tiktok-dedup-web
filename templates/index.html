@@ -47,6 +47,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/channel_groups_board.css?v=20261126_27">
     <style>
+        .notice-feature-list b { font-weight: inherit; }
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -2131,7 +2132,7 @@
                                 </span>
                                 <span class="text-[11px] font-black text-emerald-400">10 lượt / ngày</span>
                             </div>
-                            <ul class="space-y-2 text-xs text-slate-300 leading-snug pt-1">
+                            <ul class="notice-feature-list space-y-2 text-xs font-semibold text-slate-200 leading-snug pt-1">
                                 <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Trải nghiệm <b>trọn vẹn 100% tính năng</b></span></li>
                                 <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Trùng lặp</b> & mở thẳng <b class="text-sky-300">Video Gốc (Gốc ↗)</b></span></li>
                                 <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-emerald-400 flex-shrink-0"></i><span>Check <b>Mất FYP / Bản quyền / Tắt tiếng / Quốc gia</b></span></li>
@@ -2150,7 +2151,7 @@
                                 </span>
                                 <span class="text-[11px] font-black text-amber-300">Không giới hạn</span>
                             </div>
-                            <ul class="space-y-2 text-xs text-slate-200 leading-snug pt-1">
+                            <ul class="notice-feature-list space-y-2 text-xs font-semibold text-slate-200 leading-snug pt-1">
                                 <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Quét <b>KHÔNG GIỚI HẠN</b> số lượt mỗi ngày (24/7)</span></li>
                                 <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Không khóa sau 10 lượt — soi sỉ nhiều kênh</span></li>
                                 <li class="flex items-center gap-2 sm:whitespace-nowrap"><i class="fa-solid fa-circle-check text-amber-400 flex-shrink-0"></i><span>Đầy đủ Check Trùng, mở <b class="text-sky-300">Gốc ↗</b> &amp; Xuất CSV</span></li>
@@ -3081,19 +3082,26 @@
             const remaining = expires * 1000 - nowMs;
             const date = new Date(expires * 1000).toLocaleDateString('vi-VN', {timeZone: 'Asia/Ho_Chi_Minh'});
             if (remaining <= 0) return `Đã hết hạn · ${date}`;
-            const left = remaining < 86400000 ? 'Còn dưới 1 ngày' : `Còn ${Math.ceil(remaining / 86400000)} ngày`;
+            const seconds = Math.floor(remaining / 1000);
+            const days = Math.floor(seconds / 86400);
+            const pad = value => String(value).padStart(2, '0');
+            const time = `${pad(Math.floor(seconds % 86400 / 3600))}:${pad(Math.floor(seconds % 3600 / 60))}:${pad(seconds % 60)}`;
+            const left = days > 0 ? `${days} ngày ${time}` : `Còn ${time}`;
             return `${left} · ${date}`;
         }
 
         function vipExpiryMarkup(user) {
             const [remaining, date] = vipExpiryLabel(user).split(' · ');
-            return `<span class="text-[11px] font-extrabold text-yellow-200 whitespace-nowrap">${escapeHtml(remaining)}</span><span class="text-[10px] font-semibold text-white whitespace-nowrap">${date ? 'HSD: ' + escapeHtml(date) : 'Hạn sử dụng VIP'}</span>`;
+            return `<span class="text-[11px] font-extrabold text-yellow-200 whitespace-nowrap tabular-nums">${escapeHtml(remaining)}</span><span class="text-[10px] font-semibold text-white whitespace-nowrap">${date ? 'HSD: ' + escapeHtml(date) : 'Hạn sử dụng VIP'}</span>`;
         }
 
-        setInterval(() => {
+        function updateVipExpiryDisplay() {
             const label = document.getElementById('vipNavExpiry');
             if (label && currentVipUser) label.innerHTML = vipExpiryMarkup(currentVipUser);
-        }, 60000);
+        }
+        setInterval(updateVipExpiryDisplay, 1000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) updateVipExpiryDisplay(); });
+        window.addEventListener('focus', updateVipExpiryDisplay);
 
         function renderVipNav() {
             if (!currentVipUser || currentVipUser.role !== 'admin') document.getElementById('readerFallbackNotice')?.classList.add('hidden');
