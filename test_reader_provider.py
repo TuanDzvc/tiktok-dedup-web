@@ -71,6 +71,20 @@ class ProviderTests(unittest.TestCase):
         self.assertIn('Không kết nối được reader',ev['detail'])
         self.assertFalse(ev['api_ok'])
 
+    def test_missing_channel_is_not_reader_failure_and_does_not_spend_paid_api(self):
+        self.router._bridge=Mock(return_value=Response({'success':False,'code':'profile_not_found',
+            'error':'Kênh không tồn tại hoặc không khả dụng. Đây không phải lỗi reader.'},404))
+        for name in ['@missing.one', '@missing.two']:
+            result=self.router.check(self.legacy,name)
+            self.assertFalse(result['success'])
+            self.assertEqual(result['error_code'],'profile_not_found')
+            self.assertFalse(result['reader_provider']['fallback'])
+        self.legacy.assert_not_called()
+        self.assertEqual(self.router.fallback_count,0)
+        self.assertEqual(self.router.blocked_until,0)
+        self.assertEqual([e['query'] for e in self.router.events],['@missing.one','@missing.two'])
+        self.assertTrue(all(e['source']=='target_unavailable' for e in self.router.events))
+
     def test_reader_success_logged_only_on_change(self):
         self.router._bridge=Mock(return_value=Response(native_payload()))
         self.router.check(self.legacy,'a');self.router.check(self.legacy,'b')
@@ -206,8 +220,9 @@ class SessionTests(unittest.TestCase):
 
     def test_target_error_is_not_mislabeled_session_expired(self):
         manager=self.manager(Mock(),lambda _:self.new)
-        manager._update(state='healthy');manager.read_failure('target_unavailable')
-        self.assertEqual(manager.view()['state'],'healthy')
+        for code in ['target_unavailable','profile_not_found']:
+            manager._update(state='healthy');manager.read_failure(code)
+            self.assertEqual(manager.view()['state'],'healthy')
 
 
 if __name__=='__main__':unittest.main()

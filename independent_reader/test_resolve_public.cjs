@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {profileFromData,failureMessage}=require('./resolve_public.cjs');
+const {profileFromData,failureMessage,failureCode}=require('./resolve_public.cjs');
 
 test('returns only the requested identity and public profile fields',()=>{
   const result=profileFromData({__DEFAULT_SCOPE__:{'webapp.user-detail':{userInfo:{
@@ -13,7 +13,9 @@ test('missing user preserves the observed TikTok status without inventing a caus
   try{profileFromData({__DEFAULT_SCOPE__:{'webapp.user-detail':{statusCode:10221}}},'fixture');}catch(e){error=e;}
   assert.equal(error.profileStatus,10221);
   const message=failureMessage(error,'profile_data',"Couldn’t find this account. Visit TikTok");
-  assert.match(message,/Không tìm thấy tài khoản/);assert.match(message,/10221/);
+  assert.match(message,/Kênh không tồn tại hoặc không khả dụng/);assert.match(message,/10221/);
+  assert.equal(failureCode(error),'profile_not_found');
+  assert.match(message,/không phải lỗi reader/);
   assert.doesNotMatch(message,/cần xác minh/);
 });
 test('unknown status is not automatically called CAPTCHA or account deletion',()=>{
@@ -21,6 +23,7 @@ test('unknown status is not automatically called CAPTCHA or account deletion',()
   const message=failureMessage(error,'profile_data','TikTok');
   assert.match(message,/123456/);assert.match(message,/chưa có đủ dữ liệu/);
   assert.doesNotMatch(message,/yêu cầu xác minh|bị xóa/);
+  assert.equal(failureCode(error),'profile_unavailable');
 });
 test('different identity is rejected',()=>{
   assert.throws(()=>profileFromData({__DEFAULT_SCOPE__:{'webapp.user-detail':{

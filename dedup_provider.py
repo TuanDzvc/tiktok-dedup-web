@@ -207,7 +207,7 @@ class ReaderRouter:
     def _record(self,source,reason='',query='',detail='',api_ok=None):
         with self.lock:
             # Every API fallback is logged individually (it costs money); reader runs only on change.
-            if source=='api_fallback' or self.last_source!=source or self.last_reason!=reason:
+            if source in {'api_fallback','target_unavailable'} or self.last_source!=source or self.last_reason!=reason:
                 event={'at':int(self.clock()),'source':source,'reason':reason}
                 if query:event['query']=str(query)[:80]
                 if detail:event['detail']=str(detail)[:200]
@@ -248,6 +248,11 @@ class ReaderRouter:
                 if response.status_code!=200 or not payload.get('success'):
                     reason=payload.get('code') or reason
                     detail=str(payload.get('error') or f'HTTP {response.status_code}')
+                    if reason == 'profile_not_found':
+                        self._record('target_unavailable', reason, shown_query, detail)
+                        return {'success':False, 'error':detail, 'error_code':reason,
+                                'target_unavailable':True,
+                                'reader_provider':{'source':'independent','fallback':False,'reason':reason}}
                     raise RuntimeError('Native read failed')
                 result=format_native(payload, cookie_str=kwargs.get('cookie_str', ''), proxy_str=kwargs.get('proxy_str', ''))
                 self.blocked_until=0;self._record('independent',query=shown_query)

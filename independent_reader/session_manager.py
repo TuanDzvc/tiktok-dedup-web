@@ -66,7 +66,7 @@ class SessionManager:
         self._update(state='healthy',message='Phiên TikTok đọc dữ liệu được; đang ưu tiên reader riêng.',last_checked=now,last_good=now)
 
     def read_failure(self,code='reader_unavailable'):
-        if code in {'target_unavailable','invalid_input','profile_unavailable'}:return
+        if code in {'target_unavailable','invalid_input','profile_unavailable','profile_not_found'}:return
         self._update(state='unavailable',message='Reader TikTok chưa dùng được. Chưa đủ căn cứ kết luận tài khoản bị đình chỉ.',last_checked=int(time.time()))
 
     def check_current(self):

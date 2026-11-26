@@ -8,6 +8,8 @@ Trạng thái triển khai: PC đã cập nhật và domain trả `X-Served-By: 
 
 ### Chẩn đoán lỗi hồ sơ kênh ngày 26/11/2026
 
+Đã tách nghiệp vụ `profile_not_found` (mã hồ sơ 10221 hoặc tiêu đề TikTok xác nhận không tìm thấy tài khoản): trả “Kênh không tồn tại hoặc không khả dụng … không phải lỗi reader”, không gọi API trả phí, không mở circuit và không đánh dấu phiên lỗi. Nhật ký dùng nguồn `target_unavailable`, màu trung tính, tên kênh và lý do riêng; không tăng bộ đếm fallback. Lỗi hồ sơ chưa rõ nguyên nhân vẫn dùng cơ chế dự phòng như cũ. Kiểm tra thật qua `/api/check` cho kênh trên: `success=false`, mã `profile_not_found`, `fallback=false`, trạng thái reader vẫn healthy, fallback count giữ nguyên. Fixture trình duyệt xác nhận badge xanh, lỗi kênh có nhãn riêng và ẩn cảnh báo reader/API.
+
 Đối chiếu log: `@beverlyzwssg65403` lỗi hồ sơ cả 18:06 và 18:09; các kênh khác vẫn chuyển lại reader thành công. Mở TikTok công khai trực tiếp cho kênh này thấy “Couldn't find this account”, dữ liệu `webapp.user-detail.statusCode=10221`, không có user. Gọi sidecar độc lập cũng nhận thiếu user/mã 10221; kênh đối chứng `seitezhm99d` vẫn đọc được video. Đây là lỗi hồ sơ kênh ở lần thử, không có bằng chứng phiên đọc hết hạn; không suy ra tài khoản bị xóa/đình chỉ hay nguyên nhân của log cũ không có username.
 
 Resolver cũ bắt mọi exception rồi ghi chung “có thể cần xác minh trình duyệt”, nên log không phân biệt được nguyên nhân. `resolve_public.cjs` nay giữ mã hồ sơ và phân biệt lỗi Chrome, timeout điều hướng, thiếu script, HTTP lỗi, JSON lỗi, hồ sơ không khớp username và trang xác minh có bằng chứng từ tiêu đề. Không giải CAPTCHA, không sửa/tạo dữ liệu cho log cũ. Sidecar gọi script mới mỗi lần cần tra hồ sơ nên thay đổi có hiệu lực mà không khởi động lại web/sidecar.

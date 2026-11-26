@@ -20,10 +20,15 @@ function profileFromData(data,username){
     source:'public TikTok profile'};
 }
 
+function failureCode(error,title=''){
+  return Number(error.profileStatus)===10221 || /couldn['’]t find this account|account not found/i.test(title)
+    ? 'profile_not_found' : 'profile_unavailable';
+}
+
 function failureMessage(error,stage,title='',httpStatus=0){
   const code=Number.isFinite(Number(error.profileStatus)) ? ` (TikTok statusCode=${Number(error.profileStatus)})` : '';
-  if(/couldn['’]t find this account|account not found/i.test(title))
-    return 'TikTok hiển thị "Không tìm thấy tài khoản"'+code+'. Không lấy được hồ sơ kênh; chưa kết luận tài khoản bị xóa hay đình chỉ.';
+  if(failureCode(error,title)==='profile_not_found')
+    return 'Kênh không tồn tại hoặc không khả dụng trên TikTok'+code+'. Đây là lỗi kênh, không phải lỗi reader. Vui lòng kiểm tra lại username.';
   if(/captcha|security check|verify to continue/i.test(title))
     return 'Trang hồ sơ TikTok đang yêu cầu xác minh trình duyệt. Chưa đọc được hồ sơ kênh.';
   if(stage==='launch')return 'Không mở được Chrome đọc hồ sơ kênh. Cần kiểm tra tiến trình/profile Chrome của reader.';
@@ -54,9 +59,9 @@ async function run(username){
     process.stdout.write(JSON.stringify(result));
   }catch(error){
     const title=page ? await page.title().catch(()=>'') : '';
-    process.stdout.write(JSON.stringify({error:failureMessage(error,stage,title,httpStatus)}));process.exitCode=2;
+    process.stdout.write(JSON.stringify({code:failureCode(error,title),error:failureMessage(error,stage,title,httpStatus)}));process.exitCode=2;
   }finally{await context?.close().catch(()=>{});}
 }
 
-module.exports={profileFromData,failureMessage};
+module.exports={profileFromData,failureMessage,failureCode};
 if(require.main===module)run(process.argv[2]||'');

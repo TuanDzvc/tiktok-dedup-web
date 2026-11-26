@@ -27,6 +27,12 @@ def username_from_input(value):
     return value
 
 
+class ProfileLookupFailure(ValueError):
+    def __init__(self, message, code='profile_unavailable'):
+        super().__init__(message)
+        self.code = code if code == 'profile_not_found' else 'profile_unavailable'
+
+
 def resolve(value):
     username=username_from_input(value)
     cache=json.loads(PUBLIC_CACHE.read_text('utf-8')) if PUBLIC_CACHE.exists() else {}
@@ -38,7 +44,7 @@ def resolve(value):
     try: result=json.loads(proc.stdout)
     except ValueError:raise ValueError('Bộ đọc hồ sơ chưa chạy được; kiểm tra Chrome và Node.js.') from None
     if proc.returncode or not result.get('secUid'):
-        raise ValueError(result.get('error','Không tìm được kênh.'))
+        raise ProfileLookupFailure(result.get('error','Không tìm được kênh.'), result.get('code'))
     cache[username.lower()]={'cachedAt':time.time(),'profile':result}
     PUBLIC_CACHE.write_text(json.dumps(cache,ensure_ascii=False,indent=2),'utf-8')
     return result

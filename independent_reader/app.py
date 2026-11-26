@@ -48,6 +48,9 @@ class Handler(BaseHTTPRequestHandler):
                     service.username_from_input(data.get('query',''))
                     result=service.fetch_raw(data['query'],data.get('count',18),data.get('cursor',0))
                     MANAGER.read_success();return self.respond(200,{'success':True,**result})
+                except service.ProfileLookupFailure as e:
+                    return self.respond(404 if e.code == 'profile_not_found' else 400,
+                                        {'success':False,'code':e.code,'error':str(e)})
                 except service.ReadFailure as e:
                     MANAGER.read_failure(e.code)
                     return self.respond(503,{'success':False,'code':e.code,'error':str(e)})
