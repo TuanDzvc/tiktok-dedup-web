@@ -6145,7 +6145,7 @@
             } else {
                 dupBadge = `
                     <div class="relative inline-flex items-center justify-center h-7">
-                        <span data-tip="Video sạch an toàn — Không trùng lặp & Đủ điều kiện lên Xu hướng FYP" class="h-7 px-2.5 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-check"></i> Sạch</span>
+                        <span data-tip="Không phát hiện nội dung trùng lặp.&#10;Không phát hiện hạn chế đề xuất FYP." class="h-7 px-2.5 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal"><i class="fa-solid fa-check"></i> Sạch</span>
                     </div>
                 `;
             }
@@ -6166,7 +6166,7 @@
             } else {
                 sbBadge = `
                     <div class="relative inline-flex items-center justify-center h-7">
-                        <span data-tip="Không bị Shadowban — Phân phối đề xuất FYP bình thường" class="h-7 px-2.5 rounded-lg bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">✅ Không</span>
+                        <span data-tip="Không bị Shadowban.&#10;Phân phối đề xuất FYP bình thường." class="h-7 px-2.5 rounded-lg bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[11px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-1 cursor-help leading-normal">✅ Không</span>
                     </div>
                 `;
             }
@@ -10749,9 +10749,9 @@
     </div>
 
     <!-- Tooltip nổi căn chính giữa bên dưới nhãn trạng thái -->
-    <div id="tikCenteredTooltip" class="fixed z-[999999] pointer-events-none hidden transition-opacity duration-100" style="left:0;top:0;width:max-content;max-width:360px;">
+    <div id="tikCenteredTooltip" class="fixed z-[999999] pointer-events-none hidden transition-opacity duration-100" style="left:0;top:0;width:max-content;">
         <div id="tikCenteredTooltipArrow" class="w-2.5 h-2.5 bg-[#0b1326] border-l border-t border-cyan-400/65 rotate-45 -mb-1.5 mx-auto"></div>
-        <div id="tikCenteredTooltipBody" class="px-3.5 py-2 rounded-xl bg-[#0b1326] border border-cyan-400/65 text-white text-xs font-bold shadow-[0_10px_30px_rgba(0,0,0,0.9)] text-center max-w-[360px] whitespace-pre-line leading-relaxed"></div>
+        <div id="tikCenteredTooltipBody" class="px-2.5 py-1.5 rounded-xl bg-[#0b1326] border border-cyan-400/65 text-white text-xs font-bold shadow-[0_10px_30px_rgba(0,0,0,0.9)] text-center whitespace-pre-line leading-relaxed" style="text-wrap:pretty;"></div>
     </div>
     <script>
         (function initCenteredTooltip() {
@@ -10776,10 +10776,29 @@
                 }
                 const formattedMsg = msg.replace(/[ \t]+(\([^)\n]{10,}\))/g, '\n$1');
                 tipBody.textContent = formattedMsg;
-                // Reset về (0,0) trước khi đo offsetWidth để tránh bị ép hẹp bởi vị trí sát mép phải của lần hover trước (gây lệch sang phải)
+                const maxAllowed = Math.min(396, window.innerWidth - 20);
                 tipWrap.style.left = '0px';
                 tipWrap.style.top = '0px';
+                tipBody.style.textWrap = 'pretty';
+                tipBody.style.width = 'auto';
+                tipBody.style.maxWidth = `${maxAllowed}px`;
                 tipWrap.classList.remove('hidden');
+
+                // Khóa chặt chiều rộng đúng bằng dòng dài nhất + 20px đệm (10px mỗi bên), tắt pretty/balance sau khi đo để không tự co chữ lần 2 gây hở rìa
+                try {
+                    const rng = document.createRange();
+                    rng.selectNodeContents(tipBody);
+                    let maxLineW = Array.from(rng.getClientRects()).reduce((m, rc) => Math.max(m, rc.width), 0);
+                    if (maxLineW > 0) {
+                        tipBody.style.textWrap = 'wrap';
+                        tipBody.style.width = `${Math.min(maxAllowed, Math.ceil(maxLineW + 22))}px`;
+                        const maxLineW2 = Array.from(rng.getClientRects()).reduce((m, rc) => Math.max(m, rc.width), 0);
+                        if (maxLineW2 > 0 && maxLineW2 < maxLineW - 2) {
+                            tipBody.style.width = `${Math.min(maxAllowed, Math.ceil(maxLineW2 + 22))}px`;
+                        }
+                    }
+                } catch (_) {}
+
                 const r = el.getBoundingClientRect();
                 const tw = tipWrap.offsetWidth;
                 const centerX = r.left + r.width / 2;

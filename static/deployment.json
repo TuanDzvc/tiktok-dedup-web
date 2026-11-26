@@ -1,5 +1,5 @@
 {
-  "release": "2026-11-26.3",
+  "release": "2026-11-27.1",
   "group_assets": "20261126_27",
   "features": [
     "channel_groups",
@@ -8,6 +8,7 @@
     "guest_registration_first",
     "channel_availability_errors",
     "full_channel_labels_and_copy",
-    "grouped_channel_selector"
+    "grouped_channel_selector",
+    "two_line_clean_tooltips"
   ]
 }
