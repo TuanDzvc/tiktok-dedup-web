@@ -5217,7 +5217,7 @@
 
         function showToast(msg) {
             const toast = document.createElement('div');
-            toast.className = "tikflow-toast fixed left-1/2 -translate-x-1/2 z-[999999] px-4 py-1 rounded-xl bg-dark-950/95 border border-cyan-500/70 text-cyan-100 text-[11px] font-bold shadow-2xl backdrop-blur-md flex items-center gap-2 transition-all duration-300 max-w-[92vw] sm:whitespace-nowrap pointer-events-none select-none";
+            toast.className = "tikflow-toast fixed left-1/2 -translate-x-1/2 z-[999999] px-4 py-0.5 rounded-xl bg-dark-950/95 border border-cyan-500/70 text-cyan-100 text-[11px] font-bold shadow-2xl backdrop-blur-md flex items-center gap-2 transition-all duration-300 max-w-[92vw] sm:whitespace-nowrap pointer-events-none select-none";
             toast.style.top = `${(document.querySelector('header')?.getBoundingClientRect().bottom || 64) + 4}px`;
             toast.style.transform = 'translate(-50%, 0)';
             toast.style.opacity = '0';
