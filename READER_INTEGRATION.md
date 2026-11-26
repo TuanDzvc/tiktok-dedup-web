@@ -2,7 +2,11 @@
 
 Ngày triển khai: 25/11/2026. Luồng `/api/check` giữ nguyên xác thực, quota, phí ví khách hàng, phân quyền quét thêm, lịch sử và ảnh. Chỉ thay nguồn dữ liệu: reader riêng trước, engine API cũ làm dự phòng.
 
-Trạng thái triển khai: PC đã cập nhật và domain trả `X-Served-By: PC-Primary`. GitHub từ chối credential đã lưu (401); người dùng chọn cập nhật PC trước, Render làm sau. Commit nằm local; Render vẫn chạy bản API cũ, chưa có bảng quản lý phiên mới khi PC tắt.
+Trạng thái triển khai ngày 26/11/2026: PC và Render đã đồng bộ bản chức năng `886d433`, release `2026-11-26.1`, asset nhóm kênh `20261126_25`. URL dự phòng: `https://tiktok-dedup-web.onrender.com/`. Đã đối chiếu HTML/JS/CSS khớp PC, thử luồng khách mở Đăng ký trên Render, kiểm tra API nhóm kênh, số dư và trạng thái reader. Render dùng API dự phòng; phiên TikTok/MuMu và khóa bridge vẫn chỉ ở PC.
+
+GitHub Credential Manager đã có đăng nhập hợp lệ; nguyên nhân push 401 cũ là token hết hiệu lực gắn trong URL origin. Đã chuyển origin sang URL repo không chứa token, push qua Credential Manager và kích hoạt Render Deploy Hook đã lưu (không công khai hook). Source và ảnh Docker không chứa file runtime/phiên riêng. Bản sao trước rollout nằm trong `independent_reader/.private/backups/render_rollout_*`.
+
+Đã kiểm tra 58 tests Python và 7 tests CJS. Dữ liệu user (role/số dư/hạn VIP), nhóm kênh trên Render khớp PC; dữ liệu user, nhóm và điều khoản/trạng thái đơn thanh toán trong snapshot Supabase khớp PC. Có một lần upload snapshot 5MB bị timeout trong kiểm tra, nhưng đã đọc lại xác nhận bản lưu bền vững đầy đủ; không ghi đè snapshot bằng dữ liệu rỗng. Không tắt PC đang phục vụ khách để thử failover và không thực hiện thanh toán/quét API trả phí thêm trong kiểm tra triển khai.
 
 ## Vận hành trên web
 
@@ -28,11 +32,11 @@ Kiểm tra: `node --test independent_reader/test_resolve_public.cjs` (7 tests); 
 
 - **VIP Check Trùng:** 50.000đ / 30 ngày theo cấu hình PayOS. Chỉ cấp/gia hạn VIP, không cộng ví Check tài khoản. Mua khi còn hạn nối thêm 30 ngày từ hạn hiện tại; hết hạn tính từ lúc thanh toán. VIP vĩnh viễn không cần mua thêm.
 - **Ví Check Tài Khoản:** nạp riêng từ 50.000đ, cộng toàn bộ khoản nhận vào ví; 250đ/tài khoản thành công, lỗi không trừ. Tài khoản thường dùng được, không cần VIP; nạp ví không cấp/gia hạn VIP.
-- Màn QR có hai lựa chọn rõ ràng. Tab Check tài khoản mặc định mở nạp ví; tab kiểm tra kênh mặc định mở VIP. VIP ẩn bộ chọn số tiền; ví có mức nạp tùy chọn. Thông báo, đăng ký và kết quả thanh toán đều phân biệt hai khoản. Xử lý phản hồi cũ khi đổi lựa chọn; mở lại đơn đang chờ giữ đúng đơn và loại thanh toán, không tự tạo đơn mới.
+- Màn QR chỉ hiển thị loại thanh toán theo nút/tab đã mở, không có hai ô lựa chọn chung. Tab Check tài khoản mở nạp ví; nút Mua/Gia Hạn VIP mở VIP. VIP ẩn bộ chọn số tiền; ví có mức nạp tùy chọn. Thông báo, đăng ký và kết quả thanh toán đều phân biệt hai khoản; mở lại đơn đang chờ giữ đúng đơn và loại thanh toán, không tự tạo đơn mới.
 - Đơn mới bắt buộc `order_type` là `vip` hoặc `account`, chụp `billing_policy=split_v1`, số tiền và thời hạn. Không tái dùng đơn cơ chế cũ. Xác nhận thanh toán dùng loại của đơn đã lưu, không tin loại do client gửi. Gọi lại webhook/check-order không cộng/gia hạn lần nữa. Public order có `wallet_credit_vnd`; VIP mới bằng 0, ví mới có `duration_days=0`.
 - Giữ nguyên số dư, hạn hiện có và đơn cũ: đơn chưa có `split_v1` tiếp tục được hưởng cơ chế lúc tạo (VIP kèm cộng ví). Không trừ lại tiền hoặc hủy quyền cũ. Backup trước cập nhật tại `independent_reader/.private/backups/split_payments_*`.
 - 38 kiểm thử qua (`test_split_payments`, `test_vip_subscription`, `test_usage_counts`, `test_reader_provider`). Kiểm thử giao diện dùng fixture chặn toàn bộ request API: cả hai loại, tài khoản thường nạp ví, kết quả thanh toán, mở lại đơn ví, đổi lựa chọn nhanh, màn hình 390px. Không tạo QR PayOS thật hoặc chuyển tiền để thử.
-- **Phạm vi triển khai: PC. Render chưa cập nhật theo lựa chọn trước của người dùng.** Khi PC tắt/chuyển sang Render, bản dự phòng còn cơ chế cũ; không coi thanh toán tách khoản đã được triển khai toàn bộ hai runtime. Cần cập nhật Render cùng phiên bản trước khi dựa vào cơ chế này trên nhánh dự phòng.
+- **Đã triển khai cả PC và Render ngày 26/11/2026.** Cơ chế thanh toán tách khoản và dữ liệu user/nhóm đã được đồng bộ. Reader riêng vẫn chỉ ở PC; Render dùng API dự phòng khi phục vụ yêu cầu.
 
 Các ghi chú phí/gia hạn ghi trước mục này là lịch sử; quy tắc tách khoản trên áp dụng cho đơn mới.
 
