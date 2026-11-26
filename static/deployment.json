@@ -1,5 +1,5 @@
 {
-  "release": "2026-11-27.3",
+  "release": "2026-11-27.4",
   "group_assets": "20261126_27",
   "features": [
     "channel_groups",
@@ -11,6 +11,7 @@
     "grouped_channel_selector",
     "two_line_clean_tooltips",
     "two_line_hero_and_updated_notice",
-    "revised_free_vip_notice_copy"
+    "revised_free_vip_notice_copy",
+    "toast_above_workspace_tabs"
   ]
 }
