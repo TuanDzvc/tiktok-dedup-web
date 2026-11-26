@@ -1,5 +1,5 @@
 {
-  "release": "2026-11-27.2",
+  "release": "2026-11-27.3",
   "group_assets": "20261126_27",
   "features": [
     "channel_groups",
@@ -10,6 +10,7 @@
     "full_channel_labels_and_copy",
     "grouped_channel_selector",
     "two_line_clean_tooltips",
-    "two_line_hero_and_updated_notice"
+    "two_line_hero_and_updated_notice",
+    "revised_free_vip_notice_copy"
   ]
 }
