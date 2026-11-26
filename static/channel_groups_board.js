@@ -939,14 +939,14 @@
     const visList = [];
     for (const g of visGroups) {
       for (const c of (g.channels || [])) {
-        visList.push({ handle: c.username.toLowerCase(), name: c.name || c.username, groupName: g.name });
+        visList.push({ handle: c.username.toLowerCase(), name: c.name || c.username, groupName: g.name, groupId: g.id });
       }
     }
     if (visList.some(x => x.handle === currentHandle)) return visList;
     const allList = [];
     for (const g of state.groups) {
       for (const c of (g.channels || [])) {
-        allList.push({ handle: c.username.toLowerCase(), name: c.name || c.username, groupName: g.name });
+        allList.push({ handle: c.username.toLowerCase(), name: c.name || c.username, groupName: g.name, groupId: g.id });
       }
     }
     return allList;
@@ -1048,10 +1048,19 @@
     const regCode = (typeof formatCountryCode === 'function') ? formatCountryCode((entry && entry.region) || 'US') : ((entry && entry.region) || 'US');
     const flagHtml = (typeof getCountryFlag === 'function') ? getCountryFlag(regCode) : '';
 
-    const switcherOpts = navList.map((item, i) => (
-      `<option value="${esc(item.handle)}" ${item.handle === h ? 'selected' : ''}>${i + 1}. ${esc(item.name)} (@${esc(item.handle)} · ${esc(item.groupName)})</option>`
-    )).join('');
-    const switcherLabel = grpInfo ? `${curNavIdx + 1}. ${grpInfo.name} (@${h} · ${grpInfo.groupName})` : `@${h}`;
+    const navigationGroups = new Map();
+    for (const item of navList) {
+      const key = item.groupId || item.groupName;
+      if (!navigationGroups.has(key)) navigationGroups.set(key, { name: item.groupName, items: [] });
+      navigationGroups.get(key).items.push(item);
+    }
+    const switcherOpts = Array.from(navigationGroups.values()).map(group => `
+      <optgroup label="${esc(group.name)} (${group.items.length} kênh)">
+        ${group.items.map((item, i) => `<option value="${esc(item.handle)}" ${item.handle === h ? 'selected' : ''}>${i + 1}. ${esc(item.name)} (@${esc(item.handle)})</option>`).join('')}
+      </optgroup>`).join('');
+    const currentGroupItems = navigationGroups.get(grpInfo?.groupId || grpInfo?.groupName)?.items || [];
+    const localChannelIndex = currentGroupItems.findIndex(item => item.handle === h);
+    const switcherLabel = grpInfo ? `${grpInfo.groupName} · ${localChannelIndex + 1}. ${grpInfo.name} (@${h})` : `@${h}`;
 
     const st = (entry && entry.stats) ? entry.stats : { total: 0, dup: 0, fyp: 0, clean: 0 };
     const fBtn = (mode, label, activeCls) => state.detailFilter === mode

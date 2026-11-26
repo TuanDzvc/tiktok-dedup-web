@@ -695,6 +695,7 @@
 .tt-cg-channel-switcher:focus-within { outline: 2px solid #22d3ee; outline-offset: 2px; }
 .tt-cg-channel-switcher select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .tt-cg-channel-switcher option { background: #0f172a; color: #fff; }
+.tt-cg-channel-switcher optgroup { background: #172554; color: #fcd34d; font-weight: 900; }
 .tt-cg-copy-handle { max-width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
 
 .tt-cg-avatar img {
