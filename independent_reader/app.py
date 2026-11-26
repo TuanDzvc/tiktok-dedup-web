@@ -51,8 +51,9 @@ class Handler(BaseHTTPRequestHandler):
                 except service.ReadFailure as e:
                     MANAGER.read_failure(e.code)
                     return self.respond(503,{'success':False,'code':e.code,'error':str(e)})
-                except ValueError:
-                    return self.respond(400,{'success':False,'code':'profile_unavailable','error':'Không đọc được hồ sơ hoặc đầu vào không hợp lệ.'})
+                except ValueError as e:
+                    msg=str(e).strip()[:200] or 'Không đọc được hồ sơ hoặc đầu vào không hợp lệ.'
+                    return self.respond(400,{'success':False,'code':'profile_unavailable','error':msg})
                 except Exception:
                     MANAGER.read_failure()
                     return self.respond(503,{'success':False,'code':'reader_unavailable','error':'Reader tạm không dùng được.'})

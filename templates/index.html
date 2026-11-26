@@ -2875,7 +2875,12 @@
                 document.getElementById('readerStatusMessage').textContent = healthy ? (engine.message || 'Phiên TikTok đang đọc được dữ liệu.') : fallback ? 'Đang dùng API dự phòng; lượt đọc qua API có chi phí nội bộ. ' + (engine.message || '') : 'Reader chưa dùng được và API dự phòng đang tắt.';
                 const mumuLabels = { connected: 'Đã kết nối', unavailable: 'Chưa kết nối (phiên lưu vẫn được giữ)', candidate_unusable: 'Phiên mới chưa qua kiểm tra', not_checked: 'Chưa kiểm tra' };
                 document.getElementById('readerSessionMeta').textContent = `Đọc thành công gần nhất: ${readerDate(engine.last_good)} · Nạp MuMu: ${readerDate(engine.last_imported)} · MuMu: ${mumuLabels[engine.mumu_state] || engine.mumu_state || '—'} · Lượt dự phòng đã ghi: ${data.fallback_count || 0}`;
-                if (engine.refresh_message) document.getElementById('readerActionMessage').textContent = engine.refresh_message;
+                if (engine.refresh_message) {
+                    const mumuOffButHealthy = healthy && engine.mumu_state === 'unavailable';
+                    document.getElementById('readerActionMessage').textContent = mumuOffButHealthy
+                        ? 'MuMu đang tắt — không sao: phiên đã lưu vẫn đọc tốt. Chỉ cần mở MuMu khi phiên hết hạn (badge chuyển cam/đỏ).'
+                        : engine.refresh_message;
+                }
                 const notice = document.getElementById('readerFallbackNotice');
                 const lastUsedFallback = data.last_source === 'api_fallback';
                 notice.classList.toggle('hidden', healthy && !lastUsedFallback);
@@ -2884,10 +2889,37 @@
                 readerLastFallbackAt = Number(data.last_fallback_at || 0);
                 const events = document.getElementById('readerRecentEvents');
                 events.replaceChildren();
-                const sourceLabels = { independent: 'Reader riêng', api_fallback: 'API dự phòng', unavailable: 'Chưa đọc được' };
-                for (const event of (data.events || []).slice(-4).reverse()) {
+                const sourceLabels = { independent: '🟢 Reader riêng', api_fallback: '🟠 API dự phòng', unavailable: '🔴 Không đọc được' };
+                const reasonLabels = {
+                    reader_unavailable: 'Reader lỗi hoặc không phản hồi',
+                    profile_unavailable: 'Reader không mở được hồ sơ kênh',
+                    target_unavailable: 'Kênh không trả video công khai',
+                    session_missing: 'Chưa có phiên TikTok cho reader',
+                    incomplete_data: 'Dữ liệu reader thiếu group_id',
+                    video_or_short_link: 'Link video / link rút gọn (reader chỉ đọc kênh)',
+                    invalid_input: 'Đầu vào không hợp lệ',
+                    reader_disabled: 'Reader đang tắt'
+                };
+                const evList = (data.events || []).slice(-10).reverse();
+                if (evList.length) {
+                    const head = document.createElement('div');
+                    head.className = 'text-slate-300 font-bold';
+                    head.textContent = 'Nhật ký nguồn đọc (mỗi lượt dùng API đều ghi 1 dòng; Reader chỉ ghi khi chuyển lại):';
+                    events.appendChild(head);
+                }
+                for (const event of evList) {
                     const line = document.createElement('div');
-                    line.textContent = `${readerDate(event.at)} · ${sourceLabels[event.source] || 'Cập nhật nguồn đọc'}${event.reason ? ' · ' + event.reason : ''}`;
+                    line.className = event.source === 'api_fallback' ? 'text-amber-200/90' : (event.source === 'independent' ? 'text-emerald-300/90' : 'text-rose-300/90');
+                    const parts = [readerDate(event.at), sourceLabels[event.source] || 'Cập nhật nguồn đọc'];
+                    if (event.query) parts.push('Kênh: ' + event.query);
+                    if (event.reason) parts.push('Lý do: ' + (reasonLabels[event.reason] || event.reason));
+                    if (event.detail) parts.push('Chi tiết: ' + event.detail);
+                    if (event.source === 'api_fallback') {
+                        if (event.api_ok === true) parts.push('API: ✅ check thành công');
+                        else if (event.api_ok === false) parts.push('API: ❌ cũng lỗi');
+                    }
+                    if (!event.query && event.source !== 'independent') parts.push('(log cũ, chưa ghi tên kênh)');
+                    line.textContent = parts.join(' · ');
                     events.appendChild(line);
                 }
             } catch (_) {
@@ -2899,7 +2931,7 @@
             try {
                 const response = await fetch('/api/vip/admin/reader-refresh', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getVipToken() }, body: JSON.stringify({ check_only: checkOnly }) });
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Không kết nối được reader trên PC.');
+                if (!response.ok || data.success === false) throw new Error(data.error || 'Không kết nối được reader trên PC.');
                 document.getElementById('readerActionMessage').textContent = data.message || 'Đã bắt đầu kiểm tra.';
                 setTimeout(loadReaderStatus, 4000);
             } catch (error) { document.getElementById('readerActionMessage').textContent = error.message; }

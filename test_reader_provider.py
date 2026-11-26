@@ -48,6 +48,34 @@ class ProviderTests(unittest.TestCase):
         self.assertTrue(result['reader_provider']['fallback'])
         self.assertEqual(self.router.fallback_count,1)
 
+    def test_every_fallback_logs_channel_reason_detail_and_api_result(self):
+        self.router._bridge=Mock(return_value=Response({'success':False,'code':'profile_unavailable',
+            'error':'Không đọc được hồ sơ công khai; có thể cần xác minh trình duyệt.'},400))
+        self.router.check(self.legacy,'@chan.one')
+        self.router.check(self.legacy,'https://www.tiktok.com/@chan.two')
+        fb=[e for e in self.router.events if e['source']=='api_fallback']
+        self.assertEqual(len(fb),2)
+        self.assertEqual(fb[0]['query'],'@chan.one')
+        self.assertEqual(fb[1]['query'],'https://www.tiktok.com/@chan.two')
+        self.assertEqual(fb[0]['reason'],'profile_unavailable')
+        self.assertIn('xác minh trình duyệt',fb[0]['detail'])
+        self.assertTrue(fb[0]['api_ok'])
+        self.assertNotIn('detail',self.router.check(self.legacy,'@chan.three')['reader_provider'])
+
+    def test_connection_failure_detail_and_failed_api_logged(self):
+        self.router._bridge=Mock(side_effect=RuntimeError('offline'))
+        self.legacy.return_value={'success':False,'error':'x'}
+        self.router.check(self.legacy,'fixture')
+        ev=self.router.events[-1]
+        self.assertEqual(ev['reason'],'reader_unavailable')
+        self.assertIn('Không kết nối được reader',ev['detail'])
+        self.assertFalse(ev['api_ok'])
+
+    def test_reader_success_logged_only_on_change(self):
+        self.router._bridge=Mock(return_value=Response(native_payload()))
+        self.router.check(self.legacy,'a');self.router.check(self.legacy,'b')
+        self.assertEqual(len([e for e in self.router.events if e['source']=='independent']),1)
+
     def test_reader_and_fallback_are_always_enabled(self):
         self.router.settings_file.write_text(json.dumps({'enabled':False,'fallback_enabled':False}))
         self.assertEqual(self.router.settings(),{'enabled':True,'fallback_enabled':True})

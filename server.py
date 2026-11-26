@@ -3770,11 +3770,14 @@ async def api_vip_admin_delete_user(target_user: str, req: Request):
 
 
 _ROUTER_PROXY_TARGETS = [
-    {"id": "preset:us_la", "port": 11101, "name": "California (Los Angeles)", "country": "US", "host": "192.168.2.101", "default": True, "group": "🇺🇸 Hoa Kỳ (US)"},
+    # 26/11/2026: cổng 11101 cũ (PIA 104.165.194.11 -> IP ra 104.165.194.174 Santa Clara) bị TikTok nhận là Hong Kong.
+    # Đã đổi node_us_ca trên router sang PIA "US California" 172.98.213.203 -> IP ra 172.98.213.79 (Los Angeles), TikTok mở login bình thường.
+    # Mặc định "California (Los Angeles)" dùng cổng 11110 (172.98.213.159, Los Angeles).
+    {"id": "preset:us_la", "port": 11110, "name": "California (Los Angeles)", "country": "US", "host": "192.168.2.101", "default": True, "group": "🇺🇸 Hoa Kỳ (US)"},
     {"id": "preset:us_nyc", "port": 11104, "name": "New York (NYC)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
     {"id": "preset:us_lv", "port": 11103, "name": "Las Vegas", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
     {"id": "preset:us_dc", "port": 11105, "name": "Washington DC", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
-    {"id": "preset:us_la2", "port": 11110, "name": "Los Angeles (#2)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
+    {"id": "preset:us_la2", "port": 11101, "name": "Los Angeles (#2)", "country": "US", "host": "192.168.2.101", "group": "🇺🇸 Hoa Kỳ (US)"},
     {"id": "preset:de_fra", "port": 11108, "name": "Frankfurt", "country": "DE", "host": "192.168.2.101", "group": "🇩🇪 Đức (Germany)"},
     {"id": "preset:de_ber", "port": 11109, "name": "Berlin", "country": "DE", "host": "192.168.2.101", "group": "🇩🇪 Đức (Germany)"},
     {"id": "preset:mx_mex", "port": 11107, "name": "Mexico City", "country": "MX", "host": "192.168.2.101", "group": "🇲🇽 Mexico"},

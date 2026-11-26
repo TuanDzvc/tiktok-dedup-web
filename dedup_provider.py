@@ -204,10 +204,15 @@ class ReaderRouter:
         response=self._bridge('/internal/check-session' if check_only else '/internal/refresh',{})
         response.raise_for_status();return response.json()
 
-    def _record(self,source,reason=''):
+    def _record(self,source,reason='',query='',detail='',api_ok=None):
         with self.lock:
-            if self.last_source!=source or self.last_reason!=reason:
-                self.events=(self.events+[{'at':int(self.clock()),'source':source,'reason':reason}])[-20:]
+            # Every API fallback is logged individually (it costs money); reader runs only on change.
+            if source=='api_fallback' or self.last_source!=source or self.last_reason!=reason:
+                event={'at':int(self.clock()),'source':source,'reason':reason}
+                if query:event['query']=str(query)[:80]
+                if detail:event['detail']=str(detail)[:200]
+                if api_ok is not None:event['api_ok']=bool(api_ok)
+                self.events=(self.events+[event])[-30:]
             self.last_source=source;self.last_reason=reason
             if source=='api_fallback':self.last_fallback_at=int(self.clock());self.fallback_count+=1
             try:
@@ -217,35 +222,52 @@ class ReaderRouter:
             except OSError:pass
 
     def check(self,legacy,query,**kwargs):
-        config=self.settings();reason='reader_disabled'
+        config=self.settings();reason='reader_disabled';detail=''
+        shown_query=re.sub(r'\s+',' ',str(query or '').lstrip('!').strip())[:80]
         video_input=bool(re.search(r'/video/\d+|(?:vm|vt)\.tiktok\.com/',query,re.I) or re.fullmatch(r'\d{15,}',query.strip()))
-        if video_input:reason='video_or_short_link'
+        if video_input:
+            reason='video_or_short_link';detail='Reader chỉ đọc theo kênh; link video/link rút gọn đi thẳng API.'
         if config['enabled'] and not video_input:
             reason='reader_unavailable'
             try:
                 if self.blocked_until>self.clock():
                     status=self.engine_status()
                     if status.get('state')!='healthy' or status.get('last_checked',0)<self.last_error_at:
+                        detail='Reader vừa lỗi; tạm bỏ qua reader trong 30 giây rồi thử lại.'
                         raise RuntimeError('Reader circuit is open')
-                response=self._bridge('/internal/channel',{'query':query.lstrip('!').strip(),
-                    'count':kwargs.get('max_videos',18),'cursor':kwargs.get('max_cursor',0)})
-                payload=response.json()
+                try:
+                    response=self._bridge('/internal/channel',{'query':query.lstrip('!').strip(),
+                        'count':kwargs.get('max_videos',18),'cursor':kwargs.get('max_cursor',0)})
+                except Exception:
+                    detail='Không kết nối được reader trên PC (127.0.0.1:8767) hoặc reader phản hồi quá lâu.'
+                    raise
+                try:payload=response.json()
+                except ValueError:
+                    detail=f'Reader trả dữ liệu không đọc được (HTTP {response.status_code}).'
+                    raise
                 if response.status_code!=200 or not payload.get('success'):
                     reason=payload.get('code') or reason
+                    detail=str(payload.get('error') or f'HTTP {response.status_code}')
                     raise RuntimeError('Native read failed')
                 result=format_native(payload, cookie_str=kwargs.get('cookie_str', ''), proxy_str=kwargs.get('proxy_str', ''))
-                self.blocked_until=0;self._record('independent')
+                self.blocked_until=0;self._record('independent',query=shown_query)
                 result['reader_provider']={'source':'independent','fallback':False}
                 return result
-            except Exception:
+            except Exception as exc:
+                if not detail:detail=f'Lỗi xử lý dữ liệu reader: {type(exc).__name__}'
                 if reason not in {'target_unavailable','profile_unavailable','invalid_input'}:
                     self.last_error_at=self.clock();self.blocked_until=self.clock()+30
         if not config['fallback_enabled']:
-            self._record('unavailable',reason)
+            self._record('unavailable',reason,shown_query,detail)
             return {'success':False,'error':'Link video/link rút gọn cần API dự phòng; hãy dán username hoặc link kênh.' if video_input else 'Reader TikTok chưa dùng được và API dự phòng đang tắt.',
                 'reader_provider':{'source':'unavailable','fallback':False,'reason':reason}}
-        self._record('api_fallback',reason)
-        result=legacy(query,**kwargs)
+        try:
+            result=legacy(query,**kwargs)
+        except Exception:
+            self._record('api_fallback',reason,shown_query,detail,api_ok=False)
+            raise
+        self._record('api_fallback',reason,shown_query,detail,
+                     api_ok=bool(isinstance(result,dict) and result.get('success')))
         if isinstance(result,dict):result['reader_provider']={'source':'api_fallback','fallback':True,'reason':reason}
         return result
 
