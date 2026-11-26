@@ -57,7 +57,8 @@ from core_dedup import fetch_channel_info_and_posts, check_accounts_batch_tikhub
 import studio_engine
 import dedup_provider
 from vip_subscription import activate_paid_membership, restore_paid_memberships
-from usage_counts import ensure_usage_counts, record_dedup_success, record_account_results
+from usage_counts import (ensure_usage_counts, record_dedup_success, record_account_results,
+                          record_dedup_blocked, backfill_dedup_counts)
 
 # Cấu hình Google Sheet Webhook lưu vết người dùng
 SHEET_WEBHOOK_URL = os.getenv(
@@ -1602,6 +1603,8 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
         if 'dedup_check_count' in lu or 'dedup_check_count' in ru:
             chosen['dedup_check_count'] = max(int(lu.get('dedup_check_count') or 0), int(ru.get('dedup_check_count') or 0))
             chosen['dedup_count_estimated'] = bool(lu.get('dedup_count_estimated') or ru.get('dedup_count_estimated'))
+        if 'dedup_blocked_count' in lu or 'dedup_blocked_count' in ru:
+            chosen['dedup_blocked_count'] = max(int(lu.get('dedup_blocked_count') or 0), int(ru.get('dedup_blocked_count') or 0))
         l_bal_ts = int(lu.get("account_balance_updated_at") or 0)
         r_bal_ts = int(ru.get("account_balance_updated_at") or 0)
         if l_bal_ts > r_bal_ts:
@@ -2145,6 +2148,7 @@ def _public_vip_user(u: Dict[str, Any], blocked_map: Optional[Dict[str, Any]] = 
         "scan_count": int(u.get("scan_count") or 0),
         "dedup_check_count": int(u.get("dedup_check_count", max(0, int(u.get("scan_count") or 0) - int(u.get("account_check_count") or 0)))),
         "dedup_count_estimated": bool(u.get("dedup_count_estimated", int(u.get("scan_count") or 0) > 0)),
+        "dedup_blocked_count": max(0, int(u.get("dedup_blocked_count") or 0)),
         "account_balance_vnd": bal_vnd,
         "dedup_checks_left": _calc_dedup_checks_left(bal_vnd),
         "dedup_check_unit_price_vnd": DEDUP_CHECK_UNIT_PRICE_VND,
@@ -2317,6 +2321,19 @@ def on_startup():
                 _PEER_SYNC_STATUS["last_direction"] = "supabase_boot_restore"
     except Exception as e_boot:
         logger.warning(f"[SupabaseSync] Bỏ qua khôi phục lúc khởi động: {e_boot}")
+
+    # Cộng bù 1 lần lượt Check trùng bị đếm thiếu (không bao giờ làm giảm số)
+    try:
+        with _VIP_LOCK:
+            bf_users = _load_vip_users_unlocked()
+            with _QUOTA_LOCK:
+                bf_quota = _load_free_quota_unlocked().get(_vn_date_key()) or {}
+            bf_raised = backfill_dedup_counts(bf_users, _load_check_history_unlocked(), bf_quota)
+            _save_vip_users_unlocked(bf_users)
+        if bf_raised:
+            logger.info(f"[UsageBackfill] Đã cộng bù lượt Check trùng cho: {', '.join(bf_raised)}")
+    except Exception as e_bf:
+        logger.warning(f"[UsageBackfill] Bỏ qua cộng bù: {e_bf}")
 
     # Chỉ bật cloudflare tunnel trên máy tính local, không bật khi chạy trên cloud (Render/VPS)
     if not _is_cloud_runtime():
@@ -3579,6 +3596,29 @@ async def api_vip_admin_adjust_balance(req: Request):
     })
 
 
+def _parse_admin_expires_date_vn(raw_date: str) -> Optional[int]:
+    s = str(raw_date or "").strip()
+    if not s:
+        return None
+    y = m = d = 0
+    m_iso = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
+    m_vn = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$", s)
+    if m_iso:
+        y, m, d = int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3))
+    elif m_vn:
+        d, m, y = int(m_vn.group(1)), int(m_vn.group(2)), int(m_vn.group(3))
+    else:
+        return None
+    if y < 2000 or y > 2100:
+        return None
+    try:
+        tz_vn = datetime.timezone(datetime.timedelta(hours=7))
+        dt = datetime.datetime(y, m, d, 23, 59, 59, tzinfo=tz_vn)
+        return int(dt.timestamp())
+    except ValueError:
+        return None
+
+
 @app.post("/api/vip/admin/users")
 async def api_vip_admin_upsert_user(req: Request):
     try:
@@ -3597,7 +3637,22 @@ async def api_vip_admin_upsert_user(req: Request):
     note_in = body.get("note")
     active = bool(body.get("active", True))
     days = body.get("days")
+    expires_date = body.get("expires_date")
+    expires_at_in = body.get("expires_at")
     max_devs_in = body.get("max_devices")
+
+    parsed_exp_date: Optional[int] = None
+    if expires_date is not None and str(expires_date).strip() != "":
+        parsed_exp_date = _parse_admin_expires_date_vn(str(expires_date))
+        if parsed_exp_date is None:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Ngày hết hạn không hợp lệ (định dạng YYYY-MM-DD hoặc DD/MM/YYYY)."})
+
+    parsed_exp_ts_in: Optional[int] = None
+    if expires_at_in is not None and str(expires_at_in).strip() != "":
+        try:
+            parsed_exp_ts_in = max(0, int(expires_at_in))
+        except Exception:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Timestamp hết hạn không hợp lệ."})
 
     if not target_u or len(target_u) < 2:
         return JSONResponse(status_code=400, content={"success": False, "error": "Tên tài khoản phải từ 2 ký tự trở lên (chữ/số)."})
@@ -3611,8 +3666,14 @@ async def api_vip_admin_upsert_user(req: Request):
 
         eff_role = (role if has_role_param else str(existing.get("role") or "vip").lower()) if existing else role
         exp_ts = int(existing.get("expires_at") or 0) if existing else 0
-        if eff_role == "member":
+        if parsed_exp_date is not None and eff_role != "admin":
+            eff_role = "vip"
+            has_role_param = True
+            exp_ts = parsed_exp_date
+        elif eff_role == "member":
             exp_ts = 0
+        elif parsed_exp_ts_in is not None:
+            exp_ts = parsed_exp_ts_in
         elif days is not None and str(days).strip() != "":
             d_val = int(days)
             exp_ts = 0 if d_val <= 0 else int(time.time()) + d_val * 86400
@@ -3632,6 +3693,14 @@ async def api_vip_admin_upsert_user(req: Request):
             elif target_u != u_obj["username"] and "active" in body:
                 existing["active"] = active
             existing["expires_at"] = exp_ts
+            if target_u != u_obj["username"]:
+                if has_role_param and eff_role == "member":
+                    existing["vip_revoked_at"] = now_ts
+                    existing["vip_source"] = "admin_revoked"
+                elif eff_role == "vip":
+                    existing.pop("vip_revoked_at", None)
+                    if parsed_exp_date is not None or parsed_exp_ts_in is not None or (days is not None and str(days).strip() != ""):
+                        existing["vip_source"] = "admin"
             if note_in is not None:
                 existing["note"] = str(note_in).strip()[:120]
             if target_u in UNLIMITED_DEVICE_USERS:
@@ -3869,6 +3938,13 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
         )
 
         internal_cost = res_scan.pop("_internal_cost", None) if isinstance(res_scan, dict) else None
+        if checked_username and max_cursor == 0 and dedup_locked:
+            with _VIP_LOCK:
+                usage_users = _load_vip_users_unlocked()
+                usage_user = usage_users.get(checked_username)
+                if isinstance(usage_user, dict):
+                    record_dedup_blocked(usage_user)
+                    _save_vip_users_unlocked(usage_users)
         if isinstance(res_scan, dict) and res_scan.get("success"):
             if checked_username and max_cursor == 0 and not dedup_locked:
                 with _VIP_LOCK:

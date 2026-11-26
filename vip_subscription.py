@@ -12,6 +12,7 @@ def activate_paid_membership(user, paid_at, duration_days=30, extend_active=Fals
     user.update(role='vip', vip_started_at=int(user.get('vip_started_at') or paid_at) if expires > paid_at else int(paid_at),
                 expires_at=base + max(1, int(duration_days)) * 86400,
                 vip_source='payment')
+    user.pop('vip_revoked_at', None)
     return True
 
 
@@ -21,12 +22,13 @@ def restore_paid_memberships(users, orders, now, duration_days=30, minimum_amoun
     for name, user in users.items():
         if user.get('role') in ('admin', 'vip') or int(user.get('expires_at') or 0) > 0:
             continue
+        revoked_at = int(user.get('vip_revoked_at') or 0)
         paid = sorted((o for o in orders.values() if isinstance(o, dict)
                        and str(o.get('username') or '').lower() == name
                        and str(o.get('status') or '').upper() == 'PAID'
                        and str(o.get('order_type') or 'vip').lower() == 'vip'
                        and int(o.get('amount') or 0) >= minimum_amount
-                       and int(o.get('paid_at') or 0) > 0),
+                       and int(o.get('paid_at') or 0) > revoked_at),
                       key=lambda o: int(o['paid_at']))
         for order in paid:
             activate_paid_membership(user, int(order['paid_at']),
