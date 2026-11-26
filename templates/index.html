@@ -3081,8 +3081,10 @@
             const remaining = expires * 1000 - nowMs;
             const date = new Date(expires * 1000).toLocaleDateString('vi-VN', {timeZone: 'Asia/Ho_Chi_Minh'});
             if (remaining <= 0) return `Đã hết hạn · ${date}`;
-            const days = Math.ceil(remaining / 86400000);
-            return `Còn ${days} ngày · ${date}`;
+            // Count calendar dates in Vietnam (UTC+7), rather than rounded 24-hour periods.
+            const vietnamDay = ms => Math.floor((ms + 7 * 3600000) / 86400000);
+            const days = vietnamDay(expires * 1000) - vietnamDay(nowMs);
+            return `${days > 0 ? `Còn ${days} ngày` : 'Hết hạn hôm nay'} · ${date}`;
         }
 
         function vipExpiryMarkup(user) {
