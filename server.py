@@ -2985,45 +2985,12 @@ async def api_vip_admin_save_payos_config(req: Request):
 
 
 _TIKHUB_USD_TO_VND = 25500
-_TIKHUB_BAL_CACHE: Dict[str, Any] = {"ts": 0.0, "data": None}
+from api_balance_cache import ApiBalanceCache
+_TIKHUB_BAL_READER = ApiBalanceCache(BASE_DIR / 'independent_reader/.private/api-balance-last-good.json', _TIKHUB_USD_TO_VND)
 
 
 def _get_tikhub_live_balance(force_refresh: bool = False) -> Dict[str, Any]:
-    """Lấy số dư TikHub thực tế ($0.0000 miễn phí qua get_user_info) — chỉ phục vụ Admin."""
-    now_t = time.time()
-    cached = _TIKHUB_BAL_CACHE.get("data")
-    if not force_refresh and isinstance(cached, dict) and (now_t - float(_TIKHUB_BAL_CACHE.get("ts") or 0.0)) < 15:
-        return cached
-    api_key = core_dedup._get_tikhub_api_key()
-    if not api_key:
-        return {"balance_usd": 0.0, "free_credit_usd": 0.0, "total_usd": 0.0, "total_vnd": 0, "est_scans_left": 0, "usd_rate": _TIKHUB_USD_TO_VND}
-    try:
-        r = requests.get(
-            "https://api.tikhub.io/api/v1/tikhub/user/get_user_info",
-            headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-            timeout=6,
-        )
-        if r.status_code == 200:
-            ud = (r.json() or {}).get("user_data") or {}
-            bal = round(float(ud.get("balance") or 0.0), 4)
-            free_c = round(float(ud.get("free_credit") or 0.0), 4)
-            tot = round(bal + free_c, 4)
-            info = {
-                "balance_usd": bal,
-                "free_credit_usd": free_c,
-                "total_usd": tot,
-                "total_vnd": int(round(tot * _TIKHUB_USD_TO_VND)),
-                "est_scans_left": int(tot / 0.001),
-                "usd_rate": _TIKHUB_USD_TO_VND,
-            }
-            _TIKHUB_BAL_CACHE["ts"] = now_t
-            _TIKHUB_BAL_CACHE["data"] = info
-            return info
-    except Exception:
-        pass
-    if isinstance(cached, dict):
-        return cached
-    return {"balance_usd": 0.0, "free_credit_usd": 0.0, "total_usd": 0.0, "total_vnd": 0, "est_scans_left": 0, "usd_rate": _TIKHUB_USD_TO_VND}
+    return _TIKHUB_BAL_READER.get(core_dedup._get_tikhub_api_key(), force=force_refresh)
 
 
 @app.get("/api/vip/admin/api-balance")
@@ -3033,7 +3000,7 @@ async def api_vip_admin_balance(req: Request, refresh: int = Query(0)):
         return JSONResponse(status_code=403, content={"success": False, "error": "Chỉ Admin mới xem được số dư ví API hệ thống."})
     import asyncio
     info = await asyncio.to_thread(_get_tikhub_live_balance, bool(refresh))
-    return JSONResponse(content={"success": True, "billing": info})
+    return JSONResponse(status_code=200 if info["balance_known"] else 503, content={"success": info["balance_known"], "billing": info})
 
 
 def _require_reader_admin(req: Request):
@@ -3974,6 +3941,8 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
                         "scan_cost_vnd": c_vnd,
                         "api_calls": c_calls,
                         "cached_hits": c_cached,
+                        "balance_known": bal_info["balance_known"],
+                        "balance_stale": bal_info["balance_stale"],
                         "balance_usd": bal_info["total_usd"],
                         "balance_vnd": bal_info["total_vnd"],
                         "est_scans_left": bal_info["est_scans_left"],
@@ -4236,7 +4205,9 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
                 "scan_cost_vnd": c_vnd,
                 "api_calls": c_calls,
                 "cached_hits": c_cached,
-                "balance_usd": bal_info["total_usd"],
+                "balance_known": bal_info["balance_known"],
+                        "balance_stale": bal_info["balance_stale"],
+                        "balance_usd": bal_info["total_usd"],
                 "balance_vnd": bal_info["total_vnd"],
                 "est_scans_left": bal_info["est_scans_left"],
                 "usd_rate": _TIKHUB_USD_TO_VND,

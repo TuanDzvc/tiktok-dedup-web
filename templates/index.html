@@ -3025,6 +3025,12 @@
                 `;
             }
             const canSeeBilling = Boolean(isAdmin);
+            if (canSeeBilling && !window._lastAdminBal) {
+                try {
+                    const saved = JSON.parse(sessionStorage.getItem('tikflow_api_balance:' + currentVipUser.username) || 'null');
+                    if (saved && Date.now() / 1000 - saved.updated_at < 86400 && Number.isFinite(saved.balance_usd) && Number.isFinite(saved.balance_vnd)) window._lastAdminBal = saved;
+                } catch (_) {}
+            }
             const activateVipBtn = !isAdmin && !(isVip && Number(currentVipUser.expires_at || 0) <= 0) ? `
                 <button type="button" id="buyVipNavBtn" onclick="openVipQrModal(null, 50000, 'vip')"
                     class="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 border border-amber-300/60 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap flex-shrink-0"
@@ -3068,7 +3074,7 @@
                     </span>
                     <div class="flex flex-col items-center justify-center leading-tight text-center">
                         <div class="flex items-center gap-1.5">
-                            <span id="adminNavBalanceUsd" class="text-xs font-black tracking-tight text-white tabular-nums">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd || 0).toFixed(4)) : 'Ví API'}</span>
+                            <span id="adminNavBalanceUsd" class="text-xs font-black tracking-tight text-white tabular-nums">${window._lastAdminBal ? ('$' + Number(window._lastAdminBal.balance_usd).toFixed(4)) : 'Đang tải…'}</span>
                             <span class="hidden sm:inline-block w-px h-3 bg-slate-600/80"></span>
                             <span id="adminNavBalanceVnd" class="hidden sm:inline-block text-xs font-extrabold text-cyan-300 tabular-nums">${window._lastAdminBal ? (Number(window._lastAdminBal.balance_vnd || 0).toLocaleString('vi-VN') + 'đ') : '...'}</span>
                         </div>
@@ -3104,7 +3110,6 @@
             `;
             syncAdminBillingVisibility();
             if (shouldShowAdminNavBalance() && !window._adminBalFetchedOnce) {
-                window._adminBalFetchedOnce = true;
                 refreshAdminApiBalance(false);
             }
             syncCheckHistoryAuthUI();
@@ -3303,23 +3308,35 @@
                 if (banner && !canCurrentUserSeeBilling()) banner.classList.add('hidden');
                 return;
             }
-            const balUsd = Number(b.balance_usd ?? b.total_usd ?? 0);
-            const balVnd = Number(b.balance_vnd ?? b.total_vnd ?? 0);
-            const estLeft = Number(b.est_scans_left ?? Math.floor(balUsd / 0.001));
-            window._lastAdminBal = { balance_usd: balUsd, balance_vnd: balVnd, est_scans_left: estLeft };
+            const incomingUsd = b.total_usd ?? b.balance_usd;
+            const incomingVnd = b.total_vnd ?? b.balance_vnd;
+            const validBalance = b.balance_known !== false && incomingUsd != null && incomingVnd != null && Number.isFinite(Number(incomingUsd)) && Number.isFinite(Number(incomingVnd));
+            if (validBalance) {
+                window._lastAdminBal = { balance_usd: Number(incomingUsd), balance_vnd: Number(incomingVnd),
+                    est_scans_left: Number(b.est_scans_left ?? 0), updated_at: Number(b.updated_at || Date.now() / 1000) };
+                try { sessionStorage.setItem('tikflow_api_balance:' + currentVipUser.username, JSON.stringify(window._lastAdminBal)); } catch (_) {}
+            }
+            const previous = window._lastAdminBal;
+            const balUsd = previous?.balance_usd ?? null;
+            const balVnd = previous?.balance_vnd ?? null;
+            const estLeft = previous?.est_scans_left ?? 0;
 
             const navUsd = document.getElementById('adminNavBalanceUsd');
             const navVnd = document.getElementById('adminNavBalanceVnd');
             const navEst = document.getElementById('adminNavEstScans');
-            if (navUsd) navUsd.innerText = `$${balUsd.toFixed(4)}`;
-            if (navVnd) navVnd.innerText = `${balVnd.toLocaleString('vi-VN')}đ`;
+            if (navUsd) navUsd.innerText = balUsd == null ? 'Chưa tải được' : `$${balUsd.toFixed(4)}`;
+            if (navVnd) navVnd.innerText = balVnd == null ? '—' : `${balVnd.toLocaleString('vi-VN')}đ`;
+            const navButton = document.getElementById('adminApiBalanceNav');
+            if (navButton) navButton.title = (!validBalance || b.balance_stale)
+                ? (previous ? 'Số dư xác nhận gần nhất; đang thử cập nhật lại. Bấm để làm mới.' : 'Chưa tải được số dư API; đang tự thử lại.')
+                : 'Số dư API vừa cập nhật — bấm để làm mới';
             if (navEst) navEst.innerText = `~${estLeft.toLocaleString('vi-VN')} lượt`;
 
             const modUsd = document.getElementById('adminModalBalanceUsd');
             const modVnd = document.getElementById('adminModalBalanceVnd');
             const modEst = document.getElementById('adminModalEstScans');
-            if (modUsd) modUsd.innerText = `$${balUsd.toFixed(4)}`;
-            if (modVnd) modVnd.innerText = `≈ ${balVnd.toLocaleString('vi-VN')} VNĐ`;
+            if (modUsd) modUsd.innerText = balUsd == null ? 'Chưa tải được' : `$${balUsd.toFixed(4)}`;
+            if (modVnd) modVnd.innerText = balVnd == null ? '—' : `≈ ${balVnd.toLocaleString('vi-VN')} VNĐ`;
             if (modEst) modEst.innerText = `Còn ~${estLeft.toLocaleString('vi-VN')} lượt quét`;
 
             if (isScanResult && banner && lastDedupUsedApi) {
@@ -3336,7 +3353,7 @@
                         leftEl.innerHTML = `<i class="fa-solid fa-bolt text-amber-400"></i> <span>Chi phí lượt quét này: <b class="text-amber-300 font-mono">$${cUsd.toFixed(4)} (~${cVnd.toLocaleString('vi-VN')} VNĐ)</b> <span class="text-slate-400 font-normal">• ${calls} request API${cached > 0 ? `, ${cached} cache 0đ` : ''}</span></span>`;
                     }
                 }
-                if (rightEl) {
+                if (rightEl && balUsd != null && balVnd != null) {
                     rightEl.innerHTML = `<i class="fa-solid fa-wallet text-cyan-400"></i> <span>Số dư còn: <b class="text-emerald-300 font-mono">$${balUsd.toFixed(4)}</b> <b class="text-amber-300">(~${balVnd.toLocaleString('vi-VN')} VNĐ)</b></span>`;
                 }
                 banner.classList.remove('hidden');
@@ -3344,19 +3361,42 @@
             syncAdminBillingVisibility();
         }
 
+        let adminBalanceRequest = null;
+        let adminBalanceRetryTimer = null;
+        let adminBalanceFailures = 0;
         async function refreshAdminApiBalance(showMsg = false) {
             if (!canCurrentUserSeeBilling()) return;
-            try {
-                const resp = await fetch('/api/vip/admin/api-balance?refresh=1', { headers: getDeviceHeaders(true) });
-                const data = await resp.json();
-                if (data && data.success && data.billing) {
-                    updateAdminBillingUI(data.billing, false);
-                    if (showMsg) {
-                        const b = data.billing;
-                        showToast(`💰 Số dư API: $${Number(b.total_usd || 0).toFixed(4)} (~${Number(b.total_vnd || 0).toLocaleString('vi-VN')} VNĐ)`);
+            if (adminBalanceRequest) return adminBalanceRequest;
+            if (adminBalanceRetryTimer) { clearTimeout(adminBalanceRetryTimer); adminBalanceRetryTimer = null; }
+            const username = currentVipUser.username, token = getVipToken();
+            adminBalanceRequest = (async () => {
+                let fresh = false;
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 10000);
+                try {
+                    const resp = await fetch('/api/vip/admin/api-balance?refresh=' + (showMsg ? '1' : '0'), { headers: getDeviceHeaders(true), signal: controller.signal });
+                    const data = await resp.json();
+                    if (!canCurrentUserSeeBilling() || currentVipUser.username !== username || getVipToken() !== token) return;
+                    if (data.billing) updateAdminBillingUI(data.billing, false);
+                    fresh = Boolean(resp.ok && data.success && data.billing && !data.billing.balance_stale);
+                    if (fresh) {
+                        adminBalanceFailures = 0;
+                        window._adminBalFetchedOnce = true;
+                        if (showMsg) showToast('💰 Đã cập nhật số dư API.');
+                    } else if (!data.billing) updateAdminBillingUI({balance_known:false}, false);
+                } catch (_) {
+                    if (canCurrentUserSeeBilling() && currentVipUser.username === username) updateAdminBillingUI({balance_known:false}, false);
+                } finally {
+                    clearTimeout(timeout);
+                    adminBalanceRequest = null;
+                    if (!fresh && canCurrentUserSeeBilling() && currentVipUser.username === username) {
+                        window._adminBalFetchedOnce = false;
+                        adminBalanceFailures++;
+                        if (shouldShowAdminNavBalance()) adminBalanceRetryTimer = setTimeout(() => refreshAdminApiBalance(false), Math.min(30000, 2000 * 2 ** Math.min(adminBalanceFailures - 1, 4)));
                     }
                 }
-            } catch (e) {}
+            })();
+            return adminBalanceRequest;
         }
 
         function getLocalDateKey() {
@@ -3611,6 +3651,7 @@
         }
 
         function vipLogout() {
+            if (adminBalanceRetryTimer) { clearTimeout(adminBalanceRetryTimer); adminBalanceRetryTimer = null; }
             localStorage.removeItem('tikflow_vip_token');
             currentVipUser = null;
             window._lastAdminBal = null;

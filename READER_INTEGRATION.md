@@ -6,6 +6,14 @@ Trạng thái triển khai: PC đã cập nhật và domain trả `X-Served-By: 
 
 ## Vận hành trên web
 
+### Số dư API khi F5 / API chậm (26/11/2026)
+
+Đã bỏ cơ chế trả số dư 0 khi thiếu key, timeout, HTTP lỗi hoặc JSON thiếu balance. `api_balance_cache.py` chỉ nhận số dư có trường hợp lệ (kể cả số 0 thật), cộng balance + free_credit nhất quán USD/VNĐ. Giữ bản xác nhận gần nhất trong bộ nhớ và file private tối đa 24h, gắn fingerprint key để không lấy nhầm số dư khi đổi API key. Cache bình thường 15 giây, gộp request đồng thời, có cooldown lỗi; chưa từng có giá trị hợp lệ trả `balance_known=false`, số tiền null và HTTP 503, không giả số 0. Chi phí scan vẫn hiển thị độc lập nếu không tải được số dư.
+
+Giao diện lưu số dư hợp lệ theo username Admin trong sessionStorage để F5 hiện ngay số gần nhất, không ghi đè bằng kết quả lỗi. Có ghi chú trạng thái gần nhất trong tooltip; chưa có dữ liệu thì “Đang tải…”/“Chưa tải được”. Request gộp, timeout 10 giây và thử lại theo backoff 2–30 giây; chỉ đánh dấu đã tải khi thành công. Khắc phục cả trường hợp API có free credit mà số USD trước đây chọn nhầm balance tiền mặt trước total.
+
+53 tests Python qua; kiểm thử trình duyệt mô phỏng lỗi → phục hồi tự động, F5 khi API lỗi vẫn giữ $3.7980 / 96.849đ, 0 thật hiển thị 0, 3 lời gọi đồng thời chỉ phát 1 request. API công khai trên PC đã kiểm tra trả số dư xác nhận hợp lệ. Dữ liệu test giao diện là fixture, không thay số dư thực.
+
 ### Chẩn đoán lỗi hồ sơ kênh ngày 26/11/2026
 
 Đã tách nghiệp vụ `profile_not_found` (mã hồ sơ 10221 hoặc tiêu đề TikTok xác nhận không tìm thấy tài khoản): trả “Kênh không tồn tại hoặc không khả dụng … không phải lỗi reader”, không gọi API trả phí, không mở circuit và không đánh dấu phiên lỗi. Nhật ký dùng nguồn `target_unavailable`, màu trung tính, tên kênh và lý do riêng; không tăng bộ đếm fallback. Lỗi hồ sơ chưa rõ nguyên nhân vẫn dùng cơ chế dự phòng như cũ. Kiểm tra thật qua `/api/check` cho kênh trên: `success=false`, mã `profile_not_found`, `fallback=false`, trạng thái reader vẫn healthy, fallback count giữ nguyên. Fixture trình duyệt xác nhận badge xanh, lỗi kênh có nhãn riêng và ẩn cảnh báo reader/API.
