@@ -32,15 +32,20 @@
                         }
                     },
                     fontFamily: {
-                        sans: ['Inter', 'Segoe UI', 'system-ui', 'sans-serif'],
-                        mono: ['Consolas', 'JetBrains Mono', 'monospace'],
+                        sans: ['"Be Vietnam Pro"', '"Plus Jakarta Sans"', 'Inter', 'Segoe UI', 'system-ui', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'Consolas', 'monospace'],
                     }
                 }
             }
         }
     </script>
+    <!-- Google Fonts (Be Vietnam Pro + Plus Jakarta Sans + JetBrains Mono) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/channel_groups_board.css?v=20261126_25">
     <style>
         ::-webkit-scrollbar {
             width: 8px;
@@ -206,6 +211,7 @@
                     id="tabMainChecker"
                     onclick="switchMainWorkspaceTab('checker')"
                     class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition whitespace-nowrap"
+                    data-tip="Quét video trùng lặp, kiểm tra mất đề xuất FYP &amp; phân tích kênh TikTok"
                 >
                     <i class="fa-solid fa-bolt text-amber-300"></i>
                     <span>Kiểm Tra Kênh</span>
@@ -215,7 +221,7 @@
                     id="tabMainAccountCheck"
                     onclick="switchMainWorkspaceTab('account_check')"
                     class="px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap"
-                    title="Check hàng loạt trạng thái đề xuất (tài khoản không được đề xuất), ngày tạo, quốc gia & follower (250đ / tài khoản)"
+                    data-tip="Check hàng loạt trạng thái đề xuất (tài khoản không được đề xuất), ngày tạo, quốc gia &amp; follower (250đ / tài khoản)"
                 >
                     <i class="fa-solid fa-user-shield text-rose-400"></i>
                     <span>Check Tài Khoản</span>
@@ -223,10 +229,21 @@
                 </button>
                 <button
                     type="button"
+                    id="tabMainChannelGroups"
+                    onclick="switchMainWorkspaceTab('channel_groups')"
+                    class="px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap"
+                    data-tip="Lưu danh sách nhóm kênh TikTok riêng của bạn để Check Trùng &amp; FYP hàng loạt"
+                >
+                    <i class="fa-solid fa-layer-group text-amber-300"></i>
+                    <span>Check Nhóm Kênh</span>
+                    <span id="channelGroupsNavCount" class="hidden px-1.5 py-0.5 rounded-md bg-amber-950 border border-amber-500/50 text-amber-300 font-mono text-[11px] font-extrabold tabular-nums">0</span>
+                </button>
+                <button
+                    type="button"
                     id="tabMainHistory"
                     onclick="switchMainWorkspaceTab('history')"
                     class="hidden px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap"
-                    title="Xem lại các kênh đã check trong 7 ngày gần nhất"
+                    data-tip="Xem lại các kênh đã check trong 7 ngày gần nhất"
                 >
                     <i class="fa-solid fa-clock-rotate-left text-cyan-400"></i>
                     <span>Lịch Sử Check</span>
@@ -845,7 +862,7 @@
                             <button
                                 type="button"
                                 id="btnAccWalletLogin"
-                                onclick="openVipModal(true, 'login')"
+                                onclick="openVipModal(true, 'register')"
                                 class="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-extrabold text-xs shadow-lg shadow-amber-500/25 transition active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
                             >
                                 <i class="fa-solid fa-right-to-bracket"></i>
@@ -1234,10 +1251,126 @@
             </div>
         </section>
 
+        <!-- Tab 4: TikTok Channel Groups Board -->
+        <section id="channelGroupsWorkspace" class="hidden !-mt-0.5">
+            <div id="channelGroupsBoardMount"></div>
+        </section>
+
     </main>
 
+    <!-- Modal Cài Đặt Nhóm & Thêm Kênh TikTok Riêng -->
+    <div id="cgSettingsModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4" onclick="if(event.target===this)closeCgSettingsModal()">
+        <div class="w-full max-w-2xl rounded-2xl border-2 border-indigo-400/75 bg-[#131d38] p-5 space-y-4 shadow-2xl text-white">
+            <div class="flex items-center justify-between gap-3 pb-3 border-b border-indigo-400/25">
+                <div class="flex items-center gap-2 min-w-0">
+                    <i class="fa-solid fa-gear text-amber-300 text-base flex-shrink-0"></i>
+                    <h3 class="text-base sm:text-lg font-extrabold text-amber-300 truncate">Cài đặt nhóm &amp; Thêm kênh TikTok</h3>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <button type="button" onclick="exportCgJson()" class="tt-cg-btn !h-8 !px-2.5 !text-[11px]" data-tip="Xuất danh sách nhóm kênh ra file JSON">
+                        <i class="fa-solid fa-file-export text-cyan-300"></i><span>Xuất JSON</span>
+                    </button>
+                    <button type="button" onclick="triggerCgImportJson()" class="tt-cg-btn !h-8 !px-2.5 !text-[11px]" data-tip="Nhập danh sách nhóm kênh từ file JSON">
+                        <i class="fa-solid fa-file-import text-emerald-300"></i><span>Nhập JSON</span>
+                    </button>
+                    <input id="cgImportJsonFileInput" type="file" accept=".json,application/json" class="hidden" onchange="handleCgImportJsonFile(this)" />
+                    <button type="button" onclick="closeCgSettingsModal()" class="w-8 h-8 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-lg leading-none" data-tip="Đóng">×</button>
+                </div>
+            </div>
+
+            <form onsubmit="submitCgAddForm(event)" class="p-4 rounded-xl bg-[#0e172f] border border-emerald-400/35 space-y-3.5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-cyan-200 mb-1">Chọn nhóm nhận kênh</label>
+                        <select id="cgGroupSelect" onchange="onCgGroupSelectChange(this)" class="tt-cg-select"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">Tên hiển thị riêng (khi thêm 1 kênh)</label>
+                        <input id="cgSingleCustomNameInput" type="text" maxlength="80" placeholder="Để trống sẽ tự lấy Nickname TikTok" class="tt-cg-input" />
+                    </div>
+                </div>
+                <div id="cgInlineNewGroupFallback" class="hidden space-y-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-amber-300 mb-1">Tên nhóm mới</label>
+                            <input id="cgNewGroupNameInput" type="text" maxlength="80" placeholder="VD: US 1, US Game, ĐỨC 1, Nuôi Follow" class="tt-cg-input" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-purple-200 mb-1">Tab tổng (tùy chọn)</label>
+                            <input id="cgNewTopTabInput" type="text" maxlength="80" list="cgExistingTopTabsList" placeholder="Để trống = tự gom theo tên (VD: US, ĐỨC)" class="tt-cg-input" />
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400">Đặt dạng <b class="text-amber-200">US 1, US 2, US Game</b> sẽ tự gom vào tab <b class="text-purple-300">US</b>; tên riêng như <b class="text-amber-200">Nuôi Follow US</b> sẽ tạo tab riêng.</p>
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-emerald-300">Dán @username hoặc link kênh TikTok (mỗi lần dán tự xuống dòng mới để dán tiếp ngay)</label>
+                    <textarea
+                        id="cgBulkChannelsInput"
+                        rows="6"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false"
+                        onpaste="handleCgSmartPaste(event)"
+                        oninput="updateCgBulkInputCount()"
+                        onkeydown="if((event.ctrlKey || event.metaKey) && event.key === 'Enter'){ event.preventDefault(); submitCgAddForm(event); }"
+                        class="tt-cg-textarea font-mono"
+                        placeholder="Dán @username hoặc link kênh TikTok vào đây (mỗi lần dán tự xuống dòng mới)...&#10;Ví dụ:&#10;https://www.tiktok.com/@moodybfpisw&#10;@seitezhm99d&#10;@user9434878202398"
+                    ></textarea>
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span id="cgBulkInputCount" class="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-700/80 text-cyan-300 font-bold tabular-nums">0 kênh</span>
+                            <span id="cgBulkDupHint" class="hidden px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-600/40 text-amber-300 font-semibold"></span>
+                            <span class="text-slate-400 text-[11px]">Ctrl + Enter để lưu nhanh</span>
+                        </div>
+                        <button type="button" id="btnClearCgBulkInput" onclick="clearCgBulkInput()" class="hidden px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white text-[11px] font-bold transition">
+                            <i class="fa-solid fa-eraser mr-1 text-rose-300"></i>Xóa ô nhập
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" onclick="closeCgSettingsModal()" class="tt-cg-btn">Đóng</button>
+                    <button type="submit" class="tt-cg-btn tt-cg-btn-add"><i class="fa-solid fa-circle-plus text-yellow-300"></i><span>Lưu vào danh sách</span></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Sửa Nhóm & Chọn Tab (Bảng Nhóm Kênh) -->
+    <div id="cgEditGroupModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4" onclick="if(event.target===this)closeCgEditGroupModal()">
+        <form onsubmit="saveCgEditGroupModal(event)" class="w-full max-w-md rounded-2xl border-2 border-indigo-400/70 bg-[#131d38] p-5 space-y-4 shadow-2xl text-white">
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-extrabold text-amber-300">Sửa nhóm &amp; chọn Tab hiển thị</h3>
+                <button type="button" onclick="closeCgEditGroupModal()" class="w-8 h-8 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-lg leading-none">×</button>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-200 mb-1">Tên nhóm</label>
+                <input id="cgEditGroupNameInput" type="text" required maxlength="80" class="tt-cg-input" />
+            </div>
+            <label class="flex items-center gap-2 text-xs font-bold text-cyan-200 cursor-pointer select-none">
+                <input id="cgEditSeparateTabChk" type="checkbox" onchange="onCgEditSeparateChange(this)" class="w-4 h-4 accent-purple-500" />
+                <span>Hiển thị thành Tab riêng trên hàng đầu</span>
+            </label>
+            <div>
+                <label class="block text-xs font-bold text-slate-200 mb-1">Nằm trong Tab tổng</label>
+                <input id="cgEditTopTabInput" type="text" maxlength="80" list="cgExistingTopTabsList" placeholder="VD: US, ĐỨC, MEXICO..." class="tt-cg-input" />
+                <datalist id="cgExistingTopTabsList"></datalist>
+                <p class="mt-1 text-[11px] text-slate-400">Nếu bật "Hiển thị thành Tab riêng", nhóm sẽ đứng thành 1 tab riêng giống "Nuôi Follow US" hoặc "INDO WEB".</p>
+            </div>
+            <div class="flex justify-end gap-2 pt-1">
+                <button type="button" onclick="closeCgEditGroupModal()" class="tt-cg-btn">Hủy</button>
+                <button type="submit" class="tt-cg-btn tt-cg-btn-add">Lưu thay đổi</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Bảng Nổi Xem Kết Quả Kênh (Kiểu Check Post ngay trên Nhóm Kênh) -->
+    <div id="cgChannelDetailModal" class="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-1.5 sm:p-2.5" onclick="if(event.target===this)closeCgChannelModal()">
+        <div id="cgChannelDetailContent" class="relative max-w-[1580px] w-[97vw] h-[96vh] max-h-[96vh] bg-dark-900 border-2 border-indigo-400/65 rounded-2xl shadow-2xl flex flex-col overflow-hidden mx-auto text-white"></div>
+    </div>
+
     <!-- Video Preview Modal -->
-    <div id="videoModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div id="videoModal" class="fixed inset-0 z-[70] bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
         <div class="bg-dark-900 border border-slate-700 max-w-lg w-full rounded-3xl p-6 space-y-4 shadow-2xl relative">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
                 <i class="fa-solid fa-xmark"></i>
@@ -2049,8 +2182,8 @@
                 </div>
 
                 <div class="text-xs text-slate-300 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center space-y-1">
-                    <p>💡 <b class="text-amber-300">VIP Check Trùng: 50.000đ / 30 ngày</b> — không cộng số dư Check Tài Khoản.</p>
-                    <p class="text-[11px] text-cyan-200">🛡️ <b class="text-rose-300">Check Tài Khoản nạp ví riêng, không cần VIP</b> · 250đ / tài khoản thành công · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>.</p>
+                    <p>💡 Nạp <b class="text-amber-300">50.000đ (VietQR)</b> để có <b class="text-emerald-300">VIP Kiểm Tra Kênh không giới hạn trong 30 ngày</b>.</p>
+                    <p class="text-[11px] text-cyan-200">🛡️ <b class="text-rose-300">Check Tài Khoản</b> dùng Số Dư nạp riêng (<b class="text-emerald-300">250đ / 1 tài khoản check thành công</b> · Acc lỗi <b>0đ</b> · Lịch sử <b>0đ</b>).</p>
                 </div>
 
                 <!-- Hàng nút dưới cùng: Tắt thông báo + Zalo + Facebook + Đăng Ký trên cùng 1 hàng -->
@@ -2889,10 +3022,11 @@
                 readerLastFallbackAt = Number(data.last_fallback_at || 0);
                 const events = document.getElementById('readerRecentEvents');
                 events.replaceChildren();
-                const sourceLabels = { independent: '🟢 Reader riêng', api_fallback: '🟠 API dự phòng', unavailable: '🔴 Không đọc được' };
+                const sourceLabels = { independent: '🟢 Reader riêng', api_fallback: '🟠 API dự phòng', unavailable: '🔴 Không đọc được', target_unavailable: '⚪ Lỗi kênh — không phải lỗi reader' };
                 const reasonLabels = {
                     reader_unavailable: 'Reader lỗi hoặc không phản hồi',
-                    profile_unavailable: 'Reader không mở được hồ sơ kênh',
+                    profile_unavailable: 'Chưa đọc được hồ sơ kênh (chưa rõ nguyên nhân, không đồng nghĩa reader lỗi)',
+                    profile_not_found: 'Kênh không tồn tại hoặc không khả dụng trên TikTok',
                     target_unavailable: 'Kênh không trả video công khai',
                     session_missing: 'Chưa có phiên TikTok cho reader',
                     incomplete_data: 'Dữ liệu reader thiếu group_id',
@@ -2904,12 +3038,12 @@
                 if (evList.length) {
                     const head = document.createElement('div');
                     head.className = 'text-slate-300 font-bold';
-                    head.textContent = 'Nhật ký nguồn đọc (mỗi lượt dùng API đều ghi 1 dòng; Reader chỉ ghi khi chuyển lại):';
+                    head.textContent = 'Nhật ký: lượt API, lỗi kênh và chuyển nguồn đọc. Lỗi kênh không làm reader lỗi/hết phiên.';
                     events.appendChild(head);
                 }
                 for (const event of evList) {
                     const line = document.createElement('div');
-                    line.className = event.source === 'api_fallback' ? 'text-amber-200/90' : (event.source === 'independent' ? 'text-emerald-300/90' : 'text-rose-300/90');
+                    line.className = event.source === 'target_unavailable' ? 'text-slate-300' : event.source === 'api_fallback' ? 'text-amber-200/90' : (event.source === 'independent' ? 'text-emerald-300/90' : 'text-rose-300/90');
                     const parts = [readerDate(event.at), sourceLabels[event.source] || 'Cập nhật nguồn đọc'];
                     if (event.query) parts.push('Kênh: ' + event.query);
                     if (event.reason) parts.push('Lý do: ' + (reasonLabels[event.reason] || event.reason));
@@ -2950,7 +3084,7 @@
 
         function vipExpiryMarkup(user) {
             const [remaining, date] = vipExpiryLabel(user).split(' · ');
-            return `<span class="text-[11px] font-bold text-emerald-300 whitespace-nowrap">${escapeHtml(remaining)}</span><span class="text-[10px] font-semibold text-emerald-200 whitespace-nowrap">${date ? 'HSD: ' + escapeHtml(date) : 'Hạn sử dụng VIP'}</span>`;
+            return `<span class="text-[11px] font-extrabold text-yellow-200 whitespace-nowrap">${escapeHtml(remaining)}</span><span class="text-[10px] font-semibold text-white whitespace-nowrap">${date ? 'HSD: ' + escapeHtml(date) : 'Hạn sử dụng VIP'}</span>`;
         }
 
         setInterval(() => {
@@ -3031,7 +3165,7 @@
                     if (saved && Date.now() / 1000 - saved.updated_at < 86400 && Number.isFinite(saved.balance_usd) && Number.isFinite(saved.balance_vnd)) window._lastAdminBal = saved;
                 } catch (_) {}
             }
-            const activateVipBtn = !isAdmin && !(isVip && Number(currentVipUser.expires_at || 0) <= 0) ? `
+            const activateVipBtn = !isAdmin && !isVip ? `
                 <button type="button" id="buyVipNavBtn" onclick="openVipQrModal(null, 50000, 'vip')"
                     class="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 border border-amber-300/60 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap flex-shrink-0"
                     title="VIP Check trùng 50.000đ / 30 ngày, không cộng ví Check tài khoản">
@@ -3097,7 +3231,7 @@
                         <i class="fa-solid ${iconCls}"></i>
                         ${roleHtml}
                     </button>
-                    ${!isAdmin && isVip ? `<div id="vipNavExpiry" class="w-[140px] h-10 px-3 py-1 rounded-xl border border-emerald-500/40 bg-emerald-950/60 flex flex-col items-center justify-center leading-tight flex-shrink-0">${vipExpiryMarkup(currentVipUser)}</div>` : ''}
+                    ${!isAdmin && isVip ? `<div id="vipNavExpiry" class="w-[140px] h-10 px-3 py-1 rounded-xl border border-fuchsia-400/60 bg-gradient-to-r from-violet-800 to-fuchsia-800 flex flex-col items-center justify-center leading-tight flex-shrink-0">${vipExpiryMarkup(currentVipUser)}</div>` : ''}
                     <button
                         type="button"
                         onclick="vipLogout()"
@@ -3123,7 +3257,7 @@
         function shouldShowAdminNavBalance() {
             return canCurrentUserSeeBilling() && (
                 activeMainWorkspaceTab === 'account_check' ||
-                (['checker', 'history'].includes(activeMainWorkspaceTab) && String(currentVipUser.username || '').toLowerCase() === 'tuandzvcc')
+                (['checker', 'history', 'channel_groups'].includes(activeMainWorkspaceTab) && String(currentVipUser.username || '').toLowerCase() === 'tuandzvcc')
             );
         }
 
@@ -3449,7 +3583,7 @@
             }
         }
 
-        function openVipModal(focusInput = true, defaultTab = 'login') {
+        function openVipModal(focusInput = true, defaultTab = 'register') {
             closeNoticeModal();
             if (currentVipUser && !currentVipUser.is_vip && currentVipUser.role !== 'admin') {
                 openVipQrModal();
@@ -3893,7 +4027,9 @@
                     const isoDate = formatUnixToVnDateInput(u.expires_at);
                     const isPermVipRow = (u.role === 'vip' && (!u.expires_at || Number(u.expires_at) <= 0));
                     const isExpiredRow = (Number(u.expires_at || 0) > 0 && !u.is_vip);
-                    const expStr = (u.role === 'admin' || isSelf)
+                    const expStr = String(u.username || '').toLowerCase() === 'admin'
+                        ? '<span class="text-slate-400 font-bold" title="Tài khoản admin VIP vĩnh viễn, không cần hạn dùng">—</span>'
+                        : (u.role === 'admin' || isSelf)
                         ? '<span class="text-emerald-400 font-bold">Vĩnh viễn</span>'
                         : `<div class="flex flex-col items-center gap-1">
                             ${isPermVipRow ? '<span class="text-[10px] font-bold text-emerald-400 leading-none">Vĩnh viễn</span>' : ''}
@@ -6132,13 +6268,10 @@
                 <td class="p-3 text-center align-middle whitespace-nowrap">
                     ${dupBadge}
                 </td>
-                <td class="p-3 text-center font-mono whitespace-nowrap">
+                <td onclick="if(!event.target.closest('a')) copyText('${safeAweme}')" data-tip="Click vào ô để sao chép ngay ID: ${safeAweme}" class="p-3 text-center font-mono whitespace-nowrap cursor-pointer group/aweme">
                     <div class="flex items-center justify-center gap-2">
-                        <span class="text-xs text-slate-300 font-bold select-all tracking-tight">${safeAweme}</span>
-                        <button onclick="copyText('${safeAweme}')" title="Sao chép Aweme ID" class="text-slate-400 hover:text-white transition p-1">
-                            <i class="fa-regular fa-copy text-xs"></i>
-                        </button>
-                        <a href="${escapeHtml(v.share_url || '#')}" target="_blank" title="Mở trên TikTok" class="text-cyan-400 hover:text-cyan-300 transition p-1">
+                        <span class="px-2.5 py-1 rounded-lg bg-slate-900/90 group-hover/aweme:bg-cyan-950/85 border border-slate-700/80 group-hover/aweme:border-cyan-400/70 text-xs text-slate-200 group-hover/aweme:text-cyan-200 font-bold tracking-tight transition active:scale-95 select-none">${safeAweme}</span>
+                        <a href="${escapeHtml(v.share_url || '#')}" target="_blank" onclick="event.stopPropagation()" data-tip="Mở video trên TikTok" class="text-cyan-400 hover:text-cyan-200 transition p-1">
                             <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                         </a>
                     </div>
@@ -6435,19 +6568,24 @@
                 targetTab = 'account_check';
             } else if (tabName === 'history' && currentVipUser) {
                 targetTab = 'history';
+            } else if (tabName === 'channel_groups') {
+                targetTab = 'channel_groups';
             }
             activeMainWorkspaceTab = targetTab;
 
             const checkerWs = document.getElementById('checkerWorkspace');
             const accountWs = document.getElementById('accountCheckWorkspace');
             const historySec = document.getElementById('checkHistorySection');
+            const cgWs = document.getElementById('channelGroupsWorkspace');
             const tabChecker = document.getElementById('tabMainChecker');
             const tabAccount = document.getElementById('tabMainAccountCheck');
             const tabHistory = document.getElementById('tabMainHistory');
+            const tabCg = document.getElementById('tabMainChannelGroups');
 
             if (checkerWs) checkerWs.classList.toggle('hidden', targetTab !== 'checker');
             if (accountWs) accountWs.classList.toggle('hidden', targetTab !== 'account_check');
             if (historySec) historySec.classList.toggle('hidden', targetTab !== 'history');
+            if (cgWs) cgWs.classList.toggle('hidden', targetTab !== 'channel_groups');
 
             const activeCls = 'px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition whitespace-nowrap';
             const inactiveCls = 'px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap';
@@ -6460,8 +6598,13 @@
                 tabHistory.className = (targetTab === 'history') ? activeCls : inactiveCls;
                 tabHistory.classList.toggle('hidden', !currentVipUser);
             }
+            if (tabCg) {
+                tabCg.className = (targetTab === 'channel_groups') ? activeCls : inactiveCls;
+                tabCg.classList.remove('hidden');
+            }
 
             if (typeof syncAccountWalletUI === 'function') syncAccountWalletUI();
+            if (typeof syncCgSupportWidgetVisibility === 'function') syncCgSupportWidgetVisibility();
 
             syncAdminBillingVisibility();
             if (shouldShowAdminNavBalance()) refreshAdminApiBalance(false);
@@ -6476,6 +6619,9 @@
                 renderCheckHistory();
                 renderAccountCheckHistory();
                 loadCheckHistory(false);
+                try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+            } else if (targetTab === 'channel_groups') {
+                if (typeof loadChannelGroupsBoard === 'function') loadChannelGroupsBoard(false);
                 try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
             } else if (targetTab === 'checker') {
                 setTimeout(() => {
@@ -6574,7 +6720,7 @@
                         if (!currentVipUser) {
                             priceEl.className = 'px-2.5 py-1 rounded-xl bg-amber-950/70 border border-amber-500/50 text-amber-200 font-bold tabular-nums cursor-pointer hover:bg-amber-900/70 transition';
                             priceEl.innerText = `Phí dự kiến: ${est.toLocaleString('vi-VN')}đ (${unique.length} × ${unitPrice}đ) · Bấm đăng nhập`;
-                            priceEl.onclick = () => openVipModal(true, 'login');
+                            priceEl.onclick = () => openVipModal(true, 'register');
                         } else {
                             const bal = (typeof getUserAccountBalanceVnd === 'function') ? getUserAccountBalanceVnd() : Number(currentVipUser.account_balance_vnd || 0);
                             if (est > bal) {
@@ -6743,7 +6889,7 @@
         async function runBulkAccountCheck() {
             if (!canCurrentUserUseAccountCheck()) {
                 showToast('🔐 Vui lòng đăng nhập tài khoản để sử dụng Check Tài Khoản (250đ / tài khoản)!');
-                openVipModal(true, 'login');
+                openVipModal(true, 'register');
                 return;
             }
             if (accountCheckLoading) return;
@@ -7165,6 +7311,8 @@
                     document.getElementById(clrId)?.classList.add('hidden');
                 }
                 if (histTab) histTab.classList.add('hidden');
+                document.getElementById('tabMainChannelGroups')?.classList.remove('hidden');
+                if (typeof loadChannelGroupsBoard === 'function') loadChannelGroupsBoard(false);
                 if (subTabsBox) subTabsBox.classList.add('hidden');
                 if (subTabAcc) subTabAcc.classList.add('hidden');
                 clearAccountCheckResults();
@@ -7180,6 +7328,10 @@
             if (histTab) histTab.classList.remove('hidden');
             if (subTabsBox) subTabsBox.classList.remove('hidden');
             if (subTabAcc) subTabAcc.classList.remove('hidden');
+            document.getElementById('tabMainChannelGroups')?.classList.remove('hidden');
+            if (typeof loadChannelGroupsBoard === 'function') {
+                loadChannelGroupsBoard(false);
+            }
 
             const curU = String(currentVipUser.username || '').trim().toLowerCase();
             if (curU && checkHistoryLoadedForUser !== curU) {
@@ -7255,6 +7407,7 @@
 
             updateCheckHistoryCounts();
             if (typeof syncAccountWalletUI === 'function') syncAccountWalletUI();
+            if (typeof syncCgSupportWidgetVisibility === 'function') syncCgSupportWidgetVisibility();
             if (activeCheckHistorySubTab === 'account') {
                 renderAccountCheckHistory();
             } else {
@@ -9775,13 +9928,10 @@
                         </td>
 
                         <!-- aweme_id -->
-                        <td class="py-1 px-1 text-center border-r border-slate-800/80">
-                            <div class="inline-flex items-center justify-center gap-1 font-mono text-[11px] text-slate-300 bg-slate-950/70 px-1.5 py-0.5 rounded border border-slate-800">
+                        <td onclick="if(!event.target.closest('button')) copyText('${item.item_id}')" title="Click để sao chép ID: ${item.item_id}" class="py-1 px-1 text-center border-r border-slate-800/80 cursor-pointer group/cpid">
+                            <div class="inline-flex items-center justify-center gap-1.5 font-mono text-[11px] text-slate-200 group-hover/cpid:text-cyan-200 bg-slate-950/85 group-hover/cpid:bg-cyan-950/80 px-2 py-0.5 rounded border border-slate-800 group-hover/cpid:border-cyan-400/65 transition active:scale-95 select-none">
                                 <span>${item.item_id}</span>
-                                <button type="button" onclick="copyText('${item.item_id}')" class="text-slate-500 hover:text-cyan-400 transition ml-0.5" title="Sao chép aweme_id">
-                                    <i class="fa-regular fa-copy text-[9px]"></i>
-                                </button>
-                                <button type="button" onclick="copyStudioVideoLink('${item.item_id}', '${item.share_url}')" class="text-slate-500 hover:text-emerald-400 transition ml-0.5" title="Sao chép toàn bộ link video TikTok">
+                                <button type="button" onclick="event.stopPropagation(); copyStudioVideoLink('${item.item_id}', '${item.share_url}')" class="text-cyan-400 hover:text-emerald-400 transition ml-0.5" title="Sao chép toàn bộ link video TikTok">
                                     <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
                                 </button>
                             </div>
@@ -10571,7 +10721,7 @@
 </script>
 
     <!-- Thanh nổi Liên hệ/Hỗ trợ sát mép phải màn hình (chạy theo khi cuộn chuột) -->
-    <div class="fixed right-2 sm:right-3.5 top-1/2 -translate-y-1/2 z-[60] glass-panel rounded-2xl px-2 py-2.5 border border-cyan-500/40 shadow-[0_12px_35px_rgba(0,0,0,0.75)] flex flex-col items-center gap-2 select-none">
+    <div id="floatingSupportWidget" class="fixed right-2 sm:right-3.5 top-1/2 -translate-y-1/2 z-[60] glass-panel rounded-2xl px-2 py-2.5 border border-cyan-500/40 shadow-[0_12px_35px_rgba(0,0,0,0.75)] flex flex-col items-center gap-2 select-none">
         <span class="text-[10px] font-extrabold text-cyan-300 text-center leading-tight tracking-tight px-0.5">
             Liên hệ<br />Hỗ trợ
         </span>
@@ -10599,9 +10749,9 @@
     </div>
 
     <!-- Tooltip nổi căn chính giữa bên dưới nhãn trạng thái -->
-    <div id="tikCenteredTooltip" class="fixed z-[999999] pointer-events-none hidden transition-opacity duration-100" style="left:0;top:0;">
-        <div id="tikCenteredTooltipArrow" class="w-2.5 h-2.5 bg-[#0b1326] border-l border-t border-cyan-400/60 rotate-45 -mb-1.5 mx-auto"></div>
-        <div id="tikCenteredTooltipBody" class="px-3.5 py-2 rounded-xl bg-[#0b1326]/98 border border-cyan-400/60 text-white text-xs font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.85)] text-center max-w-[400px] whitespace-pre-line leading-snug backdrop-blur-md"></div>
+    <div id="tikCenteredTooltip" class="fixed z-[999999] pointer-events-none hidden transition-opacity duration-100" style="left:0;top:0;width:max-content;max-width:360px;">
+        <div id="tikCenteredTooltipArrow" class="w-2.5 h-2.5 bg-[#0b1326] border-l border-t border-cyan-400/65 rotate-45 -mb-1.5 mx-auto"></div>
+        <div id="tikCenteredTooltipBody" class="px-3.5 py-2 rounded-xl bg-[#0b1326] border border-cyan-400/65 text-white text-xs font-bold shadow-[0_10px_30px_rgba(0,0,0,0.9)] text-center max-w-[360px] whitespace-pre-line leading-relaxed"></div>
     </div>
     <script>
         (function initCenteredTooltip() {
@@ -10609,6 +10759,13 @@
             const tipBody = document.getElementById('tikCenteredTooltipBody');
             const tipArrow = document.getElementById('tikCenteredTooltipArrow');
             let activeEl = null;
+
+            function hideTip() {
+                if (activeEl) {
+                    activeEl = null;
+                    tipWrap?.classList.add('hidden');
+                }
+            }
 
             function positionTip(el) {
                 if (!el || !tipWrap || !tipBody) return;
@@ -10619,14 +10776,18 @@
                 }
                 const formattedMsg = msg.replace(/[ \t]+(\([^)\n]{10,}\))/g, '\n$1');
                 tipBody.textContent = formattedMsg;
+                // Reset về (0,0) trước khi đo offsetWidth để tránh bị ép hẹp bởi vị trí sát mép phải của lần hover trước (gây lệch sang phải)
+                tipWrap.style.left = '0px';
+                tipWrap.style.top = '0px';
                 tipWrap.classList.remove('hidden');
                 const r = el.getBoundingClientRect();
                 const tw = tipWrap.offsetWidth;
                 const centerX = r.left + r.width / 2;
                 let left = centerX - tw / 2;
-                const pad = 10;
+                const pad = 8;
                 if (left < pad) left = pad;
                 if (left + tw > window.innerWidth - pad) left = window.innerWidth - pad - tw;
+
                 const top = r.bottom + 7;
                 tipWrap.style.left = `${Math.round(left)}px`;
                 tipWrap.style.top = `${Math.round(top)}px`;
@@ -10642,17 +10803,14 @@
                 if (target) {
                     activeEl = target;
                     positionTip(target);
-                } else if (activeEl) {
-                    activeEl = null;
-                    tipWrap?.classList.add('hidden');
+                } else {
+                    hideTip();
                 }
             });
-            window.addEventListener('scroll', () => {
-                if (activeEl) {
-                    activeEl = null;
-                    tipWrap?.classList.add('hidden');
-                }
-            }, true);
+            window.addEventListener('scroll', hideTip, true);
+            document.addEventListener('mousedown', hideTip, true);
+            document.addEventListener('dragstart', hideTip, true);
+            document.addEventListener('keydown', hideTip, true);
         })();
     </script>
 
@@ -10660,10 +10818,11 @@
     <button 
         id="btnBackToTop" 
         onclick="scrollToTop()" 
-        title="Cuộn lên đầu trang"
+        data-tip="Cuộn lên đầu trang"
         class="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-600 via-sky-600 to-blue-600 text-white shadow-2xl shadow-cyan-500/40 border border-cyan-400/40 flex items-center justify-center text-lg hover:scale-110 active:scale-95 transition-all duration-300 backdrop-blur-md opacity-0 pointer-events-none group"
     >
         <i class="fa-solid fa-arrow-up group-hover:-translate-y-0.5 transition duration-200"></i>
     </button>
+    <script src="/static/channel_groups_board.js?v=20261126_25"></script>
 </body>
 </html>

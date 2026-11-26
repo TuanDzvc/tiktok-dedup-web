@@ -59,6 +59,7 @@ import dedup_provider
 from vip_subscription import activate_paid_membership, restore_paid_memberships
 from usage_counts import (ensure_usage_counts, record_dedup_success, record_account_results,
                           record_dedup_blocked, backfill_dedup_counts)
+import channel_groups_store
 
 # Cấu hình Google Sheet Webhook lưu vết người dùng
 SHEET_WEBHOOK_URL = os.getenv(
@@ -357,6 +358,7 @@ VIP_ORDERS_FILE = BASE_DIR / "vip_orders.json"
 PAYOS_CONFIG_FILE = BASE_DIR / "payos_config.json"
 VIP_SYNC_META_FILE = BASE_DIR / "vip_sync_meta.json"
 CHECK_HISTORY_FILE = BASE_DIR / "check_history.json"
+CHANNEL_GROUPS_FILE = BASE_DIR / "channel_groups.json"
 CHECK_HISTORY_TTL_SECONDS = 7 * 86400
 CHECK_HISTORY_MAX_CHANNELS = 60
 CHECK_HISTORY_MAX_ACCOUNTS = 300
@@ -364,6 +366,7 @@ CHECK_HISTORY_MAX_VIDEOS = 100
 ENV_FILE = BASE_DIR / ".env"
 _VIP_LOCK = threading.Lock()
 _HISTORY_LOCK = threading.Lock()
+_CHANNEL_GROUPS_LOCK = threading.Lock()
 _PEER_SYNC_TIMER_LOCK = threading.Lock()
 _PEER_SYNC_TIMER: Optional[threading.Timer] = None
 _PEER_SYNC_RUN_LOCK = threading.Lock()
@@ -735,6 +738,21 @@ def _save_check_history_unlocked(hmap: Dict[str, Any], schedule_sync: bool = Tru
         logger.error(f"[CheckHistory] Lỗi lưu check_history.json: {e}")
 
 
+def _load_channel_groups_unlocked() -> Dict[str, Any]:
+    return channel_groups_store.load_channel_groups_file(CHANNEL_GROUPS_FILE)
+
+
+def _save_channel_groups_unlocked(state: Dict[str, Any], schedule_sync: bool = True) -> Dict[str, Any]:
+    try:
+        saved = channel_groups_store.save_channel_groups_file(CHANNEL_GROUPS_FILE, state)
+        if schedule_sync:
+            _schedule_peer_sync_push(CHECK_HISTORY_SYNC_DELAY_SEC)
+        return saved
+    except Exception as e:
+        logger.error(f"[ChannelGroups] Lỗi lưu channel_groups.json: {e}")
+        return channel_groups_store.normalize_store_payload(state)
+
+
 def _record_check_history_for_user(
     account_username: str,
     res: Dict[str, Any],
@@ -832,6 +850,39 @@ def _record_check_history_for_user(
         deleted.pop(target_handle, None)
         _prune_check_history_unlocked(hmap, now_ts)
         _save_check_history_unlocked(hmap, schedule_sync=True)
+
+    # Tự động cập nhật avatar / nickname / trạng thái check gần nhất vào bảng Check Nhóm Kênh của tài khoản đang đăng nhập
+    if acct:
+        try:
+            with _CHANNEL_GROUPS_LOCK:
+                cg_store = _load_channel_groups_unlocked()
+                user_board = (cg_store.get("users") or {}).get(acct)
+                cg_changed = False
+                if isinstance(user_board, dict):
+                    for grp in user_board.get("groups") or []:
+                        for ch in grp.get("channels") or []:
+                            if str(ch.get("username") or "").lower() == target_handle:
+                                new_av = str(merged_ch.get("avatar") or "")
+                                new_nick = str(merged_ch.get("nickname") or target_handle)
+                                if new_av and ch.get("avatarUrl") != new_av:
+                                    ch["avatarUrl"] = new_av
+                                    cg_changed = True
+                                if new_nick and (not ch.get("name") or ch.get("name") == target_handle) and ch.get("name") != new_nick:
+                                    ch["name"] = new_nick
+                                    cg_changed = True
+                                ch["lastCheck"] = {
+                                    "checkedAt": now_ts,
+                                    "total": int(stats.get("total") or len(final_videos)),
+                                    "dup": int(stats.get("dup") or 0),
+                                    "fyp": int(stats.get("fyp") or 0),
+                                    "clean": int(stats.get("clean") or 0),
+                                }
+                                cg_changed = True
+                    if cg_changed:
+                        user_board["updated_at"] = now_ts
+                        _save_channel_groups_unlocked(cg_store, schedule_sync=True)
+        except Exception as e_cg:
+            logger.warning(f"[ChannelGroups] Bỏ qua cập nhật metadata kênh sau quét: {e_cg}")
 
 
 def _record_account_check_history_for_user(
@@ -1505,6 +1556,8 @@ def _export_sync_snapshot_unlocked() -> Dict[str, Any]:
         hmap = _load_check_history_unlocked()
         if _prune_check_history_unlocked(hmap):
             _save_check_history_unlocked(hmap, schedule_sync=False)
+    with _CHANNEL_GROUPS_LOCK:
+        cg_state = _load_channel_groups_unlocked()
     return {
         "users": users,
         "blocked_devices": bmap,
@@ -1512,6 +1565,7 @@ def _export_sync_snapshot_unlocked() -> Dict[str, Any]:
         "payos_config": payos_cfg,
         "free_quota": qmap,
         "check_history": hmap,
+        "channel_groups": cg_state,
         "sync_meta": meta,
         "exported_at": int(time.time()),
     }
@@ -1532,6 +1586,8 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
         l_qmap = _load_free_quota_unlocked()
     with _HISTORY_LOCK:
         l_hist = _load_check_history_unlocked()
+    with _CHANNEL_GROUPS_LOCK:
+        l_cgroups = _load_channel_groups_unlocked()
 
     r_users = remote.get("users") if isinstance(remote.get("users"), dict) else {}
     r_bmap = remote.get("blocked_devices") if isinstance(remote.get("blocked_devices"), dict) else {}
@@ -1539,6 +1595,7 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
     r_pcfg = remote.get("payos_config") if isinstance(remote.get("payos_config"), dict) else {}
     r_qmap = remote.get("free_quota") if isinstance(remote.get("free_quota"), dict) else {}
     r_hist = remote.get("check_history") if isinstance(remote.get("check_history"), dict) else {}
+    r_cgroups = remote.get("channel_groups") if isinstance(remote.get("channel_groups"), dict) else {}
     r_meta = remote.get("sync_meta") if isinstance(remote.get("sync_meta"), dict) else {}
 
     # 1. Trộn sync_meta
@@ -1760,6 +1817,12 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
             cur_h = _load_check_history_unlocked()
             if _canon(m_hist) != _canon(cur_h):
                 _save_check_history_unlocked(m_hist, schedule_sync=False)
+                any_changed = True
+        with _CHANNEL_GROUPS_LOCK:
+            cur_cg = _load_channel_groups_unlocked()
+            m_cgroups = channel_groups_store.merge_channel_groups_state(cur_cg, r_cgroups, deleted_users=m_del)
+            if _canon(m_cgroups) != _canon(cur_cg):
+                _save_channel_groups_unlocked(m_cgroups, schedule_sync=False)
                 any_changed = True
     finally:
         _APPLYING_REMOTE_SYNC = False
@@ -4264,6 +4327,77 @@ def _delete_history_item_response(req: Request, target_username: str, entries_ke
         _prune_check_history_unlocked(hmap, now_ts)
         _save_check_history_unlocked(hmap, schedule_sync=True)
     return JSONResponse(content={"success": True, "deleted": target})
+
+
+@app.get("/api/channel-groups")
+def api_get_channel_groups(req: Request):
+    """Lấy bảng Check Nhóm Kênh riêng của từng tài khoản đang đăng nhập."""
+    vip_user = _extract_vip_user(req)
+    if not channel_groups_store.is_authenticated_user(vip_user):
+        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập tài khoản để sử dụng Check Nhóm Kênh."})
+    acct = str(vip_user.get("username") or "").strip().lower()
+    with _CHANNEL_GROUPS_LOCK:
+        store = _load_channel_groups_unlocked()
+        state = channel_groups_store.get_user_board_from_store(store, acct)
+    # Bổ sung avatar / kết quả check gần nhất từ check_history của chính tài khoản đó
+    with _HISTORY_LOCK:
+        hmap = _load_check_history_unlocked()
+        acct_box = hmap.get(acct) if isinstance(hmap.get(acct), dict) else {}
+        entries = acct_box.get("entries") if isinstance(acct_box.get("entries"), dict) else {}
+    for g in state.get("groups") or []:
+        for ch in g.get("channels") or []:
+            h_ent = entries.get(str(ch.get("username") or "").lower())
+            if isinstance(h_ent, dict):
+                if not ch.get("avatarUrl") and h_ent.get("avatar"):
+                    ch["avatarUrl"] = str(h_ent.get("avatar") or "")
+                if (not ch.get("name") or ch.get("name") == ch.get("username")) and h_ent.get("nickname"):
+                    ch["name"] = str(h_ent.get("nickname") or ch["username"])
+                st_h = h_ent.get("stats") if isinstance(h_ent.get("stats"), dict) else {}
+                h_ts = int(h_ent.get("checked_at") or 0)
+                cur_lc = ch.get("lastCheck") if isinstance(ch.get("lastCheck"), dict) else {}
+                if h_ts > int(cur_lc.get("checkedAt") or 0):
+                    ch["lastCheck"] = {
+                        "checkedAt": h_ts,
+                        "total": int(st_h.get("total") or len(h_ent.get("videos") or [])),
+                        "dup": int(st_h.get("dup") or 0),
+                        "fyp": int(st_h.get("fyp") or 0),
+                        "clean": int(st_h.get("clean") or 0),
+                    }
+    return JSONResponse(content={"success": True, **state})
+
+
+@app.post("/api/channel-groups")
+async def api_save_channel_groups(req: Request):
+    """Lưu bảng Check Nhóm Kênh riêng của từng tài khoản đang đăng nhập."""
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Dữ liệu không hợp lệ."})
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not channel_groups_store.is_authenticated_user(vip_user):
+        return JSONResponse(status_code=401, content={"success": False, "error": "Vui lòng đăng nhập tài khoản để lưu Check Nhóm Kênh."})
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Payload không hợp lệ."})
+    acct = str(vip_user.get("username") or "").strip().lower()
+    now_ts = int(time.time())
+    incoming = channel_groups_store.normalize_board_payload({
+        "updated_at": now_ts,
+        "top_tab_order": body.get("top_tab_order") if isinstance(body.get("top_tab_order"), list) else [],
+        "groups": body.get("groups") if isinstance(body.get("groups"), list) else [],
+    }, now_ts=now_ts)
+    allow_empty = bool(body.get("allow_empty", False))
+    with _CHANNEL_GROUPS_LOCK:
+        store = _load_channel_groups_unlocked()
+        existing = channel_groups_store.get_user_board_from_store(store, acct)
+        if existing.get("groups") and not incoming.get("groups") and not allow_empty:
+            return JSONResponse(
+                status_code=409,
+                content={"success": False, "error": "Chặn ghi đè danh sách rỗng ngoài ý muốn.", **existing},
+            )
+        next_store = channel_groups_store.set_user_board_in_store(store, acct, incoming, now_ts=now_ts)
+        saved_store = _save_channel_groups_unlocked(next_store, schedule_sync=True)
+        saved_board = channel_groups_store.get_user_board_from_store(saved_store, acct)
+    return JSONResponse(content={"success": True, **saved_board})
 
 
 @app.get("/api/check-history")

@@ -1,0 +1,836 @@
+/* TikTok Channel Groups Board — adapted from YouTube Download Marker group board */
+
+#channelGroupsWorkspace {
+  width: min(98vw, 1860px);
+  margin-left: calc(50% - min(49vw, 930px));
+}
+
+#channelGroupsBoardMount {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding-top: 10px;
+  padding-bottom: 4px;
+  min-height: calc(100vh - 166px);
+}
+
+.tt-cg-board-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  margin: auto;
+  padding: 11px 12px 12px;
+  border: 2px solid rgba(112, 142, 255, 0.82);
+  border-radius: 14px;
+  background: #131d38;
+  color: #fff;
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.65);
+}
+
+.tt-cg-board-card.cols-1 {
+  width: min(100%, 568px);
+}
+
+.tt-cg-board-card.cols-2 {
+  width: min(100%, 936px);
+}
+
+.tt-cg-board-card.cols-3 {
+  width: min(100%, 1396px);
+}
+
+.tt-cg-board-card.cols-4,
+.tt-cg-board-card.cols-many {
+  width: 100%;
+}
+
+.tt-cg-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tt-cg-title {
+  color: #ffd428;
+  font: 900 15.5px/1.15 "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+}
+
+/* Reserve the same header slot when idle so scanning never pushes the board down. */
+.tt-cg-progress-slot {
+  position: relative;
+  flex: 1 1 180px;
+  min-width: 0;
+  height: 28px;
+  container-type: inline-size;
+}
+
+.tt-cg-inline-progress {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 5px 6px 7px;
+  border: 1px solid rgba(34, 211, 238, .55);
+  border-radius: 6px;
+  background: #0b3046;
+  color: #a5f3fc;
+  font-size: 10.5px;
+  font-weight: 800;
+  box-sizing: border-box;
+}
+
+.tt-cg-progress-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tt-cg-progress-stats { white-space: nowrap; font-size: 10px; }
+.tt-cg-board-card .tt-cg-header .tt-cg-inline-progress .tt-cg-btn-stop {
+  height: 19px;
+  padding: 0 5px;
+  flex-shrink: 0;
+}
+.tt-cg-progress-track {
+  position: absolute;
+  bottom: 3px;
+  left: 6px;
+  right: 6px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #0f172a;
+}
+.tt-cg-progress-track > div {
+  height: 100%;
+  background: linear-gradient(90deg, #22d3ee, #34d399);
+  transition: width 200ms;
+}
+@container (max-width: 360px) {
+  .tt-cg-progress-stats { display: none; }
+}
+
+.tt-cg-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(74, 222, 128, 0.32);
+  border-radius: 999px;
+  background: #16254a;
+  color: #d8e6ff;
+  font: 800 10.5px/1 "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+  white-space: nowrap;
+}
+
+.tt-cg-count-groups { color: #4ade80; }
+.tt-cg-count-sep { color: #7fa4dc; }
+.tt-cg-count-channels { color: #ffb33f; }
+
+.tt-cg-toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  max-width: 100%;
+  overflow: visible;
+  padding: 2px 0;
+}
+
+.tt-cg-board-card.cols-1 .tt-cg-toolbar {
+  width: 100%;
+  margin-left: 0;
+}
+
+@media (max-width: 600px) {
+  .tt-cg-toolbar {
+    flex-wrap: wrap;
+  }
+}
+
+.tt-cg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 156, 255, 0.62);
+  background: linear-gradient(145deg, #25365f, #192746);
+  color: #eff5ff;
+  font: 800 11.5px/1 "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter 120ms ease, transform 120ms ease, opacity 120ms ease;
+}
+
+.tt-cg-board-card .tt-cg-header .tt-cg-btn {
+  height: 24px;
+  padding: 0 6.5px;
+  gap: 3px;
+  border-radius: 6px;
+  font-size: 9.5px;
+}
+
+.tt-cg-btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.tt-cg-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.tt-cg-btn-add {
+  border-color: rgba(103, 242, 165, 0.78);
+  background: linear-gradient(145deg, #1ea665, #116b42);
+  color: #fff;
+}
+
+.tt-cg-btn-selected {
+  border-color: rgba(84, 230, 255, 0.85);
+  background: linear-gradient(145deg, #0ea5e9, #0369a1);
+  color: #fff;
+}
+
+.tt-cg-btn-tabscan {
+  border-color: rgba(196, 181, 253, 0.85);
+  background: linear-gradient(145deg, #7653d6, #493099);
+  color: #fff;
+}
+
+.tt-cg-btn-allscan {
+  border-color: rgba(255, 212, 40, 0.82);
+  background: linear-gradient(145deg, #c2780e, #854d0e);
+  color: #fffbeb;
+}
+
+.tt-cg-btn-stop {
+  border-color: rgba(255, 130, 145, 0.88);
+  background: linear-gradient(145deg, #dc2626, #991b1b);
+  color: #fff;
+}
+
+/* Quick add form panel */
+.tt-cg-add-panel {
+  padding: 14px;
+  border: 1px solid rgba(103, 242, 165, 0.45);
+  border-radius: 12px;
+  background: #0e172f;
+}
+
+.tt-cg-input,
+.tt-cg-select,
+.tt-cg-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid rgba(127, 156, 255, 0.65);
+  border-radius: 9px;
+  background: #111a34;
+  color: #fff;
+  font: 600 13px/1.35 "Segoe UI", Inter, Arial, sans-serif;
+  outline: none;
+}
+
+.tt-cg-input,
+.tt-cg-select {
+  height: 38px;
+  padding: 0 11px;
+}
+
+.tt-cg-textarea {
+  min-height: 152px;
+  padding: 10px 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.tt-cg-input:focus,
+.tt-cg-select:focus,
+.tt-cg-textarea:focus {
+  border-color: #67e8f9;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.22);
+}
+
+/* Top group filter tabs (US, ĐỨC, MEXICO, Nuôi Follow US, INDO WEB...) */
+.tt-cg-filter-strip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 4px 4px 5px;
+  margin: -2px 0;
+}
+
+.tt-cg-top-tab {
+  display: inline-flex;
+  flex: 1 0 100px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 29px;
+  min-height: 29px;
+  padding: 2px 8px;
+  border: 1px solid rgba(127, 156, 255, 0.62);
+  border-radius: 8px;
+  background: linear-gradient(145deg, #25365f, #192746);
+  color: #eff5ff;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.tt-cg-top-tab:hover {
+  border-color: #c4d4ff;
+  background: linear-gradient(145deg, #304778, #21345c);
+}
+
+.tt-cg-top-tab.is-active {
+  border-color: #c8b5ff;
+  outline: 1.5px solid rgba(139, 92, 246, 0.46);
+  outline-offset: 1px;
+  background: linear-gradient(145deg, #7653d6, #493099);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(92, 57, 190, 0.35), inset 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.tt-cg-top-tab.drag-before {
+  box-shadow: inset 4px 0 #ffd342;
+}
+.tt-cg-top-tab.drag-after {
+  box-shadow: inset -4px 0 #ffd342;
+}
+
+.tt-cg-top-tab-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 900 11px/1.1 "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+}
+
+.tt-cg-top-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 196, 61, 0.96);
+  color: #15213d;
+  font: 900 9.5px/15px "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+}
+
+.tt-cg-top-tab.is-active .tt-cg-top-tab-count {
+  background: #fff;
+  color: #4b2d92;
+}
+
+/* Strict 4-groups-per-column CSS Grid: shared row tracks keep all columns 100% aligned horizontally row-for-row */
+.tt-cg-body {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 2px 2px 4px;
+}
+
+.tt-cg-columns-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 9px;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .tt-cg-columns-strip.rows-1 { grid-template-rows: repeat(1, auto); }
+  .tt-cg-columns-strip.rows-2 { grid-template-rows: repeat(2, auto); }
+  .tt-cg-columns-strip.rows-3 { grid-template-rows: repeat(3, auto); }
+  .tt-cg-columns-strip.rows-4 { grid-template-rows: repeat(4, auto); }
+
+  .tt-cg-columns-strip.has-1-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tt-cg-columns-strip.has-2-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tt-cg-columns-strip.has-3-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .tt-cg-columns-strip.has-4-cols {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .tt-cg-columns-strip.has-many-cols {
+    grid-template-columns: none;
+    grid-auto-columns: 432px;
+    width: max-content;
+  }
+
+  .tt-cg-columns-strip > .tt-cg-group {
+    grid-column: var(--cg-col, auto);
+    grid-row: var(--cg-row, auto);
+  }
+}
+
+.tt-cg-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px 7px;
+  border: 1px solid rgba(112, 142, 255, 0.52);
+  border-radius: 10px;
+  background: #0e172f;
+}
+
+.tt-cg-group.drag-over-top { box-shadow: inset 0 4px 0 #ffd04a; }
+.tt-cg-group.drag-over-bottom { box-shadow: inset 0 -4px 0 #ffd04a; }
+.tt-cg-group.drag-over-left { box-shadow: inset 4px 0 0 #2ed573; }
+.tt-cg-group.drag-over-right { box-shadow: inset -4px 0 0 #2ed573; }
+
+.tt-cg-group-head {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+  color: #ffd428;
+  font: 900 12.5px/1.2 "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+}
+
+.tt-cg-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 20px;
+  border: 1px solid rgba(112, 142, 255, 0.68);
+  border-radius: 5px;
+  background: #24365e;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.tt-cg-group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tt-cg-group-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.tt-cg-grp-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  font: 800 9.5px/1 "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tt-cg-grp-mini-btn:hover { filter: brightness(1.15); }
+.tt-cg-grp-mini-btn.scan { background: #147a54; border-color: rgba(110, 231, 183, 0.7); }
+.tt-cg-grp-mini-btn.select { background: #264373; border-color: rgba(147, 197, 253, 0.65); }
+.tt-cg-grp-mini-btn.add { background: #1d5d7a; border-color: rgba(103, 232, 249, 0.65); }
+
+.tt-cg-grp-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 5px;
+  color: #fff;
+  font: 900 12px/1 "Segoe UI Symbol", "Segoe UI", Arial, sans-serif;
+  cursor: pointer;
+}
+
+.tt-cg-grp-icon-btn:hover { filter: brightness(1.16); border-color: #fff; }
+.tt-cg-grp-icon-btn.rename { background: #3276c8; }
+.tt-cg-grp-icon-btn.delete { background: #cf4657; font-size: 14px; }
+
+/* Compact Channel Cards Grid — Max 4 channels per horizontal line, then wraps back to left */
+.tt-cg-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  justify-content: start;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+@media (max-width: 520px) {
+  .tt-cg-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.tt-cg-item {
+  position: relative;
+  display: grid;
+  grid-template-rows: 40px auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 98px;
+  padding: 6px 5px 6px;
+  border: 1px solid rgba(127, 156, 255, 0.48);
+  border-radius: 8px;
+  background: #1b294c;
+  color: #fff;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.tt-cg-item:hover {
+  border-color: #2ed573;
+  background: #213a50;
+}
+
+.tt-cg-item.is-selected {
+  border-color: #34d399;
+  background: linear-gradient(180deg, #173c3a 0%, #172b4d 100%);
+  box-shadow: 0 0 0 1.5px rgba(52, 211, 153, 0.85), 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.tt-cg-item.is-scanning {
+  border-color: #38bdf8;
+  z-index: 3;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  animation: ttCgScanFocus 850ms ease-in-out infinite;
+}
+
+.tt-cg-item.is-scanning::before {
+  content: "";
+  position: absolute;
+  z-index: 4;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 11px solid transparent;
+  border-bottom: 11px solid transparent;
+  border-left: 20px solid #fff;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .85));
+  pointer-events: none;
+  animation: ttCgScanArrow 850ms ease-in-out infinite;
+}
+
+@keyframes ttCgScanFocus {
+  0%, 100% { outline-color: rgba(255,255,255,.65); box-shadow: 0 0 10px rgba(255,255,255,.2); }
+  50% { outline-color: #fff; box-shadow: 0 0 17px rgba(255,255,255,.55); }
+}
+@keyframes ttCgScanArrow {
+  0%, 100% { opacity: .75; transform: translate(0, -50%); }
+  50% { opacity: 1; transform: translate(3px, -50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt-cg-item.is-scanning, .tt-cg-item.is-scanning::before { animation: none; }
+}
+
+.tt-cg-item.drag-before { box-shadow: inset 4px 0 0 #2ed573; }
+.tt-cg-item.drag-after { box-shadow: inset -4px 0 0 #2ed573; }
+
+.tt-cg-item-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.tt-cg-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: rgba(255, 196, 61, 0.98);
+  color: #13213f;
+  font: 900 8.5px/14px "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+  text-align: center;
+  pointer-events: none;
+}
+
+.tt-cg-select-wrap {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tt-cg-select-chk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1.5px solid rgba(148, 163, 184, 0.72);
+  background: rgba(15, 23, 42, 0.92);
+  color: transparent;
+  font-size: 8.5px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.tt-cg-select-chk:hover {
+  border-color: #34d399;
+  background: rgba(16, 185, 129, 0.25);
+  color: rgba(167, 243, 208, 0.75);
+}
+
+.tt-cg-item.is-selected .tt-cg-select-chk {
+  border-color: #6ee7b7;
+  background: #10b981;
+  color: #fff;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.65);
+}
+
+.tt-cg-remove {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  top: 0;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 4px;
+  background: #cf4657;
+  color: #fff;
+  font: 900 11px/1 "Segoe UI", Arial, sans-serif;
+  cursor: pointer;
+}
+
+.tt-cg-remove:hover {
+  background: #ff4059;
+  border-color: #fff;
+}
+
+.tt-cg-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 190, 58, 0.85);
+  border-radius: 50%;
+  background: #3a2d1a;
+  color: #ffd05a;
+  font: 900 14px/1 "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+  flex-shrink: 0;
+}
+
+.tt-cg-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tt-cg-item-footer {
+  align-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.5px;
+  min-width: 0;
+  width: 100%;
+}
+
+.tt-cg-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 23px;
+  max-width: 100%;
+  color: #ffbf3f;
+  font: 800 10px/1.15 "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tt-cg-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: #168c55;
+  color: #fff;
+  font: 800 9px/1.15 "Be Vietnam Pro", "Segoe UI", Inter, Arial, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.tt-cg-status-pill:hover {
+  border-color: #fff;
+  filter: brightness(1.1);
+}
+
+.tt-cg-status-pill.is-clean { background: #15803d; }
+.tt-cg-status-pill.is-bad { background: #be123c; border-color: rgba(253, 164, 175, 0.65); }
+.tt-cg-status-pill.is-fyp { background: #b45309; border-color: rgba(253, 230, 138, 0.65); }
+.tt-cg-status-pill.is-scanning { background: #0284c7; }
+.tt-cg-status-pill.is-err { background: #7f1d1d; }
+
+.tt-cg-empty {
+  padding: 20px;
+  color: #9fb0cf;
+  font: 700 13px/1.4 "Segoe UI", Inter, Arial, sans-serif;
+  text-align: center;
+}
+
+/* Floating Detail Modal — Fit exact 2 grid rows and exact 7 table rows without bottom clipping */
+.tt-cg-modal-scroll {
+  container-type: size;
+}
+
+.tt-cg-blur-underlay {
+  filter: blur(5px) saturate(0.85);
+  opacity: 0.45;
+  transition: filter 180ms ease, opacity 180ms ease;
+}
+
+.tt-cg-scan-overlay-card {
+  font-family: "Be Vietnam Pro", "Plus Jakarta Sans", Inter, "Segoe UI", sans-serif;
+}
+
+.tt-cg-scan-overlay-box {
+  background: linear-gradient(155deg, #162652 0%, #0d1736 55%, #091026 100%) !important;
+  border: 2px solid #22d3ee !important;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.92), 0 0 32px rgba(34, 211, 238, 0.22) !important;
+  opacity: 1 !important;
+}
+
+.tt-cg-scan-overlay-handle {
+  font-family: "JetBrains Mono", Consolas, monospace;
+}
+
+.tt-cg-modal-table thead tr {
+  height: 44px;
+}
+
+.tt-cg-modal-table thead th {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  height: 44px;
+}
+
+.tt-cg-modal-table tbody td {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+.tt-cg-modal-table tbody td p {
+  -webkit-line-clamp: 1 !important;
+}
+
+.tt-cg-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.tt-cg-modal-thumb {
+  aspect-ratio: 3 / 4;
+}
+
+@media (min-width: 640px) {
+  .tt-cg-modal-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .tt-cg-modal-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .tt-cg-modal-table tbody > tr {
+    height: calc((96vh - 165px) / 7);
+  }
+  @supports (height: 100cqh) {
+    .tt-cg-modal-table tbody > tr {
+      height: calc((100cqh - 45px) / 7);
+    }
+  }
+  .tt-cg-modal-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .tt-cg-modal-card {
+    height: calc((96vh - 156px) / 2);
+    min-height: 220px;
+  }
+  @supports (height: 100cqh) {
+    .tt-cg-modal-card {
+      height: calc((100cqh - 32px) / 2);
+    }
+  }
+  .tt-cg-modal-thumb {
+    aspect-ratio: auto;
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+}

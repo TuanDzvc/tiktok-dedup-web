@@ -17,6 +17,9 @@ vip_sync_meta.json
 server.log
 PUBLIC_DOMAIN.txt
 check_history.json
+channel_groups.json
+channel_groups.json.bak1
+channel_groups.json.bak2
 account_country_cache.json
 origin_meta_cache.json
 reader_settings.json

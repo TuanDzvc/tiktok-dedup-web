@@ -15,3 +15,14 @@ test folder [with spaces]/
 independent_reader/output/
 reader_settings.json
 reader_runtime.json
+vip_orders.json
+payos_config.json
+vip_sync_meta.json
+check_history.json
+channel_groups.json
+channel_groups.json.bak1
+channel_groups.json.bak2
+account_country_cache.json
+origin_meta_cache.json
+.playwright-cli/
+*.bak*
