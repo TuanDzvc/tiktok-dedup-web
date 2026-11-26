@@ -673,6 +673,30 @@
   flex-shrink: 0;
 }
 
+.tt-cg-detail-identity { flex: 1 1 auto; max-width: 100%; }
+.tt-cg-detail-info { flex: 1; min-width: 0; }
+.tt-cg-channel-nav { display: flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
+.tt-cg-channel-nav > button { flex-shrink: 0; }
+.tt-cg-channel-switcher {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 24px 5px 8px;
+  border: 1px solid rgba(6, 182, 212, .45);
+  border-radius: 8px;
+  background: #0f172a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.tt-cg-channel-switcher-label { display: block; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+.tt-cg-channel-switcher::after { content: "▾"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.tt-cg-channel-switcher:focus-within { outline: 2px solid #22d3ee; outline-offset: 2px; }
+.tt-cg-channel-switcher select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.tt-cg-channel-switcher option { background: #0f172a; color: #fff; }
+.tt-cg-copy-handle { max-width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+
 .tt-cg-avatar img {
   display: block;
   width: 100%;

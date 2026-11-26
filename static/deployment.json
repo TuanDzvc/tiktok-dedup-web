@@ -1,5 +1,12 @@
 {
-  "release": "2026-11-26.1",
-  "group_assets": "20261126_25",
-  "features": ["channel_groups", "split_payments", "balance_recovery", "guest_registration_first", "channel_availability_errors"]
+  "release": "2026-11-26.2",
+  "group_assets": "20261126_26",
+  "features": [
+    "channel_groups",
+    "split_payments",
+    "balance_recovery",
+    "guest_registration_first",
+    "channel_availability_errors",
+    "full_channel_labels_and_copy"
+  ]
 }

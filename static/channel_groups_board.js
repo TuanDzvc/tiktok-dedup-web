@@ -1051,6 +1051,7 @@
     const switcherOpts = navList.map((item, i) => (
       `<option value="${esc(item.handle)}" ${item.handle === h ? 'selected' : ''}>${i + 1}. ${esc(item.name)} (@${esc(item.handle)} · ${esc(item.groupName)})</option>`
     )).join('');
+    const switcherLabel = grpInfo ? `${curNavIdx + 1}. ${grpInfo.name} (@${h} · ${grpInfo.groupName})` : `@${h}`;
 
     const st = (entry && entry.stats) ? entry.stats : { total: 0, dup: 0, fyp: 0, clean: 0 };
     const fBtn = (mode, label, activeCls) => state.detailFilter === mode
@@ -1169,25 +1170,26 @@
       <!-- Header: Hàng 1 gồm Avatar + Thông tin kênh (trái) và Bảng/Lưới + Quét lại + Đóng (phải); Hàng 2 dưới Avatar là bộ lọc -->
       <div class="px-4 py-2.5 border-b border-slate-800 bg-[#0b1329] flex flex-col gap-2 flex-shrink-0">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex items-center gap-3 min-w-0">
+          <div class="tt-cg-detail-identity flex items-center gap-3 min-w-0">
             <img src="${avSrc}" alt="@${esc(h)}" class="w-11 h-11 rounded-2xl object-cover border-2 border-amber-400/75 flex-shrink-0"
                  onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(h)}&background=0d111a&color=38bdf8&size=96'" />
-            <div class="min-w-0 space-y-0.5">
+            <div class="tt-cg-detail-info min-w-0 space-y-0.5">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="font-extrabold text-[15px] text-amber-300 break-words">${esc(dispName)}</span>
                 <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-200">${flagHtml}<span>${esc(regCode)}</span></span>
                 ${grpInfo ? `<span class="px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-200 border border-indigo-500/50 text-[10px] font-extrabold">${esc(grpInfo.groupName)}</span>` : ''}
                 ${navList.length > 1 ? `
-                  <div class="inline-flex items-center gap-1 ml-1">
+                  <div class="tt-cg-channel-nav">
                     <button type="button" onclick="openCgChannelModal('${esc(prevHandle)}', false)" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-cyan-300 text-xs font-bold" data-tip="Kênh trước trong danh sách">◀</button>
-                    <select onchange="openCgChannelModal(this.value, false)" class="h-7 max-w-[230px] rounded-lg bg-slate-900 border border-cyan-500/45 text-xs font-bold text-white px-2 outline-none">
-                      ${switcherOpts}
-                    </select>
+                    <div class="tt-cg-channel-switcher">
+                      <span class="tt-cg-channel-switcher-label" aria-hidden="true">${esc(switcherLabel)}</span>
+                      <select onchange="openCgChannelModal(this.value, false)" aria-label="Chọn kênh trong danh sách" title="${esc(switcherLabel)}">${switcherOpts}</select>
+                    </div>
                     <button type="button" onclick="openCgChannelModal('${esc(nextHandle)}', false)" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-cyan-300 text-xs font-bold" data-tip="Kênh tiếp theo trong danh sách">▶</button>
                   </div>` : ''}
               </div>
               <div class="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                <a href="https://www.tiktok.com/@${esc(h)}" target="_blank" rel="noopener" class="text-cyan-400 hover:text-cyan-200 font-mono font-bold">@${esc(h)} ↗</a>
+                <button type="button" onclick="event.stopPropagation(); copyText('@${esc(h)}')" title="Bấm để sao chép username" class="tt-cg-copy-handle text-cyan-400 hover:text-cyan-200 font-mono font-bold">@${esc(h)} <i class="fa-regular fa-copy" aria-hidden="true"></i></button>
                 ${entry ? `<span>•</span><span>Follow: <b class="text-white">${esc(entry.followers_fmt || '0')}</b></span><span>•</span><span>Tạo: <b class="text-white">${esc(entry.create_date || '—')}</b></span>` : ''}
               </div>
             </div>
