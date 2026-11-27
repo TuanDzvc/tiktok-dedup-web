@@ -80,10 +80,7 @@
                                     <input id="omSpinTimeout" type="number" min="60" max="600" step="30" value="240" class="w-16 rounded border border-slate-600 bg-[#1e2129] px-2 py-1 text-center font-mono font-bold text-white outline-none focus:border-blue-500">
                                 </label>
                             </div>
-                            <label class="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer select-none">
-                                <input id="omChkShowBrowser" type="checkbox" checked class="rounded border-slate-600 bg-slate-900 text-blue-500">
-                                <span>Mở cửa sổ trình duyệt hiển thị trực tiếp (bỏ tích = chạy ẩn Headless)</span>
-                            </label>
+                            <p class="text-[11px] text-slate-300">Tr?nh duy?t lu?n hi?n tr?n m?y kh?ch ?? ch?n. CMD ch?y ?n.</p>
                             <textarea id="omProxyInput" rows="6" spellcheck="false" autocomplete="off"
                                 class="w-full rounded-lg border border-slate-700 bg-[#0e1014] px-3 py-2 font-mono text-xs text-slate-200 outline-none focus:border-blue-500 resize-y"
                                 placeholder="103.11.22.33:8080:user:pass&#10;45.67.89.10:3128&#10;(Để trống nếu chạy mạng trực tiếp)"></textarea>
@@ -214,7 +211,7 @@
     let omState = {
         folders: ['Default'],
         current_folder: 'Default',
-        settings: { threads: 3, timeout: 240, proxies_text: '', show_browser: false },
+        settings: { threads: 3, timeout: 240, proxies_text: '', show_browser: true },
         rows: [],
         job: { running: false, done: 0, total: 0, ok_count: 0, err_count: 0 },
         logs: [],
@@ -274,7 +271,14 @@
         if (byId('omBtnExportTxt')) byId('omBtnExportTxt').disabled = !hasChecked;
 
         const workerOnline = (omState.workers || []).some(worker => worker.id === byId('omWorkerSelect')?.value && worker.online && !worker.revoked);
-        if (byId('omBtnStart')) byId('omBtnStart').disabled = running || !hasChecked || !workerOnline;
+        if (byId('omBtnStart')) {
+            const reason = running ? 'Lượt trước đang chạy. Bấm Dừng Lại để kết thúc.'
+                : !hasChecked ? 'Tích chọn ít nhất một mail để chạy.'
+                : !workerOnline ? 'Worker máy khách đang Offline. Mở lại file BAT trong máy khách/Sandbox và chờ Online.'
+                : '';
+            byId('omBtnStart').disabled = Boolean(reason);
+            byId('omBtnStart').title = reason || 'Chạy các mail đã chọn trên máy khách';
+        }
         if (byId('omBtnStop')) byId('omBtnStop').disabled = !running;
         if (byId('omBtnRetryFailed')) byId('omBtnRetryFailed').disabled = running || !hasFailed || !workerOnline;
 
@@ -297,7 +301,7 @@
             workerSelect.innerHTML = '<option value="">Chọn máy chạy</option>' + workers.map(worker => `<option value="${esc(worker.id)}">${esc(worker.name)} · ${worker.online ? '🟢 Online' : '⚪ Offline'}</option>`).join('');
             if (workers.some(worker => worker.id === previous)) workerSelect.value = previous;
             else if (!previous && workers.filter(worker => worker.online).length === 1) workerSelect.value = workers.find(worker => worker.online).id;
-            selectedWorkerId = workerSelect.value || previous;
+            selectedWorkerId = workerSelect.value;
             byId('omWorkerStatus').textContent = workers.some(worker => worker.id === workerSelect.value && worker.online)
                 ? 'Trình duyệt sẽ mở trên máy khách đã chọn.'
                 : 'Chưa kết nối máy chạy. Tải và mở .bat trong máy khách/máy ảo.';
@@ -324,7 +328,7 @@
             const st = snap.settings || {};
             if (byId('omSpinThreads')) byId('omSpinThreads').value = st.threads || 3;
             if (byId('omSpinTimeout')) byId('omSpinTimeout').value = st.timeout || 240;
-            if (byId('omChkShowBrowser')) byId('omChkShowBrowser').checked = Boolean(st.show_browser);
+            if (byId('omChkShowBrowser')) byId('omChkShowBrowser').checked = true;
             if (byId('omProxyInput')) {
                 byId('omProxyInput').value = st.proxies_text || '';
                 updateInputCounters();
@@ -443,7 +447,7 @@
                 else if (l.kind === 'summary') col = 'text-sky-400 font-semibold';
                 else if (l.kind === 'code') col = 'text-yellow-300 font-semibold';
                 const fmtTxt = String(l.text || '').replace(/^([•✓✗]\s*[^:]+:\s*)(\S)/u, (_, p1, ch) => p1 + ch.toUpperCase());
-                return `<div><span class="text-white">[${esc(l.time)}]</span> <span class="${col}">${esc(fmtTxt)}</span></div>`;
+                return `<div><span class="text-white">[${esc(l.timestamp ? new Date(l.timestamp * 1000).toLocaleTimeString("vi-VN", {timeZone:"Asia/Ho_Chi_Minh",hour12:false}) : l.time)}]</span> <span class="${col}">${esc(fmtTxt)}</span></div>`;
             }).join('');
             logBox.scrollTop = logBox.scrollHeight;
         }
@@ -461,7 +465,7 @@
             threads: Number(byId('omSpinThreads')?.value || 3),
             timeout: Number(byId('omSpinTimeout')?.value || 240),
             proxies_text: byId('omProxyInput')?.value || '',
-            show_browser: Boolean(byId('omChkShowBrowser')?.checked),
+            show_browser: true,
         };
     }
 

@@ -81,14 +81,27 @@ function Event([string]$Kind,[string]$Text='',$Extra=@{}) {
     $body=@{job_id=$job.id;lease=$job.lease;kind=$Kind;text=$Text}
     foreach($key in $Extra.Keys){$body[$key]=$Extra[$key]}
     $result=Api 'event' $body
-    if($result.cancel){throw 'Cancelled by web'}
+    if($result.cancel){throw (New-Object OperationCanceledException('Cancelled by web'))}
     return $result
 }
 function Stage([string]$Text) {
-    if($Text -ne $script:lastLog){$null=Event 'log' $Text;$script:lastLog=$Text}
+    if($Text -ne $script:lastLog){
+        try{$null=Event 'log' $Text;$script:lastLog=$Text}
+        catch{
+            if($_.Exception -is [OperationCanceledException] -or $_.Exception -is [UnauthorizedAccessException]){throw}
+            # A temporary status-upload outage must not close the login page.
+        }
+    }
 }
 function Heartbeat {
-    if(([DateTime]::UtcNow-$script:lastHeartbeat).TotalSeconds -ge 2){$null=Event 'heartbeat';$script:lastHeartbeat=[DateTime]::UtcNow}
+    if(([DateTime]::UtcNow-$script:lastHeartbeat).TotalSeconds -ge 2){
+        $script:lastHeartbeat=[DateTime]::UtcNow
+        try{$null=Event 'heartbeat'}
+        catch{
+            if($_.Exception -is [OperationCanceledException] -or $_.Exception -is [UnauthorizedAccessException]){throw}
+            # Parent polling still owns cancellation; retry this heartbeat later.
+        }
+    }
 }
 function Ensure-Browser {
     $root=Join-Path $env:LOCALAPPDATA ('TikFlowUploader\fingerprint-chromium\runtime\'+$payload.runtime.version+'\browser')
@@ -97,7 +110,7 @@ function Ensure-Browser {
     try {
         $exe=Get-ChildItem -LiteralPath $root -Filter chrome.exe -Recurse -ErrorAction SilentlyContinue|Select-Object -First 1
         if($exe){return $exe.FullName}
-        Stage 'Downloading pinned Chromium runtime on this client (first run only)'
+        Stage ([regex]::Unescape('\u0110ang t\u1ea3i Chromium tr\u00ean m\u00e1y kh\u00e1ch (ch\u1ec9 l\u1ea7n \u0111\u1ea7u)'))
         $zip=Join-Path $workerRoot 'chromium.zip'
         $client=New-Object Net.WebClient
         try {
@@ -106,7 +119,7 @@ function Ensure-Browser {
             $null=$download.GetAwaiter().GetResult()
         } finally {$client.Dispose()}
         if((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLower() -ne $payload.runtime.sha256){throw 'Chromium SHA256 mismatch'}
-        Stage 'Extracting verified Chromium runtime on this client'
+        Stage ([regex]::Unescape('\u0110ang gi\u1ea3i n\u00e9n Chromium \u0111\u00e3 ki\u1ec3m tra tr\u00ean m\u00e1y kh\u00e1ch'))
         $staging=$root+'.staging-'+[Guid]::NewGuid().ToString('N')
         New-Item -ItemType Directory -Force -Path $staging|Out-Null
         [IO.Compression.ZipFile]::ExtractToDirectory($zip,$staging)
@@ -163,23 +176,44 @@ function Start-ClientBrowser([string]$Executable,[string[]]$BrowserArguments) {
             }
         }
         if(-not $edge){$script:failureCode='browser_policy_blocked';throw 'Application Control blocked Chromium; no verified Microsoft Edge fallback is installed'}
-        Stage 'Windows Application Control blocked Fingerprint Chromium; using verified Microsoft Edge on this client'
+        Stage ([regex]::Unescape('Windows ch\u1eb7n Fingerprint Chromium; \u0111ang d\u00f9ng Microsoft Edge \u0111\u00e3 x\u00e1c th\u1ef1c tr\u00ean m\u00e1y kh\u00e1ch'))
         $script:activeBrowser='Microsoft Edge (Application Control fallback)'
         return Start-Process -FilePath $edge -ArgumentList $BrowserArguments -WindowStyle Normal -PassThru
     }
 }
 function Code-Inputs($Probe) {
+    $namedDigits=@($Probe.inputs|Where-Object {$_.id -match '^codeEntry-\d+$' -or $_.label -match '^Enter code digit \d+$'})
+    if($namedDigits.Count -eq 6){return $namedDigits}
     $digits=@($Probe.inputs|Where-Object {$_.max -eq 1 -and $_.type -in @('text','tel','number','')})
     if($digits.Count -eq 6){return $digits}
     return @($Probe.inputs|Where-Object {$_.name -match 'otc|code' -or $_.id -match 'otc|code' -or $_.label -match 'verification code|security code' -or $_.max -eq 6}|Select-Object -First 1)
 }
 function Is-RecoveryMessage($Record) {
-    return [string]$Record.from -match 'account-security-noreply' -and [string]$Record.subject -match 'single[- ]use code|security code|verify your|verification code|mã bảo mật|xác minh'
+    return [string]$Record.from -match 'account-security-noreply' -and [string]$Record.subject -match 'single[- ]use code|security code|verify your|verification code|m\u00e3 b\u1ea3o m\u1eadt|x\u00e1c minh'
+}
+function Recovery-DestinationMatches([string]$Label,[string]$Address) {
+    $found=[regex]::Matches($Label,'[A-Za-z0-9._+*\-]+@[A-Za-z0-9.\-]+')
+    foreach($item in $found){
+        $pattern='^'+[regex]::Escape($item.Value.TrimEnd('.')).Replace('\*','.*')+'$'
+        if($Address -match $pattern){return $true}
+    }
+    return $false
+}
+function Newest-RecoveryRecord($Records,$Baseline,[DateTime]$Requested) {
+    $since=([DateTimeOffset]$Requested).ToUnixTimeSeconds()
+    # createdAt has second precision. Snapshot IDs before clicking Send excludes
+    # older mail even if it shares the same second with the request.
+    return @($Records|Where-Object {
+        (Is-RecoveryMessage $_) -and -not $Baseline.ContainsKey([string]$_.id) -and [double]$_.createdAt -ge $since
+    }|Sort-Object {[double]$_.createdAt} -Descending|Select-Object -First 1)
+}
+function Recovery-Time([DateTime]$Utc) {
+    return $Utc.ToUniversalTime().AddHours(7).ToString('yyyy-MM-dd HH:mm:ss')+' VN'
 }
 function Extract-RecoveryCode($Payload) {
     $text=if($Payload -is [string]){$Payload}else{$Payload|ConvertTo-Json -Depth 20 -Compress}
     $text=[Net.WebUtility]::HtmlDecode(($text -replace '<[^>]+>',' '))
-    $match=[regex]::Match($text,'(?i)(?:your\s+single[- ]use\s+code\s+is|security\s+code(?:\s+is)?|verification\s+code(?:\s+is)?|mã\s+bảo\s+mật)\s*:?\s*(\d{6})(?!\d)')
+    $match=[regex]::Match($text,'(?i)(?:your\s+single[- ]use\s+code\s+is|security\s+code(?:\s+is)?|verification\s+code(?:\s+is)?|m\u00e3\s+b\u1ea3o\s+m\u1eadt)\s*:?\s*(\d{6})(?!\d)')
     if($match.Success){return $match.Groups[1].Value}
     $text=$text -replace '"(?:id|createdAt|timestamp)"\s*:\s*(?:"[^"\\]*"|\d+)',''
     $codes=@([regex]::Matches($text,'(?<!\d)\d{6}(?!\d)')|ForEach-Object {$_.Value}|Select-Object -Unique)
@@ -188,12 +222,24 @@ function Extract-RecoveryCode($Payload) {
 }
 function Submit-RecoveryCode($Session,$Probe,[string]$Code) {
     if($Code -notmatch '^\d{6}$'){return $false}
+    $null=Cdp $Session 'Page.bringToFront'
     $boxes=@(Code-Inputs $Probe)
-    if($boxes.Count -eq 6){for($di=0;$di -lt 6;$di++){Fill $Session $boxes[$di] ([string]$Code[$di])}}
+    if($boxes.Count -eq 6 -and $boxes[0].max -eq 6){Fill-CodeInput $Session $boxes[0] $Code}
+    elseif($boxes.Count -eq 6){for($di=0;$di -lt 6;$di++){Fill-CodeInput $Session $boxes[$di] ([string]$Code[$di])}}
     elseif($boxes.Count -eq 1){Fill $Session $boxes[0] $Code}
     else{return $false}
     Click $Session (Button $Probe '^(next|verify|continue|submit|ti.p t.c|ti.p theo|x.c minh)$')
     return $true
+}
+function Fill-CodeInput($Session,$Element,[string]$Value) {
+    $id=[string]$Element.id|ConvertTo-Json -Compress
+    $point=@{x=$Element.x;y=$Element.y}|ConvertTo-Json -Compress
+    $focused=Evaluate $Session ('JSON.stringify((()=>{const p='+$point+';const e=document.getElementById('+$id+')||document.elementFromPoint(p.x,p.y);if(!(e instanceof HTMLInputElement))return false;e.focus();e.select();return document.activeElement===e})())')
+    if(-not $focused){throw 'OTP input could not be focused'}
+    # Microsoft handles Ctrl+A across the OTP group. Select this input directly
+    # so clearing digit N cannot reset digits 1..N-1.
+    $null=Cdp $Session 'Input.insertText' @{text=$Value}
+    Start-Sleep -Milliseconds 150
 }
 function Recovery-Item($Session,[string]$Subject) {
     $encoded=$Subject|ConvertTo-Json -Compress
@@ -204,7 +250,7 @@ function Update-RecoveryCache($Session) {
     $key=[string]$Session.GetHashCode()
     if(-not $script:recoveryCache.ContainsKey($key)){$script:recoveryCache[$key]=@{pending=@{};records=@();messages=@{}}}
     $cache=$script:recoveryCache[$key]
-    foreach($event in @($Session.DrainEventsJson()|ConvertFrom-Json)){
+    foreach($event in ($Session.DrainEventsJson()|ConvertFrom-Json)){
         $rid=[string]$event.params.requestId
         if($event.method -eq 'Network.responseReceived' -and $event.params.response.url -match '/messages?\?'){
             $cache.pending[$rid]=@{url=[string]$event.params.response.url;finished=$false;at=[DateTime]::UtcNow}
@@ -232,9 +278,19 @@ function Update-RecoveryCache($Session) {
     return $cache
 }
 function Recovery-Records($Session,[string]$Part) {
+    try{
+        $inbox=Recovery-Api $Session '/messages' @{username=$Part;domain='fviainboxes.com'}
+        return @($inbox.result)
+    }catch{}
     $cache=Update-RecoveryCache $Session
     if($cache.recordsUrl -like ('*'+[Uri]::EscapeDataString($Part)+'*')){return $cache.records}
     return @()
+}
+function Recovery-Api($Session,[string]$Path,$Query) {
+    if($Path -notin @('/messages','/message')){throw 'Unexpected recovery endpoint'}
+    $pairs=($Query.GetEnumerator()|ForEach-Object {[Uri]::EscapeDataString($_.Key)+'='+[Uri]::EscapeDataString([string]$_.Value)}) -join '&'
+    $resource=($Path+'?'+$pairs)|ConvertTo-Json -Compress
+    return Evaluate $Session ('(async()=>{if(location.origin!=="https://fviainboxes.com")throw Error("Unexpected recovery origin");const r=await fetch('+$resource+',{cache:"no-store",credentials:"same-origin"});if(!r.ok)throw Error("Recovery request failed: "+r.status);return JSON.stringify(await r.json())})()')
 }
 $browser=$null;$proxy=$null;$session=$null;$recoverySession=$null
 $profileRoot=Join-Path $workerRoot ('profile-'+$job.id)
@@ -255,11 +311,11 @@ try {
         else{$proxyArgument='--proxy-server=http://'+$hostName+':'+$port}
     }
     $script:phase='browser_start'
-    Stage 'Opening isolated Chromium on this client'
+    Stage ([regex]::Unescape('\u0110ang m\u1edf c\u1eeda s\u1ed5 tr\u00ecnh duy\u1ec7t ri\u00eang tr\u00ean m\u00e1y kh\u00e1ch \u0111\u00e3 ch\u1ecdn'))
     New-Item -ItemType Directory -Force -Path $profileRoot|Out-Null
-    $browserArguments=@(('--user-data-dir="'+$profileRoot+'"'),'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--window-size=1000,800')
+    $browserArguments=@(('--user-data-dir="'+$profileRoot+'"'),'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--window-size=1000,800','--window-position=40,40')
     if($proxyArgument){$browserArguments+=$proxyArgument}
-    if(-not $job.show_browser){$browserArguments+='--headless=new'}
+    # Mail verification must remain visible on the selected client.
     $browserArguments+='about:blank'
     $browser=Start-ClientBrowser $exe $browserArguments
     $activePort=Join-Path $profileRoot 'DevToolsActivePort'
@@ -271,7 +327,7 @@ try {
         Start-Sleep -Milliseconds 250
     }
     $script:phase='cdp_connect'
-    Stage 'Chromium started; connecting to its local control port'
+    Stage ([regex]::Unescape('Tr\u00ecnh duy\u1ec7t \u0111\u00e3 kh\u1edfi \u0111\u1ed9ng; \u0111ang k\u1ebft n\u1ed1i c\u1ed5ng \u0111i\u1ec1u khi\u1ec3n tr\u00ean m\u00e1y kh\u00e1ch'))
     $port=0
     do {
         try{$port=[int]([IO.File]::ReadAllLines($activePort)[0])}catch{}
@@ -293,13 +349,13 @@ try {
     $params=@{client_id=$job.client_id;redirect_uri='https://localhost';response_type='code';scope='openid offline_access https://graph.microsoft.com/Mail.Read';code_challenge=$challenge;code_challenge_method='S256';state=$oauthState;login_hint=$job.account.email;prompt='select_account'}
     $query=($params.GetEnumerator()|ForEach-Object {[Uri]::EscapeDataString($_.Key)+'='+[Uri]::EscapeDataString([string]$_.Value)}) -join '&'
     $script:phase='microsoft_login'
-    Stage 'Opening Microsoft sign-in on this client'
+    Stage ([regex]::Unescape('\u0110ang m\u1edf trang \u0111\u0103ng nh\u1eadp Microsoft tr\u00ean m\u00e1y kh\u00e1ch'))
     $null=Cdp $session 'Page.navigate' @{url=('https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?'+$query)}
     $deadline=[DateTime]::UtcNow.AddSeconds([int]$job.timeout)
-    $submitted=@{};$callback='';$baseline=@{};$lastRecovery=[DateTime]::UtcNow.AddMinutes(-1);$codeRequested=[DateTime]::UtcNow
+    $submitted=@{};$recoverySteps=@{};$callback='';$baseline=@{};$lastRecovery=[DateTime]::UtcNow.AddMinutes(-1);$codeRequested=[DateTime]::UtcNow;$manualRecovery=$false
     while([DateTime]::UtcNow -lt $deadline){
         Heartbeat
-        foreach($event in @($session.DrainEventsJson()|ConvertFrom-Json)){
+        foreach($event in ($session.DrainEventsJson()|ConvertFrom-Json)){
             if($event.method -eq 'Fetch.requestPaused'){
                 $callback=[string]$event.params.request.url
                 $null=Cdp $session 'Fetch.fulfillRequest' @{requestId=$event.params.requestId;responseCode=200;responseHeaders=@(@{name='Content-Type';value='text/html'});body=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('<h3>OAuth authorization received. Returning result to TikFlow.</h3>'))}
@@ -308,7 +364,7 @@ try {
         if($callback){
             $uri=[Uri]$callback;$qs=[Web.HttpUtility]::ParseQueryString($uri.Query)
             if($uri.Scheme -ne 'https' -or $uri.Host -ne 'localhost' -or $qs['state'] -cne $oauthState -or -not $qs['code']){throw 'OAuth callback validation failed'}
-            Stage 'Exchanging authorized OAuth code (Mail.Read only)'
+            Stage ([regex]::Unescape('\u0110ang nh\u1eadn token OAuth v\u1edbi quy\u1ec1n ch\u1ec9 \u0111\u1ecdc th\u01b0'))
             $tokenArgs=@{Uri='https://login.microsoftonline.com/consumers/oauth2/v2.0/token';Method='Post';UseBasicParsing=$true;TimeoutSec=30;Body=@{client_id=$job.client_id;redirect_uri='https://localhost';grant_type='authorization_code';code=$qs['code'];code_verifier=$verifier;scope='openid offline_access https://graph.microsoft.com/Mail.Read'}}
             if($proxyArgument){$tokenArgs['Proxy']=$proxyArgument.Substring('--proxy-server='.Length)}
             $tokens=Invoke-RestMethod @tokenArgs
@@ -323,22 +379,41 @@ try {
         $url=[Uri]$p.url
         if($url.Host -and $url.Host -notmatch '(^|\.)(live\.com|microsoftonline\.com|microsoft\.com)$'){throw 'Login left Microsoft domains'}
         $body=([string]$p.body).ToLowerInvariant()
+        if($submitted.code -and $body -match "that code is incorrect|that code didn't work|code has expired|m\u00e3 \u0111\u00f3 kh\u00f4ng ch\u00ednh x\u00e1c|m\u00e3 \u0111\u00f3 kh\u00f4ng c\u00f3 t\u00e1c d\u1ee5ng"){
+            $manualRecovery=$true
+        }
+        if($manualRecovery){
+            if(@(Code-Inputs $p).Count -gt 0){
+                Stage ([regex]::Unescape('Microsoft b\u00e1o m\u00e3 sai. Gi\u1eef nguy\u00ean tr\u00ecnh duy\u1ec7t \u0111\u1ec3 ki\u1ec3m tra ho\u1eb7c nh\u1eadp tay; b\u1ea5m D\u1eebng L\u1ea1i tr\u00ean web \u0111\u1ec3 \u0111\u00f3ng.'))
+                # Keep this same challenge and proxy alive until the user handles
+                # it or explicitly stops the job. Never submit the rejected code again.
+                $deadline=[DateTime]::UtcNow.AddSeconds([int]$job.timeout)
+                Start-Sleep -Milliseconds 700;continue
+            }
+            $manualRecovery=$false
+        }
         if($body -match 'account has been locked|account has been suspended|password is incorrect|that password is incorrect'){throw 'Microsoft rejected account access'}
         if($body -match 'captcha|prove.*human|verify.*human|authenticator|approve.*request|phone number'){
-            Stage 'Manual security verification required in this client browser';Start-Sleep -Milliseconds 700;continue
+            Stage ([regex]::Unescape('C\u1ea7n x\u00e1c minh b\u1ea3o m\u1eadt th\u1ee7 c\u00f4ng trong tr\u00ecnh duy\u1ec7t tr\u00ean m\u00e1y kh\u00e1ch'));Start-Sleep -Milliseconds 700;continue
         }
         $passwordInput=@($p.inputs|Where-Object {$_.type -eq 'password'}|Select-Object -First 1)[0]
         $next=Button $p '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p|yes|accept|ch.p nh.n)$'
-        if($passwordInput -and -not $submitted.password){Stage 'Filling the selected account password';Fill $session $passwordInput ([string]$job.account.password);Click $session $next;$submitted.password=$true;continue}
+        $passwordChoice=Button $p '^(use your password|s\u1eed d\u1ee5ng m\u1eadt kh\u1ea9u|nh\u1eadp m\u1eadt kh\u1ea9u)$'
+        if($passwordChoice -and -not $submitted.password -and -not $submitted.passwordChoice){
+            Stage ([regex]::Unescape('\u0110ang ch\u1ecdn \u0111\u0103ng nh\u1eadp b\u1eb1ng m\u1eadt kh\u1ea9u'))
+            Click $session $passwordChoice;$submitted.passwordChoice=$true;continue
+        }
+        if($passwordInput -and -not $submitted.password){Stage ([regex]::Unescape('\u0110ang nh\u1eadp m\u1eadt kh\u1ea9u c\u1ee7a mail \u0111\u00e3 ch\u1ecdn'));Fill $session $passwordInput ([string]$job.account.password);Click $session $next;$submitted.password=$true;continue}
         $codeBoxes=@(Code-Inputs $p)
         $codeInput=@($codeBoxes|Select-Object -First 1)[0]
         $emailInput=@($p.inputs|Where-Object {$_.type -eq 'email' -or $_.id -eq 'i0116'}|Select-Object -First 1)[0]
-        if($emailInput -and $body -notmatch 'security info|verify.*identity|recovery|add.*email|send.*code' -and -not $submitted.email){Stage 'Filling the selected account email';Fill $session $emailInput ([string]$job.account.email);Click $session $next;$submitted.email=$true;continue}
+        if($emailInput -and $body -notmatch 'security info|verify.*identity|recovery|add.*email|send.*code' -and -not $submitted.email){Stage ([regex]::Unescape('\u0110ang nh\u1eadp \u0111\u1ecba ch\u1ec9 mail \u0111\u00e3 ch\u1ecdn'));Fill $session $emailInput ([string]$job.account.email);Click $session $next;$submitted.email=$true;continue}
         $sendCode=Button $p '(send.*code|email.*code|g.i m.)'
+        $recoveryStep=([string][bool]$submitted.password)+'|'+$url.AbsolutePath+'|'+[string]$sendCode.text+'|'+(($p.inputs|ForEach-Object {$_.id}) -join ',')
         if(($sendCode -or $codeInput -or $body -match 'security info|recovery|verify.*identity') -and -not $recoverySession){
             if(-not $recovery){$recovery=([string]$job.account.email).Split('@')[0]+'@fviainboxes.com'}
-            if($recovery -notmatch '@fviainboxes\.com$'){Stage 'Use the configured recovery method manually in this browser';Start-Sleep -Milliseconds 700;continue}
-            Stage 'Opening the configured recovery mailbox on this client'
+            if($recovery -notmatch '@fviainboxes\.com$'){Stage ([regex]::Unescape('C\u1ea7n x\u00e1c minh b\u1eb1ng ph\u01b0\u01a1ng th\u1ee9c kh\u00f4i ph\u1ee5c \u0111\u00e3 c\u1ea5u h\u00ecnh trong tr\u00ecnh duy\u1ec7t'));Start-Sleep -Milliseconds 700;continue}
+            Stage ([regex]::Unescape('\u0110ang m\u1edf h\u1ed9p th\u01b0 kh\u00f4i ph\u1ee5c tr\u00ean m\u00e1y kh\u00e1ch'))
             $recoverySession=New-Tab $cdpBase 'https://fviainboxes.com/'
             $null=Cdp $recoverySession 'Network.enable'
             $until=[DateTime]::UtcNow.AddSeconds(20)
@@ -353,18 +428,37 @@ try {
             $null=Cdp $session 'Page.bringToFront'
             continue
         }
-        if($recoverySession -and $sendCode -and -not $submitted.send){
-            if($body -match '@' -and $body -notmatch 'fviainboxes\.com'){Stage 'Recovery destination differs; verify manually';Start-Sleep -Milliseconds 700;continue}
+        if($recoverySession -and $sendCode -and -not $recoverySteps.ContainsKey($recoveryStep)){
+            if(-not (Recovery-DestinationMatches ([string]$p.body) $recovery)){Stage ([regex]::Unescape('\u0110\u1ecba ch\u1ec9 nh\u1eadn m\u00e3 kh\u00f4ng kh\u1edbp mail kh\u00f4i ph\u1ee5c; c\u1ea7n ki\u1ec3m tra th\u1ee7 c\u00f4ng'));Start-Sleep -Milliseconds 700;continue}
+            if([string]$sendCode.text -match '^(send a code to|g\u1eedi m\u00e3 \u0111\u1ebfn)'){
+                $recoverySteps[$recoveryStep]=$true
+                Stage ([regex]::Unescape('\u0110ang ch\u1ecdn nh\u1eadn m\u00e3 qua mail kh\u00f4i ph\u1ee5c \u0111\u00e3 c\u1ea5u h\u00ecnh'))
+                Click $session $sendCode;continue
+            }
             $textInput=@($p.inputs|Where-Object {$_.type -in @('text','email')}|Select-Object -First 1)[0]
             if($textInput -and -not $codeInput){Fill $session $textInput $recovery}
-            $codeRequested=[DateTime]::UtcNow;Click $session $sendCode;$submitted.send=$true;Stage 'Waiting for a new Microsoft recovery code';continue
+            foreach($record in @(Recovery-Records $recoverySession $recovery.Split('@')[0])){$baseline[[string]$record.id]=$true}
+            $codeRequested=[DateTime]::UtcNow
+            Stage (([regex]::Unescape('\u0110ang y\u00eau c\u1ea7u m\u00e3 Microsoft l\u00fac '))+(Recovery-Time $codeRequested))
+            Click $session $sendCode;$recoverySteps[$recoveryStep]=$true;Stage ([regex]::Unescape('\u0110ang ch\u1edd m\u00e3 Microsoft m\u1edbi g\u1eedi t\u1edbi mail kh\u00f4i ph\u1ee5c'));continue
         }
         if($codeInput -and $recoverySession -and -not $submitted.code -and ([DateTime]::UtcNow-$lastRecovery).TotalSeconds -ge 4){
             $rp=Probe $recoverySession;Click $recoverySession (Button $rp 'Get Email|Refresh');Start-Sleep -Milliseconds 600
             $records=@(Recovery-Records $recoverySession $recovery.Split('@')[0])
-            foreach($record in @($records|Sort-Object {[double]$_.createdAt} -Descending)){
-                if($baseline.ContainsKey([string]$record.id) -or [double]$record.createdAt -lt ([DateTimeOffset]$codeRequested).ToUnixTimeSeconds()-5 -or -not (Is-RecoveryMessage $record)){continue}
-                Stage 'Found a new Microsoft security email; reading its code'
+            foreach($record in @(Newest-RecoveryRecord $records $baseline $codeRequested)){
+                $received=[DateTimeOffset]::FromUnixTimeSeconds([long]$record.createdAt).UtcDateTime
+                Stage (([regex]::Unescape('\u0110ang \u0111\u1ecdc th\u01b0 Microsoft m\u1edbi nh\u1ea5t \u0111\u1ebfn l\u00fac '))+(Recovery-Time $received)+([regex]::Unescape('; y\u00eau c\u1ea7u m\u00e3 l\u00fac '))+(Recovery-Time $codeRequested))
+                $code=''
+                try{
+                    $message=Recovery-Api $recoverySession '/message' @{id=[string]$record.id;username=$recovery.Split('@')[0];domain='fviainboxes.com'}
+                    $code=Extract-RecoveryCode $message
+                }catch{}
+                if($code -and (Submit-RecoveryCode $session $p $code)){
+                    $baseline[[string]$record.id]=$true
+                    $submitted.code=$true;Stage ([regex]::Unescape('\u0110\u00e3 nh\u1eadp m\u00e3 t\u1eeb th\u01b0 m\u1edbi nh\u1ea5t; \u0111ang ch\u1edd Microsoft x\u00e1c minh'))
+                    $null=Cdp $session 'Page.bringToFront'
+                    break
+                }
                 $cache=Update-RecoveryCache $recoverySession
                 $messageId=[string]$record.id
                 if(-not $cache.messages.ContainsKey($messageId)){
@@ -379,7 +473,8 @@ try {
                 }
                 $code=if($cache.messages.ContainsKey($messageId)){Extract-RecoveryCode $cache.messages[$messageId]}else{''}
                 if($code -and (Submit-RecoveryCode $session $p $code)){
-                    $submitted.code=$true;Stage 'Submitted the fresh recovery code'
+                    $baseline[[string]$record.id]=$true
+                    $submitted.code=$true;Stage ([regex]::Unescape('\u0110\u00e3 nh\u1eadp m\u00e3 t\u1eeb th\u01b0 m\u1edbi nh\u1ea5t; \u0111ang ch\u1edd Microsoft x\u00e1c minh'))
                     $null=Cdp $session 'Page.bringToFront'
                     break
                 }
@@ -389,9 +484,9 @@ try {
         if($body -match 'stay signed in'){Click $session (Button $p '^(no|kh.ng)$');continue}
         if($body -match 'let this app access|permissions requested|cho ph.p .ng d.ng'){
             if($body -match 'send mail as|delete mail'){throw 'Consent exceeds Mail.Read'}
-            Click $session (Button $p '^(accept|yes|ch.p nh.n|c.)$');Stage 'Confirming requested read-only OAuth permission';continue
+            Click $session (Button $p '^(accept|yes|ch.p nh.n|c.)$');Stage ([regex]::Unescape('\u0110ang x\u00e1c nh\u1eadn quy\u1ec1n OAuth ch\u1ec9 \u0111\u1ecdc th\u01b0'));continue
         }
-        Stage 'Waiting for Microsoft; complete any additional verification in this client browser'
+        Stage ([regex]::Unescape('\u0110ang ch\u1edd Microsoft; ki\u1ec3m tra c\u1eeda s\u1ed5 tr\u00ecnh duy\u1ec7t tr\u00ean m\u00e1y kh\u00e1ch n\u1ebfu c\u1ea7n x\u00e1c minh th\u00eam'))
         Start-Sleep -Milliseconds 500
     }
     if(-not $ok){$failureCode='verification_timeout';throw 'Login or verification timed out'}
@@ -403,7 +498,7 @@ try {
     $cause=$_.Exception
     while($cause){if($cause -is [ComponentModel.Win32Exception]){$nativeError=$cause.NativeErrorCode};$cause=$cause.InnerException}
     # Never upload exception messages: upstream responses may contain credentials.
-    try{$null=Event 'log' ('Worker error: '+$failureCode+'; '+$failureType+'; line '+$failureLine)}catch{}
+    try{$null=Event 'log' (([regex]::Unescape('L\u1ed7i worker: '))+$failureCode+'; '+$failureType+([regex]::Unescape('; d\u00f2ng '))+$failureLine)}catch{}
 }
 finally {
     if($session){$session.Dispose()};if($recoverySession){$recoverySession.Dispose()}

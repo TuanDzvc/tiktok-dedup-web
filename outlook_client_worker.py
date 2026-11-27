@@ -4,6 +4,7 @@ Render is the single queue/state owner. Worker keys are stored as hashes and can
 be revoked; account passwords and OAuth tokens never appear in worker logs.
 """
 import copy
+from mail_worker_messages import localize_mail_message
 import hashlib
 import hmac
 import json
@@ -128,7 +129,7 @@ class ClientMailWorker:
                 jobs[jid]={'id':jid,'batch_id':batch,'worker_id':wid,'folder':folder,'row_id':row['row_id'],
                     'status':'queued','created_at':self.clock(),'last_seen':self.clock(),'lease':secrets.token_urlsafe(24),
                     'timeout':max(60,min(600,int(settings.get('timeout') or 240))),
-                    'show_browser':bool(settings.get('show_browser',True))}
+                    'show_browser':True}
                 row['status']='Chờ worker';row['active_running']=False
             self.service._save_unlocked()
             self.service._add_log('Đã gửi '+str(len(targets))+' mail đến worker máy khách. Server không mở trình duyệt.','summary')
@@ -183,7 +184,7 @@ class ClientMailWorker:
             if row is None:return {'success':True,'cancel':True}
             kind=body.get('kind')
             if kind=='log':
-                text=str(body.get('text') or '')[:240]
+                text=localize_mail_message(str(body.get('text') or ''))[:500]
                 for secret in (row.get('password'),row.get('oauth2_token')):
                     if secret:text=text.replace(str(secret),'[ẩn]')
                 self.service._add_log(text,'info')
@@ -210,6 +211,7 @@ class ClientMailWorker:
                         'oauth_setup':'Lỗi khởi tạo OAuth trước khi đăng nhập',
                         'microsoft_login':'Lỗi trong luồng đăng nhập Microsoft',
                         'verification_timeout':'Hết thời gian chờ đăng nhập/xác minh',
+                        'recovery_code_rejected':'Microsoft từ chối mã xác minh; cần yêu cầu mã mới đúng phiên đăng nhập',
                     }
                     reason=reasons.get(body.get('failure_code'),'Worker lỗi; chưa nhận được chi tiết từ bản cũ')
                     details=[]

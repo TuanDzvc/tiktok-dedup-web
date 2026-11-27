@@ -8,7 +8,8 @@ import re
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from mail_worker_messages import localize_mail_message
 from pathlib import Path
 from typing import Any
 
@@ -222,8 +223,10 @@ class OutlookWebService:
             self._logs.append(
                 {
                     "seq": str(self._log_seq),
-                    "time": datetime.now().strftime("%H:%M:%S"),
-                    "text": text,
+                    "time": datetime.now(timezone(timedelta(hours=7))).strftime("%H:%M:%S"),
+                    "timestamp": time.time(),
+                    "timezone": "Asia/Ho_Chi_Minh",
+                    "text": localize_mail_message(text),
                     "kind": kind,
                 }
             )
@@ -263,7 +266,7 @@ class OutlookWebService:
                     "ok_count": self._ok_count,
                     "err_count": self._err_count,
                 },
-                "logs": list(self._logs[-150:]),
+                "logs": [{**entry, "text": localize_mail_message(entry.get("text"))} for entry in self._logs[-150:]],
                 "workers": self._client_worker.public_workers() if self._client_worker else [],
                 "execution_mode": "client_worker",
             }

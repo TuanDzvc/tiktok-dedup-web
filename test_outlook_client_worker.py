@@ -44,6 +44,20 @@ class ClientWorkerTests(unittest.TestCase):
         return self.w.event(self.wid, self.key, {'job_id': job['id'], 'lease': job['lease'],
             'kind': 'result', 'ok': True, 'refresh_token': 'fixture-refresh-token-long-enough', **extra})
 
+    def test_client_browser_remains_visible_with_old_headless_setting(self):
+        self.s._state['settings']['show_browser'] = False
+        job = self.claim()
+        self.assertTrue(job['show_browser'])
+
+    def test_worker_stage_is_translated_before_display(self):
+        job = self.claim()
+        self.w.event(self.wid, self.key, {'job_id': job['id'], 'lease': job['lease'],
+            'kind': 'log', 'text': 'Opening Microsoft sign-in on this client'})
+        from mail_worker_messages import localize_mail_message
+        expected = localize_mail_message('Opening Microsoft sign-in on this client')
+        self.assertNotEqual(expected, 'Opening Microsoft sign-in on this client')
+        self.assertEqual(self.s.logs[-1], expected)
+
     def test_pair_stores_only_hash(self):
         self.assertNotIn(self.key, json.dumps(self.s.saved))
         self.assertEqual(self.s.saved['client_workers'][self.wid]['hash'], hashlib.sha256(self.key.encode()).hexdigest())
