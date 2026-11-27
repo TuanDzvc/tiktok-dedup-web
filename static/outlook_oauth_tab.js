@@ -219,6 +219,7 @@
     }
     function requireOnlineWorker() {
         const selected = byId('omWorkerSelect');
+        if (selected?.value === '__dev__' && omState.dev_available) return true;
         if ((omState.workers || []).some(w => w.id === selected?.value && w.online && !w.revoked)) return true;
         toast(selected?.value ? 'Máy đã chọn đang Offline. Mở BAT trên máy đó và chờ Online.' : 'Chọn máy chạy trong danh sách phía trên rồi bấm Bắt Đầu.');
         selected?.focus();
@@ -233,6 +234,7 @@
         logs: [],
     };
     let pollTimer = null;
+    let startPending = false;
     let loadingCodeIds = new Set();
     let lastLogSeq = '';
     let settingsInitialized = false;
@@ -247,7 +249,7 @@
     }
 
     async function omApi(path, body = null) {
-        if (path === 'start' && body) body = {...body, worker_id: byId('omWorkerSelect')?.value || ''};
+        if (path === 'start' && body && !body.worker_id) body = {...body, worker_id: byId('omWorkerSelect')?.value || ''};
         const res = await fetch('/api/outlook-oauth/' + path, {
             method: body ? 'POST' : 'GET',
             headers: authHeaders(),
@@ -286,17 +288,19 @@
         if (byId('omBtnCopyTikFlow')) byId('omBtnCopyTikFlow').disabled = !hasCheckedWithToken;
         if (byId('omBtnExportTxt')) byId('omBtnExportTxt').disabled = !hasChecked;
 
-        const workerOnline = (omState.workers || []).some(worker => worker.id === byId('omWorkerSelect')?.value && worker.online && !worker.revoked);
+        const devSelected = byId('omWorkerSelect')?.value === '__dev__' && omState.dev_available;
+        const workerOnline = devSelected || (omState.workers || []).some(worker => worker.id === byId('omWorkerSelect')?.value && worker.online && !worker.revoked);
+        if (byId('omRevokeWorker')) byId('omRevokeWorker').disabled = devSelected || !byId('omWorkerSelect')?.value;
         if (byId('omBtnStart')) {
             const reason = running ? 'Lượt trước đang chạy. Bấm Dừng Lại để kết thúc.'
                 : !hasChecked ? 'Tích chọn ít nhất một mail để chạy.'
                 : !workerOnline ? 'Worker máy khách đang Offline. Mở lại file BAT trong máy khách/Sandbox và chờ Online.'
                 : '';
-            byId('omBtnStart').disabled = running;
+            byId('omBtnStart').disabled = running || startPending;
             byId('omBtnStart').title = reason || 'Chạy các mail đã chọn trên máy khách';
         }
         if (byId('omBtnStop')) byId('omBtnStop').disabled = !running;
-        if (byId('omBtnRetryFailed')) byId('omBtnRetryFailed').disabled = running || !hasFailed;
+        if (byId('omBtnRetryFailed')) byId('omBtnRetryFailed').disabled = running || startPending || !hasFailed;
 
         if (byId('omBtnBatchGetCode')) byId('omBtnBatchGetCode').disabled = !hasCheckedWithToken;
         if (byId('omBtnVerifyTokens')) byId('omBtnVerifyTokens').disabled = !hasCheckedWithToken;
@@ -313,16 +317,21 @@
         const workerSelect = byId('omWorkerSelect');
         if (workerSelect) {
             const previous = selectedWorkerId || workerSelect.value;
-            const workers = (snap.workers || []).map((worker, order) => ({...worker, order})).filter(worker => !worker.revoked)
+            const workers = (snap.workers || []).map((worker, order) => ({...worker, order})).filter(worker => !worker.revoked && worker.id !== snap.dev_worker_id)
                 .sort((a,b) => Number(b.created_at || 0) - Number(a.created_at || 0) || b.order - a.order);
             const latestOnlineByName = new Map();
             for (const worker of workers) if (worker.online && !latestOnlineByName.has(worker.name)) latestOnlineByName.set(worker.name, worker.id);
-            workerSelect.innerHTML = '<option value="">Chọn phiên worker</option>' + workers.map(worker => `<option value="${esc(worker.id)}">${esc(worker.name)} · #${esc(worker.id.slice(0,6))} · ${worker.online ? (latestOnlineByName.get(worker.name) === worker.id ? '🟢 Online — Mới nhất' : '🟢 Online — Phiên cũ') : '⚪ Offline'}</option>`).join('');
+            workerSelect.innerHTML = '<option value="">Chọn máy chạy</option>' + (snap.dev_available ? '<option value="__dev__">🖥 PC dev (máy chủ) — Không cần BAT</option>' : '') + workers.map(worker => `<option value="${esc(worker.id)}">${esc(worker.name)} · #${esc(worker.id.slice(0,6))} · ${worker.online ? (latestOnlineByName.get(worker.name) === worker.id ? '🟢 Online — Mới nhất' : '🟢 Online — Phiên cũ') : '⚪ Offline'}</option>`).join('');
             workerSelect.title = 'Mỗi dòng là một phiên BAT. Chọn phiên không dùng rồi bấm Xóa phiên worker để gỡ khỏi danh sách và dừng phiên đó.';
-            if (workers.some(worker => worker.id === previous)) workerSelect.value = previous;
+            if (previous === '__dev__' && snap.dev_available) workerSelect.value = '__dev__';
+            else if (workers.some(worker => worker.id === previous)) workerSelect.value = previous;
+            else if (snap.dev_available) workerSelect.value = '__dev__';
             else if (!previous && workers.some(worker => worker.online)) workerSelect.value = workers.find(worker => worker.online).id;
             rememberWorker(workerSelect.value);
-            byId('omWorkerStatus').textContent = workers.some(worker => worker.id === workerSelect.value && worker.online)
+            byId('omRevokeWorker').disabled = !workerSelect.value || workerSelect.value === '__dev__';
+            byId('omWorkerStatus').textContent = workerSelect.value === '__dev__'
+                ? 'Bấm Bắt Đầu để tự mở trình duyệt trên PC dev. Không cần tải hoặc mở BAT.'
+                : workers.some(worker => worker.id === workerSelect.value && worker.online)
                 ? `Trình duyệt mở trên ${workers.find(worker => worker.id === workerSelect.value).name} · #${workerSelect.value.slice(0,6)}. Phiên mới nhất được đánh dấu trong danh sách.`
                 : 'Chưa kết nối máy chạy. Tải và mở .bat trong máy khách/máy ảo.';
         }
@@ -694,13 +703,18 @@
         const checkedIds = visibleRows().filter((r) => r.checked).map((r) => r.row_id);
         if (!checkedIds.length) { toast('Tích chọn ít nhất một mail trong bảng để chạy.'); return; }
         if (!requireOnlineWorker()) return;
+        startPending = true; syncActionButtons();
         try {
-            const snap = await omApi('start', { mode: 'ids', row_ids: checkedIds, settings: currentSettingsPayload() });
+            const isDev = byId('omWorkerSelect').value === '__dev__';
+            if (isDev) toast('Đang chuẩn bị trình duyệt trên PC dev…');
+            const workerId = isDev ? (await omApi('dev-worker/ensure', {})).worker_id : byId('omWorkerSelect').value;
+            const snap = await omApi('start', { mode: 'ids', row_ids: checkedIds, settings: currentSettingsPayload(), worker_id: workerId });
             applySnapshot(snap, false);
-            toast('🚀 Đã gửi lệnh chạy đến worker máy khách đã chọn.');
+            toast(isDev ? 'Đã bắt đầu chạy trên PC dev.' : 'Đã gửi lệnh chạy đến máy khách đã chọn.');
         } catch (err) {
             toast(err.message);
         }
+        finally { startPending = false; syncActionButtons(); }
     });
     byId('omWorkerSelect')?.addEventListener('change', () => {
         rememberWorker(byId('omWorkerSelect').value);
@@ -724,6 +738,7 @@
     });
     byId('omRevokeWorker')?.addEventListener('click', async () => {
         const id = byId('omWorkerSelect').value;
+        if (id === '__dev__') { toast('PC dev được quản lý tự động; dùng Dừng Lại để dừng lượt chạy.'); return; }
         if (!id) { toast('Chọn phiên worker cần xóa.'); return; }
         try {
             const snap = await omApi('worker/revoke', {worker_id:id});
@@ -745,12 +760,15 @@
 
     byId('omBtnRetryFailed')?.addEventListener('click', async () => {
         if (!requireOnlineWorker()) return;
+        startPending = true; syncActionButtons();
         try {
-            const snap = await omApi('start', { mode: 'retry_failed', settings: currentSettingsPayload() });
+            const workerId = byId('omWorkerSelect').value === '__dev__' ? (await omApi('dev-worker/ensure', {})).worker_id : byId('omWorkerSelect').value;
+            const snap = await omApi('start', { mode: 'retry_failed', settings: currentSettingsPayload(), worker_id: workerId });
             applySnapshot(snap, false);
         } catch (err) {
             toast(err.message);
         }
+        finally { startPending = false; syncActionButtons(); }
     });
 
     byId('omBtnBatchGetCode')?.addEventListener('click', () => {

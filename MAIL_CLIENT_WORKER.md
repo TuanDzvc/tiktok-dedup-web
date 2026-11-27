@@ -4,6 +4,8 @@ Quản Lý Mail chỉ dành cho `tuandzvcc`. Render giữ duy nhất hàng đợ
 
 ## Sử dụng
 
+Trên PC dev đang phục vụ web, chọn **PC dev (máy chủ) — Không cần BAT** rồi bấm **Bắt Đầu**. Backend tự tạo và dùng lại một worker Windows cục bộ, mã hóa khóa bằng DPAPI; không thực thi BAT tải xuống. Tùy chọn ẩn/hiện áp dụng trên PC dev. Lựa chọn này chỉ có khi web đang đi qua backend PC; Render không tự mở trình duyệt trên máy cá nhân.
+
 1. Mở Quản Lý Mail, bấm **Tải worker máy khách (.bat)**.
 2. Chuyển file vào máy Windows/Sandbox muốn chạy rồi mở file. Không cần Python; dùng Windows PowerShell 5.1 và .NET Framework. Máy cần được phép kết nối mạng ra ngoài.
 3. Chờ máy hiện Online trên web, chọn máy, nạp Mail/Proxy và chọn các dòng cần chạy. Bấm **Bắt Đầu**. Chromium mở trên máy đã chọn, dùng profile riêng cho mỗi lượt.

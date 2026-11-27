@@ -2271,6 +2271,8 @@ def _prepare_client_mail_service():
 async def client_mail_cloud_owner(req: Request, call_next):
     if not req.url.path.startswith('/api/outlook-oauth/'):
         return await call_next(req)
+    if req.url.path == '/api/outlook-oauth/dev-worker/ensure':
+        return await call_next(req)
     if not _is_cloud_runtime():
         body = await req.body()
         if len(body) > 2_000_000:
@@ -2281,7 +2283,16 @@ async def client_mail_cloud_owner(req: Request, call_next):
                 target=RENDER_SYNC_BASE + req.url.path + ('?'+req.url.query if req.url.query else '')
                 response=requests.request(req.method,target,headers=headers,data=body,timeout=85,allow_redirects=False)
                 safe_headers={key:response.headers[key] for key in ('content-type','content-disposition','x-mail-worker-id') if key in response.headers}
-                return Response(response.content,status_code=response.status_code,headers={**safe_headers,'Cache-Control':'no-store'})
+                content = response.content
+                if response.status_code == 200 and _is_strict_tuandzvcc(_extract_vip_user(req)) and 'application/json' in response.headers.get('content-type',''):
+                    snapshot = response.json()
+                    if isinstance(snapshot, dict) and 'workers' in snapshot:
+                        snapshot['dev_available'] = os.name == 'nt'
+                        if snapshot['dev_available']:
+                            from dev_mail_worker import current_dev_id
+                            snapshot['dev_worker_id'] = current_dev_id()
+                        content = json.dumps(snapshot, ensure_ascii=False).encode('utf-8')
+                return Response(content,status_code=response.status_code,headers={**safe_headers,'Cache-Control':'no-store'})
             except requests.RequestException:
                 return JSONResponse(status_code=503,content={'success':False,'error':'Chưa kết nối được quản lý Mail trên Render. PC không chạy trình duyệt thay máy khách.'})
         return await run_in_threadpool(forward)
@@ -2310,6 +2321,20 @@ def api_download_mail_worker(req: Request):
     worker_id,token=service._client_worker.pair()
     return Response(launcher('https://checktiktok.site',worker_id,token,BASE_DIR,asset_origin=RENDER_SYNC_BASE).encode('ascii'),
         media_type='application/octet-stream',headers={'Content-Disposition':'attachment; filename="tikflow_mail_worker.bat"','Cache-Control':'no-store','X-Mail-Worker-Id':worker_id})
+
+
+@app.post('/api/outlook-oauth/dev-worker/ensure')
+async def api_ensure_dev_mail_worker(req: Request):
+    if not _is_strict_tuandzvcc(_extract_vip_user(req)):
+        return JSONResponse(status_code=403, content={'success':False,'error':'Không có quyền mở trình duyệt trên PC dev.'})
+    if _is_cloud_runtime():
+        return JSONResponse(status_code=409, content={'success':False,'error':'PC dev đang tắt hoặc web đang chạy trên Render. Chọn worker máy khách đang Online.'})
+    from dev_mail_worker import ensure_dev_worker
+    try:
+        result = await run_in_threadpool(ensure_dev_worker, BASE_DIR, RENDER_SYNC_BASE, req.headers.get('authorization',''))
+        return JSONResponse(content=result, headers={'Cache-Control':'no-store'})
+    except Exception:
+        return JSONResponse(status_code=503, content={'success':False,'error':'Chưa khởi động được PC dev. Kiểm tra kết nối Render và thử lại; không cần mở BAT.'})
 
 
 @app.post('/api/outlook-oauth/worker/revoke')
