@@ -130,7 +130,7 @@ class ClientMailWorker:
                 jobs[jid]={'id':jid,'batch_id':batch,'worker_id':wid,'folder':folder,'row_id':row['row_id'],
                     'status':'queued','created_at':self.clock(),'last_seen':self.clock(),'lease':secrets.token_urlsafe(24),
                     'timeout':max(60,min(600,int(settings.get('timeout') or 240))),
-                    'show_browser':True}
+                    'show_browser':bool(settings.get('show_browser',True))}
                 row['status']='Chờ worker';row['active_running']=False
             self.service._save_unlocked()
             self.service._add_log('Đã gửi '+str(len(targets))+' mail đến worker máy khách. Server không mở trình duyệt.','summary')

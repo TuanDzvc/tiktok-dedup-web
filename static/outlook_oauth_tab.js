@@ -45,7 +45,7 @@
                 <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-sky-700/50 bg-sky-950/20 p-3">
                     <button type="button" id="omDownloadWorker" class="rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 px-3 py-2 text-xs font-bold text-white">⬇ Tải worker máy khách (.bat)</button>
                     <select id="omWorkerSelect" aria-label="Máy chạy trình duyệt Mail" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-xs text-slate-200"><option value="">Chọn máy chạy</option></select>
-                    <button type="button" id="omRevokeWorker" class="rounded-lg border border-rose-500/50 bg-rose-950 px-3 py-2 text-xs text-rose-200">Ngắt worker</button>
+                    <button type="button" id="omRevokeWorker" title="Xóa phiên khỏi danh sách và dừng công việc trên phiên đó" class="rounded-lg border border-rose-500/50 bg-rose-950 px-3 py-2 text-xs text-rose-200">🗑 Xóa phiên worker</button>
                     <span id="omWorkerStatus" class="text-xs text-slate-300">Mở .bat trong máy khách/máy ảo muốn chạy. Server không mở Chrome.</span>
                 </div>
                 <div class="grid grid-cols-1 xl:grid-cols-[330px_minmax(0,1fr)] gap-4 items-stretch">
@@ -80,7 +80,11 @@
                                     <input id="omSpinTimeout" type="number" min="60" max="600" step="30" value="240" class="w-16 rounded border border-slate-600 bg-[#1e2129] px-2 py-1 text-center font-mono font-bold text-white outline-none focus:border-blue-500">
                                 </label>
                             </div>
-                            <p class="text-[11px] text-slate-300">Trình duyệt luôn hiện trên máy khách đã chọn. CMD chạy ẩn.</p>
+                            <label class="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+                                <input id="omChkHideBrowser" type="checkbox" class="rounded border-slate-600 bg-slate-900 text-blue-500">
+                                <span>Chạy ẩn trình duyệt trên máy đã chọn</span>
+                            </label>
+                            <p class="text-[11px] text-slate-400">Bỏ tích để hiện trình duyệt. CMD luôn chạy ẩn. Áp dụng từ lượt chạy tiếp theo.</p>
                             <textarea id="omProxyInput" rows="6" spellcheck="false" autocomplete="off"
                                 class="w-full rounded-lg border border-slate-700 bg-[#0e1014] px-3 py-2 font-mono text-xs text-slate-200 outline-none focus:border-blue-500 resize-y"
                                 placeholder="103.11.22.33:8080:user:pass&#10;45.67.89.10:3128&#10;(Để trống nếu chạy mạng trực tiếp)"></textarea>
@@ -314,7 +318,7 @@
             const latestOnlineByName = new Map();
             for (const worker of workers) if (worker.online && !latestOnlineByName.has(worker.name)) latestOnlineByName.set(worker.name, worker.id);
             workerSelect.innerHTML = '<option value="">Chọn phiên worker</option>' + workers.map(worker => `<option value="${esc(worker.id)}">${esc(worker.name)} · #${esc(worker.id.slice(0,6))} · ${worker.online ? (latestOnlineByName.get(worker.name) === worker.id ? '🟢 Online — Mới nhất' : '🟢 Online — Phiên cũ') : '⚪ Offline'}</option>`).join('');
-            workerSelect.title = 'Mỗi dòng là một phiên BAT. Mở nhiều BAT có thể tạo nhiều phiên cùng tên máy. Chọn phiên cũ rồi bấm Ngắt worker để đóng phiên đó.';
+            workerSelect.title = 'Mỗi dòng là một phiên BAT. Chọn phiên không dùng rồi bấm Xóa phiên worker để gỡ khỏi danh sách và dừng phiên đó.';
             if (workers.some(worker => worker.id === previous)) workerSelect.value = previous;
             else if (!previous && workers.some(worker => worker.online)) workerSelect.value = workers.find(worker => worker.online).id;
             rememberWorker(workerSelect.value);
@@ -344,7 +348,7 @@
             const st = snap.settings || {};
             if (byId('omSpinThreads')) byId('omSpinThreads').value = st.threads || 3;
             if (byId('omSpinTimeout')) byId('omSpinTimeout').value = st.timeout || 240;
-            if (byId('omChkShowBrowser')) byId('omChkShowBrowser').checked = true;
+            if (byId('omChkHideBrowser')) byId('omChkHideBrowser').checked = st.show_browser === false;
             if (byId('omProxyInput')) {
                 byId('omProxyInput').value = st.proxies_text || '';
                 updateInputCounters();
@@ -481,7 +485,7 @@
             threads: Number(byId('omSpinThreads')?.value || 3),
             timeout: Number(byId('omSpinTimeout')?.value || 240),
             proxies_text: byId('omProxyInput')?.value || '',
-            show_browser: true,
+            show_browser: !Boolean(byId('omChkHideBrowser')?.checked),
         };
     }
 
@@ -595,7 +599,7 @@
         }
     });
 
-    ['omSpinThreads', 'omSpinTimeout', 'omChkShowBrowser'].forEach((id) => {
+    ['omSpinThreads', 'omSpinTimeout', 'omChkHideBrowser'].forEach((id) => {
         byId(id)?.addEventListener('change', () => {
             omApi('settings', currentSettingsPayload()).catch(() => {});
         });
@@ -720,8 +724,13 @@
     });
     byId('omRevokeWorker')?.addEventListener('click', async () => {
         const id = byId('omWorkerSelect').value;
-        if (!id) return;
-        try { applySnapshot(await omApi('worker/revoke', {worker_id:id}), false); }
+        if (!id) { toast('Chọn phiên worker cần xóa.'); return; }
+        try {
+            const snap = await omApi('worker/revoke', {worker_id:id});
+            rememberWorker('');
+            applySnapshot(snap, false);
+            toast('Đã xóa phiên worker khỏi danh sách và gửi lệnh dừng phiên đó.');
+        }
         catch (error) { toast(error.message); }
     });
 

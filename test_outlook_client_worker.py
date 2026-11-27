@@ -44,10 +44,13 @@ class ClientWorkerTests(unittest.TestCase):
         return self.w.event(self.wid, self.key, {'job_id': job['id'], 'lease': job['lease'],
             'kind': 'result', 'ok': True, 'refresh_token': 'fixture-refresh-token-long-enough', **extra})
 
-    def test_client_browser_remains_visible_with_old_headless_setting(self):
+    def test_client_browser_respects_hidden_setting(self):
         self.s._state['settings']['show_browser'] = False
         job = self.claim()
-        self.assertTrue(job['show_browser'])
+        self.assertFalse(job['show_browser'])
+
+    def test_client_browser_visible_by_default(self):
+        self.assertTrue(self.claim()['show_browser'])
 
     def test_worker_stage_is_translated_before_display(self):
         job = self.claim()

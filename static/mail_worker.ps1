@@ -357,7 +357,7 @@ try {
     New-Item -ItemType Directory -Force -Path $profileRoot|Out-Null
     $browserArguments=@(('--user-data-dir="'+$profileRoot+'"'),'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--window-size=1000,800','--window-position=40,40')
     if($proxyArgument){$browserArguments+=$proxyArgument}
-    # Mail verification must remain visible on the selected client.
+    if(-not $job.show_browser){$browserArguments+='--headless=new'}
     $browserArguments+='about:blank'
     $browser=Start-ClientBrowser $exe $browserArguments
     $activePort=Join-Path $profileRoot 'DevToolsActivePort'
