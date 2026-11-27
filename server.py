@@ -2246,6 +2246,115 @@ app.add_middleware(
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+_MAIL_CLIENT_INIT_LOCK = threading.Lock()
+_MAIL_CLIENT_READY = False
+
+
+def _prepare_client_mail_service():
+    global _MAIL_CLIENT_READY
+    with _MAIL_CLIENT_INIT_LOCK:
+        from outlook_web_store import OUTLOOK_WEB_SERVICE
+        if not _MAIL_CLIENT_READY:
+            from outlook_client_worker import MailCloudStore, ClientMailWorker
+            store = MailCloudStore(_get_supabase_sync_config(), SUPABASE_SYNC_BUCKET)
+            restored = store.load()
+            with OUTLOOK_WEB_SERVICE._lock:
+                if restored is not None:
+                    OUTLOOK_WEB_SERVICE._state = restored
+                OUTLOOK_WEB_SERVICE._persist_callback = store.save
+                ClientMailWorker(OUTLOOK_WEB_SERVICE)
+            _MAIL_CLIENT_READY = True
+        return OUTLOOK_WEB_SERVICE
+
+
+@app.middleware('http')
+async def client_mail_cloud_owner(req: Request, call_next):
+    if not req.url.path.startswith('/api/outlook-oauth/'):
+        return await call_next(req)
+    if not _is_cloud_runtime():
+        body = await req.body()
+        if len(body) > 2_000_000:
+            return JSONResponse(status_code=413, content={'success':False,'error':'Dữ liệu quá lớn.'})
+        headers = {key:req.headers[key] for key in ('authorization','content-type','x-mail-worker-token','x-mail-worker-id') if key in req.headers}
+        def forward():
+            try:
+                target=RENDER_SYNC_BASE + req.url.path + ('?'+req.url.query if req.url.query else '')
+                response=requests.request(req.method,target,headers=headers,data=body,timeout=85,allow_redirects=False)
+                safe_headers={key:response.headers[key] for key in ('content-type','content-disposition','x-mail-worker-id') if key in response.headers}
+                return Response(response.content,status_code=response.status_code,headers={**safe_headers,'Cache-Control':'no-store'})
+            except requests.RequestException:
+                return JSONResponse(status_code=503,content={'success':False,'error':'Chưa kết nối được quản lý Mail trên Render. PC không chạy trình duyệt thay máy khách.'})
+        return await run_in_threadpool(forward)
+    # Check access before loading a private store. Worker credentials are verified
+    # by their own bounded endpoints; admin endpoints require the web session.
+    if '/worker/' not in req.url.path and not _is_strict_tuandzvcc(_extract_vip_user(req)):
+        return JSONResponse(status_code=403,content={'success':False,'error':'Tính năng chỉ dành riêng cho tuandzvcc.'})
+    try:
+        await run_in_threadpool(_prepare_client_mail_service)
+        return await call_next(req)
+    except PermissionError:
+        return JSONResponse(status_code=403,content={'success':False,'error':'Worker không hợp lệ hoặc đã thu hồi.'})
+    except ValueError as exc:
+        return JSONResponse(status_code=400,content={'success':False,'error':str(exc)[:220]})
+    except Exception:
+        logger.exception('[MailWorker] Request failed without returning private account data.')
+        return JSONResponse(status_code=503,content={'success':False,'error':'Quản lý Mail chưa sẵn sàng hoặc chưa lưu được vào cloud. Thử lại sau.'})
+
+
+@app.post('/api/outlook-oauth/worker/download')
+def api_download_mail_worker(req: Request):
+    if not _is_strict_tuandzvcc(_extract_vip_user(req)):
+        return JSONResponse(status_code=403,content={'success':False,'error':'Không có quyền tải worker.'})
+    from outlook_client_worker import launcher
+    service=_prepare_client_mail_service()
+    worker_id,token=service._client_worker.pair()
+    return Response(launcher('https://checktiktok.site',worker_id,token,BASE_DIR).encode('ascii'),
+        media_type='application/octet-stream',headers={'Content-Disposition':'attachment; filename="tikflow_mail_worker.bat"','Cache-Control':'no-store','X-Mail-Worker-Id':worker_id})
+
+
+@app.post('/api/outlook-oauth/worker/revoke')
+async def api_revoke_mail_worker(req: Request):
+    if not _is_strict_tuandzvcc(_extract_vip_user(req)):
+        return JSONResponse(status_code=403,content={'success':False,'error':'Không có quyền thu hồi worker.'})
+    body=await req.json()
+    return JSONResponse(content=await run_in_threadpool(_prepare_client_mail_service()._client_worker.revoke,str(body.get('worker_id') or '')))
+
+
+@app.post('/api/outlook-oauth/worker/{action}')
+async def api_mail_worker_request(req: Request, action: str):
+    if action not in ('poll','event'):
+        return JSONResponse(status_code=404,content={'success':False})
+    raw=await req.body()
+    if len(raw)>100_000:
+        return JSONResponse(status_code=413,content={'success':False})
+    body=json.loads(raw)
+    if not isinstance(body,dict):raise ValueError('Dữ liệu worker không hợp lệ.')
+    controller=_prepare_client_mail_service()._client_worker
+    method=controller.poll if action=='poll' else controller.event
+    result=await run_in_threadpool(method,req.headers.get('x-mail-worker-id',''),req.headers.get('x-mail-worker-token',''),body)
+    return JSONResponse(content=result,headers={'Cache-Control':'no-store'})
+
+
+@app.post('/api/outlook-oauth/migrate-local')
+async def api_mail_migrate_local(req: Request):
+    if not _is_strict_tuandzvcc(_extract_vip_user(req)):
+        return JSONResponse(status_code=403,content={'success':False})
+    raw=await req.body()
+    if len(raw)>2_000_000:return JSONResponse(status_code=413,content={'success':False})
+    data=json.loads(raw)
+    service=_prepare_client_mail_service()
+    with service._lock:
+        if any(service._state.get('folders',{}).values()):
+            return JSONResponse(status_code=409,content={'success':False,'error':'Cloud đã có mail; không ghi đè bằng bản local.'})
+        if not isinstance(data.get('folders'),dict):raise ValueError('Không có thư mục mail hợp lệ.')
+        folders=data['folders']
+        for name,rows in folders.items():
+            if not isinstance(name,str) or not isinstance(rows,list) or any(not isinstance(row,dict) or not row.get('row_id') or not row.get('email') for row in rows):
+                raise ValueError('Cấu trúc thư mục/mail không hợp lệ.')
+        service._state.update(folders=folders,settings=data.get('settings') or {},current_folder=data.get('current_folder','Default'))
+        service._save_unlocked()
+    return JSONResponse(content={'success':True})
+
 # Trạng thái Cloudflare Tunnel
 tunnel_state = {
     "url": "",
@@ -4594,6 +4703,142 @@ async def api_save_channel_groups(req: Request):
         saved_store = _save_channel_groups_unlocked(next_store, schedule_sync=True)
         saved_board = channel_groups_store.get_user_board_from_store(saved_store, acct)
     return JSONResponse(content={"success": True, **saved_board})
+
+
+# ==============================================================================
+# QUẢN LÝ MAIL OUTLOOK OAUTH2 TRỰC TIẾP TRÊN WEB (CHỈ RIÊNG TÀI KHOẢN tuandzvcc)
+# ==============================================================================
+def _is_strict_tuandzvcc(vip_user: dict | None) -> bool:
+    return bool(vip_user and str(vip_user.get("username") or "").strip().lower() == "tuandzvcc")
+
+
+@app.get("/api/outlook-oauth/state")
+def api_outlook_oauth_state(req: Request, folder: str = ""):
+    vip_user = _extract_vip_user(req)
+    if not _is_strict_tuandzvcc(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Tính năng chỉ dành riêng cho tuandzvcc."})
+    from outlook_web_store import OUTLOOK_WEB_SERVICE
+    return JSONResponse(content=OUTLOOK_WEB_SERVICE.get_snapshot(folder=folder))
+
+
+@app.post("/api/outlook-oauth/folder")
+async def api_outlook_oauth_folder(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not _is_strict_tuandzvcc(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Tính năng chỉ dành riêng cho tuandzvcc."})
+    from outlook_web_store import OUTLOOK_WEB_SERVICE
+    res = OUTLOOK_WEB_SERVICE.manage_folder(
+        action=str(body.get("action") or ""),
+        name=str(body.get("name") or ""),
+        new_name=str(body.get("new_name") or ""),
+    )
+    return JSONResponse(status_code=200 if res.get("success", True) else 400, content=res)
+
+
+@app.post("/api/outlook-oauth/settings")
+async def api_outlook_oauth_settings(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not _is_strict_tuandzvcc(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Tính năng chỉ dành riêng cho tuandzvcc."})
+    from outlook_web_store import OUTLOOK_WEB_SERVICE
+    return JSONResponse(content=OUTLOOK_WEB_SERVICE.update_settings(body if isinstance(body, dict) else {}))
+
+
+@app.post("/api/outlook-oauth/rows")
+async def api_outlook_oauth_rows(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not _is_strict_tuandzvcc(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Tính năng chỉ dành riêng cho tuandzvcc."})
+    from outlook_web_store import OUTLOOK_WEB_SERVICE
+    res = OUTLOOK_WEB_SERVICE.modify_rows(body if isinstance(body, dict) else {})
+    return JSONResponse(status_code=200 if res.get("success", True) else 400, content=res)
+
+
+@app.post("/api/outlook-oauth/start")
+async def api_outlook_oauth_start(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not _is_strict_tuandzvcc(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Tính năng chỉ dành riêng cho tuandzvcc."})
+    from outlook_web_store import OUTLOOK_WEB_SERVICE
+    res = OUTLOOK_WEB_SERVICE.start_batch(body if isinstance(body, dict) else {})
+    return JSONResponse(status_code=200 if res.get("success", True) else 400, content=res)
+
+
+@app.post("/api/outlook-oauth/stop")
+async def api_outlook_oauth_stop(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not _is_strict_tuandzvcc(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Tính năng chỉ dành riêng cho tuandzvcc."})
+    from outlook_web_store import OUTLOOK_WEB_SERVICE
+    return JSONResponse(content=OUTLOOK_WEB_SERVICE.stop_batch())
+
+
+@app.post("/api/outlook-oauth/get-code")
+async def api_outlook_oauth_get_code(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not _is_strict_tuandzvcc(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Tính năng chỉ dành riêng cho tuandzvcc."})
+    from outlook_web_store import OUTLOOK_WEB_SERVICE
+    row_ids = body.get("row_ids") if isinstance(body.get("row_ids"), list) else []
+    res = await asyncio.to_thread(OUTLOOK_WEB_SERVICE.fetch_codes, [str(x) for x in row_ids])
+    return JSONResponse(status_code=200 if res.get("success", True) else 400, content=res)
+
+
+@app.post("/api/outlook-oauth/verify-tokens")
+async def api_outlook_oauth_verify_tokens(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not _is_strict_tuandzvcc(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Tính năng chỉ dành riêng cho tuandzvcc."})
+    from outlook_web_store import OUTLOOK_WEB_SERVICE
+    row_ids = body.get("row_ids") if isinstance(body.get("row_ids"), list) else []
+    res = await asyncio.to_thread(OUTLOOK_WEB_SERVICE.verify_tokens, [str(x) for x in row_ids])
+    return JSONResponse(status_code=200 if res.get("success", True) else 400, content=res)
+
+
+@app.post("/api/outlook-oauth/messages")
+async def api_outlook_oauth_messages(req: Request):
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    vip_user = _extract_vip_user(req, body if isinstance(body, dict) else None)
+    if not _is_strict_tuandzvcc(vip_user):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Tính năng chỉ dành riêng cho tuandzvcc."})
+    from outlook_web_store import OUTLOOK_WEB_SERVICE
+    row_id = str(body.get("row_id") or "").strip()
+    try:
+        res = await asyncio.to_thread(OUTLOOK_WEB_SERVICE.get_mailbox_messages, row_id)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"success": False, "error": str(exc)})
+    return JSONResponse(status_code=200 if res.get("success", True) else 400, content=res)
 
 
 @app.get("/api/check-history")

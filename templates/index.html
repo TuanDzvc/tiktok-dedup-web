@@ -3307,7 +3307,7 @@
         function shouldShowAdminNavBalance() {
             return canCurrentUserSeeBilling() && (
                 activeMainWorkspaceTab === 'account_check' ||
-                (['checker', 'history', 'channel_groups', 'youtube_monitor'].includes(activeMainWorkspaceTab) && String(currentVipUser.username || '').toLowerCase() === 'tuandzvcc')
+                (['checker', 'history', 'channel_groups', 'youtube_monitor', 'outlook_mail'].includes(activeMainWorkspaceTab) && String(currentVipUser.username || '').toLowerCase() === 'tuandzvcc')
             );
         }
 
@@ -6622,6 +6622,8 @@
                 targetTab = 'channel_groups';
             } else if (tabName === 'youtube_monitor' && currentVipUser?.role === 'admin') {
                 targetTab = 'youtube_monitor';
+            } else if (tabName === 'outlook_mail' && String(currentVipUser?.username || '').trim().toLowerCase() === 'tuandzvcc') {
+                targetTab = 'outlook_mail';
             }
             activeMainWorkspaceTab = targetTab;
             if (targetTab !== 'youtube_monitor' && typeof closeYoutubeMonitorSettings === 'function') closeYoutubeMonitorSettings();
@@ -6640,6 +6642,7 @@
             if (historySec) historySec.classList.toggle('hidden', targetTab !== 'history');
             if (cgWs) cgWs.classList.toggle('hidden', targetTab !== 'channel_groups');
             document.getElementById('youtubeMonitorWorkspace')?.classList.toggle('hidden', targetTab !== 'youtube_monitor');
+            document.getElementById('outlookMailWorkspace')?.classList.toggle('hidden', targetTab !== 'outlook_mail');
 
             const activeCls = 'px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition whitespace-nowrap';
             const inactiveCls = 'px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap';
@@ -6662,6 +6665,16 @@
                 youtubeTab.classList.toggle('hidden', currentVipUser?.role !== 'admin');
             }
             if (targetTab === 'youtube_monitor' && typeof loadYoutubeMonitor === 'function') loadYoutubeMonitor();
+
+            const outlookTab = document.getElementById('tabMainOutlookMail');
+            const isStrictTuan = Boolean(currentVipUser && String(currentVipUser.username || '').trim().toLowerCase() === 'tuandzvcc');
+            if (outlookTab) {
+                outlookTab.className = targetTab === 'outlook_mail' ? activeCls : inactiveCls;
+                outlookTab.classList.toggle('hidden', !isStrictTuan);
+            }
+            if (targetTab === 'outlook_mail' && isStrictTuan && typeof loadOutlookMailWorkspace === 'function') {
+                loadOutlookMailWorkspace();
+            }
 
             if (typeof syncAccountWalletUI === 'function') syncAccountWalletUI();
             if (typeof syncCgSupportWidgetVisibility === 'function') syncCgSupportWidgetVisibility();
@@ -7451,9 +7464,10 @@
                 updateCheckHistoryCounts();
                 syncAccountWalletUI();
                 updateAccountCheckInputCount();
-                if (activeMainWorkspaceTab === 'history') {
+                if (activeMainWorkspaceTab === 'history' || activeMainWorkspaceTab === 'outlook_mail') {
                     activeMainWorkspaceTab = 'checker';
                 }
+                if (typeof syncOutlookMailTabVisibility === 'function') syncOutlookMailTabVisibility();
                 switchMainWorkspaceTab(activeMainWorkspaceTab);
                 return;
             }
@@ -7463,6 +7477,12 @@
             document.getElementById('tabMainChannelGroups')?.classList.remove('hidden');
             if (typeof loadChannelGroupsBoard === 'function') {
                 loadChannelGroupsBoard(false);
+            }
+            if (typeof syncOutlookMailTabVisibility === 'function') {
+                syncOutlookMailTabVisibility();
+            }
+            if (activeMainWorkspaceTab === 'outlook_mail' && String(currentVipUser.username || '').trim().toLowerCase() !== 'tuandzvcc') {
+                switchMainWorkspaceTab('checker');
             }
 
             const curU = String(currentVipUser.username || '').trim().toLowerCase();
@@ -10978,7 +10998,8 @@
     >
         <i class="fa-solid fa-arrow-up group-hover:-translate-y-0.5 transition duration-200"></i>
     </button>
-    <script src="/static/channel_groups_board.js?v=20261126_27"></script>
+    <script src="/static/channel_groups_board.js?v=20261127_1"></script>
     <script src="/static/youtube_monitor.js?v=20261127_11"></script>
+    <script src="/static/outlook_oauth_tab.js?v=20261127_8"></script>
 </body>
 </html>

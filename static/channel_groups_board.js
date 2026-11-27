@@ -1856,9 +1856,10 @@
   function syncCgSupportWidgetVisibility() {
     const widget = document.getElementById('floatingSupportWidget');
     if (!widget) return;
-    const onCgTab = (typeof activeMainWorkspaceTab !== 'undefined') && activeMainWorkspaceTab === 'channel_groups';
-    const hideForCol4 = Boolean(onCgTab && canUseChannelGroupsBoard() && Number(state.currentBoardCols || 0) >= 4);
-    widget.classList.toggle('hidden', hideForCol4);
+    const curTab = (typeof activeMainWorkspaceTab !== 'undefined') ? activeMainWorkspaceTab : '';
+    const onCgTab = curTab === 'channel_groups';
+    const hideWidget = curTab === 'outlook_mail' || Boolean(onCgTab && canUseChannelGroupsBoard() && Number(state.currentBoardCols || 0) >= 4);
+    widget.classList.toggle('hidden', hideWidget);
   }
   window.syncCgSupportWidgetVisibility = syncCgSupportWidgetVisibility;
 })();

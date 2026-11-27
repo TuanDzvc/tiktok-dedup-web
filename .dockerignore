@@ -26,4 +26,6 @@ account_country_cache.json
 origin_meta_cache.json
 .playwright-cli/
 youtube_monitor*.json
+outlook_oauth_data.json
+outlook_oauth_data.tmp
 *.bak*

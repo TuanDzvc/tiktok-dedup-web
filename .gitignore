@@ -29,3 +29,5 @@ independent_reader/node_modules/
 independent_reader/output/
 .playwright-cli/
 youtube_monitor*.json
+outlook_oauth_data.json
+outlook_oauth_data.tmp

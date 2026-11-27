@@ -1,6 +1,6 @@
 {
-  "release": "2026-11-27.25",
-  "group_assets": "20261126_27",
+  "release": "2026-11-27.26",
+  "group_assets": "20261127_1",
   "features": [
     "channel_groups",
     "split_payments",
@@ -21,6 +21,7 @@
     "bounded_reader_log_and_dismissible_failure_notice",
     "evidence_based_recommendation_labels",
     "youtube_settings_dialog",
-    "centered_youtube_settings_with_blurred_backdrop"
+    "centered_youtube_settings_with_blurred_backdrop",
+    "client_windows_mail_worker"
   ]
 }
