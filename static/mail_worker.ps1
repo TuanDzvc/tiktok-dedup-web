@@ -188,6 +188,28 @@ function Code-Inputs($Probe) {
     if($digits.Count -eq 6){return $digits}
     return @($Probe.inputs|Where-Object {$_.name -match 'otc|code' -or $_.id -match 'otc|code' -or $_.label -match 'verification code|security code' -or $_.max -eq 6}|Select-Object -First 1)
 }
+function Password-First($Session,$Probe,$Submitted,[string]$Password) {
+    if($Submitted.password){return $false}
+    $choice=Button $Probe '^(use your password|use password instead|sign in with (?:a |your )?password|s\u1eed d\u1ee5ng m\u1eadt kh\u1ea9u|nh\u1eadp m\u1eadt kh\u1ea9u)$'
+    $input=@($Probe.inputs|Where-Object {$_.type -eq 'password'}|Select-Object -First 1)[0]
+    $next=Button $Probe '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p)$'
+    if($input -and $next){
+        Stage ([regex]::Unescape('\u0110ang nh\u1eadp m\u1eadt kh\u1ea9u tr\u01b0\u1edbc khi x\u00e1c minh mail kh\u00f4i ph\u1ee5c'))
+        Fill $Session $input $Password
+        Click $Session $next
+        $Submitted.password=$true
+    }elseif($choice){
+        Stage ([regex]::Unescape('\u0110ang ch\u1ecdn \u0111\u0103ng nh\u1eadp b\u1eb1ng m\u1eadt kh\u1ea9u; ch\u01b0a y\u00eau c\u1ea7u m\u00e3 email'))
+        Click $Session $choice
+    }else{
+        $alternative=Button $Probe "^(other ways to sign in|sign.in options|sign in another way|use another (?:sign.in )?method|didn.t get a code\??)$"
+        Stage ([regex]::Unescape('\u0110ang t\u00ecm c\u00e1ch \u0111\u0103ng nh\u1eadp b\u1eb1ng m\u1eadt kh\u1ea9u; ch\u01b0a nh\u1eadp mail kh\u00f4i ph\u1ee5c ho\u1eb7c xin m\u00e3'))
+        if($alternative){Click $Session $alternative}else{Start-Sleep -Milliseconds 700}
+    }
+    # Always reprobe after a password action. Recovery is forbidden until the
+    # password has been submitted and the password form is no longer visible.
+    return $true
+}
 function Is-RecoveryMessage($Record) {
     return [string]$Record.from -match 'account-security-noreply' -and [string]$Record.subject -match 'single[- ]use code|security code|verify your|verification code|m\u00e3 b\u1ea3o m\u1eadt|x\u00e1c minh'
 }
@@ -398,16 +420,13 @@ try {
         }
         $passwordInput=@($p.inputs|Where-Object {$_.type -eq 'password'}|Select-Object -First 1)[0]
         $next=Button $p '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p|yes|accept|ch.p nh.n)$'
-        $passwordChoice=Button $p '^(use your password|s\u1eed d\u1ee5ng m\u1eadt kh\u1ea9u|nh\u1eadp m\u1eadt kh\u1ea9u)$'
-        if($passwordChoice -and -not $submitted.password -and -not $submitted.passwordChoice){
-            Stage ([regex]::Unescape('\u0110ang ch\u1ecdn \u0111\u0103ng nh\u1eadp b\u1eb1ng m\u1eadt kh\u1ea9u'))
-            Click $session $passwordChoice;$submitted.passwordChoice=$true;continue
-        }
-        if($passwordInput -and -not $submitted.password){Stage ([regex]::Unescape('\u0110ang nh\u1eadp m\u1eadt kh\u1ea9u c\u1ee7a mail \u0111\u00e3 ch\u1ecdn'));Fill $session $passwordInput ([string]$job.account.password);Click $session $next;$submitted.password=$true;continue}
         $codeBoxes=@(Code-Inputs $p)
         $codeInput=@($codeBoxes|Select-Object -First 1)[0]
         $emailInput=@($p.inputs|Where-Object {$_.type -eq 'email' -or $_.id -eq 'i0116'}|Select-Object -First 1)[0]
         if($emailInput -and $body -notmatch 'security info|verify.*identity|recovery|add.*email|send.*code' -and -not $submitted.email){Stage ([regex]::Unescape('\u0110ang nh\u1eadp \u0111\u1ecba ch\u1ec9 mail \u0111\u00e3 ch\u1ecdn'));Fill $session $emailInput ([string]$job.account.email);Click $session $next;$submitted.email=$true;continue}
+        if(Password-First $session $p $submitted ([string]$job.account.password)){continue}
+        # Wait for Microsoft to leave the password form before recovery handling.
+        if($passwordInput){Start-Sleep -Milliseconds 500;continue}
         $sendCode=Button $p '(send.*code|email.*code|g.i m.)'
         $recoveryStep=([string][bool]$submitted.password)+'|'+$url.AbsolutePath+'|'+[string]$sendCode.text+'|'+(($p.inputs|ForEach-Object {$_.id}) -join ',')
         if(($sendCode -or $codeInput -or $body -match 'security info|recovery|verify.*identity') -and -not $recoverySession){

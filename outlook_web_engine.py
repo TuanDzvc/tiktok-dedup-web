@@ -1238,6 +1238,34 @@ def run_outlook_oauth_in_ht_browser(
                         )
                     )
 
+                    # Password first: never request or confirm recovery mail
+                    # before submitting this account's password.
+                    if not password_attempted:
+                        password_option = _pick(page, ("use your password", "use password instead", "sign in with a password", "sử dụng mật khẩu", "nhập mật khẩu"))
+                        password_box_first = page.locator("input[type=password]:visible").first
+                        password_next = _pick(page, ("^next$", "^sign in$", "^continue$", "^tiếp theo$", "^đăng nhập$"))
+                        if password_box_first.count() and password_box_first.is_visible() and password_next:
+                            stage("nhập mật khẩu trước khi xác minh mail KP...")
+                            fill(password_box_first, account.password, password=True)
+                            password_attempted = True
+                            click(password_next)
+                            continue
+                        if password_option:
+                            stage("chọn đăng nhập bằng mật khẩu...")
+                            click(password_option)
+                            continue
+                        if screen in {"code", "destination", "confirm_email"} or _pick(page, ("send a code to", "^send code$", "gửi mã đến", "^gửi mã$")):
+                            alternative = _pick(page, ("other ways to sign in", "sign-in options", "sign in another way", "didn.t get a code"))
+                            stage("chờ chọn đăng nhập bằng mật khẩu; chưa xin mã mail KP...")
+                            if alternative:
+                                click(alternative)
+                            else:
+                                page.wait_for_timeout(700)
+                            continue
+                    elif page.locator("input[type=password]:visible").count():
+                        page.wait_for_timeout(500)
+                        continue
+
                     send = _pick(page, ("gửi mã đến", "send a code to"))
                     password_choice = _pick(page, ("use your password", "sử dụng mật khẩu", "nhập mật khẩu"))
 

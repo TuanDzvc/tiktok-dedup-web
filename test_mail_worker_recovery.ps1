@@ -5,7 +5,7 @@ $parseErrors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile($source,[ref]$null,[ref]$parseErrors)
 if($parseErrors.Count){throw 'Full worker script does not parse in Windows PowerShell'}
 if(([IO.File]::ReadAllBytes($source)|Where-Object {$_ -gt 127}).Count){throw 'Worker must remain ASCII compatible with Windows PowerShell 5.1'}
-$names=@('Code-Inputs','Is-RecoveryMessage','Extract-RecoveryCode','Submit-RecoveryCode','Update-RecoveryCache','Recovery-Records','Button','Recovery-DestinationMatches','Newest-RecoveryRecord','Event','Stage','Heartbeat')
+$names=@('Code-Inputs','Is-RecoveryMessage','Extract-RecoveryCode','Submit-RecoveryCode','Update-RecoveryCache','Recovery-Records','Button','Recovery-DestinationMatches','Newest-RecoveryRecord','Event','Stage','Heartbeat','Password-First')
 foreach($fn in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $names},$true)){Invoke-Expression $fn.Extent.Text}
 function Assert($Condition,[string]$Message){if(-not $Condition){throw $Message}}
 $boxes=@(1..6|ForEach-Object {@{id='digit'+$_;name='';type='tel';max=1;label=''}})
@@ -94,4 +94,20 @@ $global:apiFixture='cancel'
 $cancelled=$false
 try{Stage 'Fixture stop'}catch [OperationCanceledException]{$cancelled=$true}
 Assert $cancelled 'Explicit web cancellation was swallowed'
+# Password-first routing across actual Microsoft page variants.
+function Stage([string]$Text){}
+$global:routeClicks=@();$global:routeFills=@()
+function Click($Session,$Element){if($Element){$global:routeClicks+=,[string]$Element.text}}
+function Fill($Session,$Element,[string]$Value){$global:routeFills+=,[string]$Element.id}
+$state=@{}
+$confirm=@{inputs=@(@{id='proof-confirmation-email-input';type='text'});buttons=@(@{text='Send code'},@{text='Other ways to sign in'})}
+Assert (Password-First $null $confirm $state 'fixture-password') 'Recovery must be blocked before password submission'
+Assert ($global:routeClicks[-1] -eq 'Other ways to sign in' -and $global:routeFills.Count -eq 0) 'Recovery email was filled or code requested before password'
+$choice=@{inputs=@();buttons=@(@{text='Use your password'},@{text='Send a code to fixture@example.com'})}
+Assert (Password-First $null $choice $state 'fixture-password') 'Password method selection must reprobe'
+Assert ($global:routeClicks[-1] -eq 'Use your password') 'Code method was selected instead of password'
+$form=@{inputs=@(@{id='password';type='password'});buttons=@(@{text='Sign in'})}
+Assert (Password-First $null $form $state 'fixture-password') 'Password submission must reprobe'
+Assert ($state.password -and $global:routeFills[-1] -eq 'password') 'Password was not submitted'
+Assert (-not (Password-First $null $confirm $state 'fixture-password')) 'Recovery remained blocked after password submission'
 Write-Output 'PASS: six-box OTP, single-use subject, sender matching, safe extraction, delayed body retry and retained inbox'
