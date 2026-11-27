@@ -5,7 +5,7 @@ $parseErrors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile($source,[ref]$null,[ref]$parseErrors)
 if($parseErrors.Count){throw 'Full worker script does not parse in Windows PowerShell'}
 if(([IO.File]::ReadAllBytes($source)|Where-Object {$_ -gt 127}).Count){throw 'Worker must remain ASCII compatible with Windows PowerShell 5.1'}
-$names=@('Code-Inputs','Is-RecoveryMessage','Extract-RecoveryCode','Submit-RecoveryCode','Update-RecoveryCache','Recovery-Records','Button','Recovery-DestinationMatches','Newest-RecoveryRecord','Event','Stage','Heartbeat','Password-First','Recovery-RequestTime')
+$names=@('Code-Inputs','Is-RecoveryMessage','Extract-RecoveryCode','Submit-RecoveryCode','Update-RecoveryCache','Recovery-Records','Button','Recovery-DestinationMatches','Newest-RecoveryRecord','Event','Stage','Heartbeat','Password-First','Password-Matches','Fill-Password','Recovery-RequestTime')
 foreach($fn in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $names},$true)){Invoke-Expression $fn.Extent.Text}
 function Assert($Condition,[string]$Message){if(-not $Condition){throw $Message}}
 $boxes=@(1..6|ForEach-Object {@{id='digit'+$_;name='';type='tel';max=1;label=''}})
@@ -135,6 +135,10 @@ Assert ($global:routeClicks[-1] -eq "Didn't get a code?" -and $global:routeFills
 $choice=@{inputs=@();buttons=@(@{text='Use your password'},@{text='Send a code to fixture@example.com'})}
 Assert (Password-First $null $choice $state 'fixture-password') 'Password method selection must reprobe'
 Assert ($global:routeClicks[-1] -eq 'Use your password') 'Code method was selected instead of password'
+$global:passwordValue=''
+$global:failPasswordFill=$false
+function Password-Matches($Session,[string]$Password){return $Password -ne '' -and $global:passwordValue -ceq $Password}
+function Fill-Password($Session,[string]$Password){$global:routeFills+=,'password';if($global:failPasswordFill){return $false};$global:passwordValue=$Password;return $true}
 $form=@{inputs=@(@{id='password';type='password'});buttons=@(@{text='Sign in';id='stale-button'})}
 $global:passwordFreshProbe=@{inputs=$form.inputs;buttons=@(@{text='Next';id='fresh-button'})}
 function Probe($Session){return $global:passwordFreshProbe}
@@ -150,4 +154,16 @@ Assert ($state.passwordClicks -eq 2 -and $script:passwordNeedsInspection) 'Repea
 Assert ($global:routeFills.Count -eq 1) 'Password was filled repeatedly'
 Assert (-not (Button @{buttons=@(@{text='Next';disabled=$true})} '^Next$')) 'Disabled Next button was treated as ready'
 Assert (-not (Password-First $null $confirm $state 'fixture-password')) 'Recovery remained blocked after password submission'
+$global:passwordValue='';$global:failPasswordFill=$true
+$state=@{password=$true;passwordFilled=$true;passwordClicks=1;passwordSentAt=[DateTime]::UtcNow.AddSeconds(-10)}
+$clicksBefore=$global:routeClicks.Count
+Assert (Password-First $null $form $state 'fixture-password') 'Cleared password must stay in password routing'
+Assert ($global:routeClicks.Count -eq $clicksBefore -and -not $state.password) 'Clicked Next while password was blank after failed fill'
+$global:failPasswordFill=$false
+Assert (Password-First $null $form $state 'fixture-password') 'Password refill did not resume routing'
+Assert ($state.password -and $global:passwordValue -ceq 'fixture-password') 'Cleared password was not filled and verified before resubmission'
+$global:passwordValue='';$state=@{}
+$clicksBefore=$global:routeClicks.Count
+Assert (Password-First $null $form $state '') 'Missing account password must not advance'
+Assert ($global:routeClicks.Count -eq $clicksBefore) 'Clicked Next without a configured password'
 Write-Output 'PASS: six-box OTP, single-use subject, sender matching, safe extraction, delayed body retry and retained inbox'

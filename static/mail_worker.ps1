@@ -193,10 +193,40 @@ function Code-Inputs($Probe) {
     return @()
 
 }
+function Password-Matches($Session,[string]$Password) {
+    if(-not $Password){return $false}
+    $expected=$Password|ConvertTo-Json -Compress
+    return (Evaluate $Session ('JSON.stringify((()=>{const e=[...document.querySelectorAll("input[type=password]")].find(e=>e.getBoundingClientRect().width>0);return !!e&&e.value==='+$expected+'})())')) -eq $true
+}
+function Fill-Password($Session,[string]$Password) {
+    if(-not $Password){return $false}
+    $null=Cdp $Session 'Page.bringToFront'
+    $focused=Evaluate $Session 'JSON.stringify((()=>{const e=[...document.querySelectorAll("input[type=password]")].find(e=>e.getBoundingClientRect().width>0&&!e.disabled&&!e.readOnly);if(!e)return false;e.focus();e.select();return document.activeElement===e})())'
+    if(-not $focused){return $false}
+    $null=Cdp $Session 'Input.insertText' @{text=$Password}
+    Start-Sleep -Milliseconds 150
+    return Password-Matches $Session $Password
+}
 function Password-First($Session,$Probe,$Submitted,[string]$Password) {
     $choice=Button $Probe '^(use your password|use password instead|sign in with (?:a |your )?password|s\u1eed d\u1ee5ng m\u1eadt kh\u1ea9u|nh\u1eadp m\u1eadt kh\u1ea9u)$'
     $input=@($Probe.inputs|Where-Object {$_.type -eq 'password'}|Select-Object -First 1)[0]
     $next=Button $Probe '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p)$'
+    if($input -and -not $input.disabled -and -not (Password-Matches $Session $Password)){
+        $Submitted.password=$false
+        $Submitted.passwordFilled=$false
+        if([int]$Submitted.passwordFillAttempts -ge 3 -or -not $Password){
+            $script:passwordNeedsInspection=$true
+            Stage ([regex]::Unescape('\u00d4 m\u1eadt kh\u1ea9u ch\u01b0a c\u00f3 \u0111\u00fang pass. Kh\u00f4ng b\u1ea5m Next; gi\u1eef tr\u00ecnh duy\u1ec7t \u0111\u1ec3 ki\u1ec3m tra.'))
+            Start-Sleep -Milliseconds 700;return $true
+        }
+        Stage ([regex]::Unescape('\u0110ang \u0111i\u1ec1n v\u00e0 ki\u1ec3m tra \u0111\u00fang \u00f4 m\u1eadt kh\u1ea9u tr\u01b0\u1edbc khi b\u1ea5m Next'))
+        $Submitted.passwordFillAttempts=[int]$Submitted.passwordFillAttempts+1
+        if(-not (Fill-Password $Session $Password)){
+            Start-Sleep -Milliseconds 350;return $true
+        }
+        $Submitted.passwordFilled=$true
+        $script:passwordNeedsInspection=$false
+    }
     if($Submitted.password){
         if(-not $input){$script:passwordNeedsInspection=$false;return $false}
         if($input.disabled -or -not $next -or ([DateTime]::UtcNow-$Submitted.passwordSentAt).TotalSeconds -lt 5){
@@ -204,6 +234,7 @@ function Password-First($Session,$Probe,$Submitted,[string]$Password) {
             Start-Sleep -Milliseconds 350;return $true
         }
         if([int]$Submitted.passwordClicks -lt 2){
+            if(-not (Password-Matches $Session $Password)){return $true}
             Stage ([regex]::Unescape('Trang m\u1eadt kh\u1ea9u ch\u01b0a chuy\u1ec3n; b\u1ea5m l\u1ea1i \u0111\u00fang n\u00fat Next hi\u1ec7n t\u1ea1i'))
             Click $Session $next
             $Submitted.passwordClicks=[int]$Submitted.passwordClicks+1
@@ -215,16 +246,11 @@ function Password-First($Session,$Probe,$Submitted,[string]$Password) {
         Start-Sleep -Milliseconds 700;return $true
     }
     if($input){
-        if(-not $Submitted.passwordFilled){
-        Stage ([regex]::Unescape('\u0110ang nh\u1eadp m\u1eadt kh\u1ea9u tr\u01b0\u1edbc khi x\u00e1c minh mail kh\u00f4i ph\u1ee5c'))
-        Fill $Session $input $Password
-            $Submitted.passwordFilled=$true
-        }
         # Filling can reflow the form or briefly disable Next. Never use the
         # button coordinates captured before filling the password.
         $fresh=Probe $Session
         $ready=Button $fresh '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p)$'
-        if($ready){
+        if($ready -and (Password-Matches $Session $Password)){
             Click $Session $ready
             $Submitted.password=$true
             $Submitted.passwordSentAt=[DateTime]::UtcNow
