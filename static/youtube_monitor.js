@@ -45,7 +45,7 @@
         <div class="max-h-[calc(90vh-2px)] overflow-y-auto custom-scrollbar">
         <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-700 bg-slate-950 px-4 py-3">
             <h3 id="ytSettingsTitle" class="font-bold text-cyan-200"><i class="fa-solid fa-gear mr-2"></i>Cài Đặt Theo Dõi YouTube</h3>
-            <button type="button" id="ytCloseSettings" aria-label="Đóng cài đặt YouTube" class="w-8 h-8 rounded-lg hover:bg-red-950/60 text-xl text-red-500 hover:text-red-400 transition">×</button>
+            <button type="button" id="ytCloseSettings" aria-label="Đóng cài đặt YouTube" class="w-8 h-8 rounded-lg border border-red-500/60 bg-red-950/80 hover:bg-red-900 text-xl text-red-300 hover:text-white transition">×</button>
         </div>
         <form id="ytSettings" class="bg-slate-900/70 p-4 space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-3"><h4 class="font-bold text-cyan-200">Cấu hình thông báo</h4>
