@@ -921,6 +921,9 @@ def _record_account_check_history_for_user(
             "recommend_status": str(item.get("recommend_status") or "ok"),
             "recommend_label": str(item.get("recommend_label") or "Đề xuất bình thường"),
             "is_not_recommended": bool(item.get("is_not_recommended", False)),
+            "raw_labels": item.get('raw_labels') if isinstance(item.get('raw_labels'), list) else [],
+            "account_labels_version": int(item.get('account_labels_version') or 0),
+            "recommend_note": str(item.get('recommend_note') or ''),
             "checked_at": now_ts,
         })
 
@@ -1772,6 +1775,7 @@ def _merge_sync_state_unlocked(remote: Dict[str, Any]) -> Dict[str, Any]:
             la.get("account_deleted") if isinstance(la.get("account_deleted"), dict) else {},
             ra.get("account_deleted") if isinstance(ra.get("account_deleted"), dict) else {},
             hist_cutoff,
+            tie_score_fn=lambda e: (int((e or {}).get('account_labels_version') or 0), int((e or {}).get('labels_verified_at') or 0)),
         )
 
         if merged_ent_h or merged_del_h or merged_acc_ent or merged_acc_del:
@@ -4620,6 +4624,13 @@ def api_get_check_history(req: Request):
     # This is a read-only enrichment: no paid recheck, quota change or new date.
     account_items = [dict(item) for item in account_items]
     for item in account_items:
+        if int(item.get('account_labels_version') or 0) < core_dedup.ACCOUNT_LABELS_VERSION:
+            if item.get('raw_labels'):
+                item.update(core_dedup._parse_account_labels(item['raw_labels']))
+            elif item.get('recommend_status') == 'not_recommended':
+                item.update(recommend_status='warning', recommend_label='Kết quả cũ cần xác minh',
+                    is_not_recommended=False,
+                    recommend_note='Kết quả dùng bộ phân loại cũ, chưa lưu nhãn gốc. Không đủ bằng chứng để tiếp tục xếp vào nhóm không được đề xuất.')
         if not core_dedup._is_valid_country_code(item.get('region')):
             country = core_dedup._get_cached_account_country(item.get('unique_id') or item.get('username'), item.get('uid'))
             if country:

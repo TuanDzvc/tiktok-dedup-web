@@ -3758,6 +3758,9 @@ def _resolve_bulk_account_handle(raw_input: str) -> str:
     return _extract_handle_from_url_or_text(s)
 
 
+ACCOUNT_LABELS_VERSION = 2
+
+
 def _parse_account_labels(raw_labels: Any) -> Dict[str, Any]:
     """Chuẩn hóa trường account_labels từ TikTok Mobile API thành trạng thái đề xuất rõ ràng."""
     labels_list: List[Dict[str, Any]] = []
@@ -3765,7 +3768,9 @@ def _parse_account_labels(raw_labels: Any) -> Dict[str, Any]:
         try:
             raw_labels = json.loads(raw_labels)
         except Exception:
-            raw_labels = []
+            raw_labels = [{'content': 'Nhãn tài khoản chưa đọc được', 'label_type': None}]
+    elif isinstance(raw_labels, str) and raw_labels.strip():
+        raw_labels = [raw_labels]
     if isinstance(raw_labels, dict):
         raw_labels = [raw_labels]
     if isinstance(raw_labels, list):
@@ -3779,24 +3784,32 @@ def _parse_account_labels(raw_labels: Any) -> Dict[str, Any]:
                 labels_list.append({"content": item.strip(), "label_type": None})
 
     for lb in labels_list:
-        l_type = lb.get("label_type")
         c_low = lb["content"].lower()
-        if str(l_type) == "2" or "not recommended" in c_low or "không được đề xuất" in c_low:
+        # label_type=2 is also used for "First warning". It is not evidence of
+        # recommendation ineligibility without an explicit recommendation label.
+        if any(text in c_low for text in ('not recommended', 'not being recommended',
+                'ineligible for recommendation', 'not eligible for recommendation',
+                'không được đề xuất', 'không đủ điều kiện đề xuất')):
             return {
                 "recommend_status": "not_recommended",
                 "recommend_label": "Tài khoản không được đề xuất",
                 "is_not_recommended": True,
                 "raw_labels": labels_list,
+                "account_labels_version": ACCOUNT_LABELS_VERSION,
+                "recommend_note": 'API trả nhãn trực tiếp về việc không đủ điều kiện đề xuất. Không phải kết luận khóa đăng nhập.',
             }
 
     first_warn = next((lb["content"] for lb in labels_list if lb.get("content")), "")
-    if first_warn:
-        label_vn = "Cảnh báo tài khoản" if "account warning" in first_warn.lower() else first_warn
+    if labels_list:
+        first_warning = any(lb['content'].lower() in ('first warning', 'cảnh báo lần đầu', 'cảnh báo đầu tiên') for lb in labels_list)
+        label_vn = 'Cảnh báo lần đầu' if first_warning else "Cảnh báo tài khoản"
         return {
             "recommend_status": "warning",
             "recommend_label": label_vn,
             "is_not_recommended": False,
             "raw_labels": labels_list,
+            "account_labels_version": ACCOUNT_LABELS_VERSION,
+            "recommend_note": 'Nhãn API: ' + (first_warn or 'Có nhãn chưa xác định') + '. Chưa đủ bằng chứng để kết luận tài khoản không được đề xuất.',
         }
 
     return {
@@ -3804,6 +3817,8 @@ def _parse_account_labels(raw_labels: Any) -> Dict[str, Any]:
         "recommend_label": "Đề xuất bình thường",
         "is_not_recommended": False,
         "raw_labels": [],
+        "account_labels_version": ACCOUNT_LABELS_VERSION,
+        "recommend_note": 'API chưa trả nhãn hạn chế đề xuất. Đây không phải kiểm tra khả năng đăng nhập hay bảo đảm lượt xem.',
     }
 
 

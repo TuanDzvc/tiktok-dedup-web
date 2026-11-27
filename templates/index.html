@@ -955,6 +955,7 @@
                     <button type="button" id="btnAccFilterAll" onclick="setAccountCheckFilter('all')" class="px-3 py-1.5 rounded-xl font-bold bg-cyan-500 text-dark-950 transition">Tất cả (0)</button>
                     <button type="button" id="btnAccFilterNotRec" onclick="setAccountCheckFilter('not_recommended')" class="px-3 py-1.5 rounded-xl font-bold bg-slate-800/90 border border-rose-600/50 text-rose-300 hover:bg-rose-950/80 transition">⚠️ Không được đề xuất (0)</button>
                     <button type="button" id="btnAccFilterOk" onclick="setAccountCheckFilter('ok')" class="px-3 py-1.5 rounded-xl font-bold bg-slate-800/90 border border-emerald-600/50 text-emerald-300 hover:bg-emerald-950/80 transition">✅ Đề xuất bình thường (0)</button>
+                    <button type="button" id="btnAccFilterWarning" onclick="setAccountCheckFilter('warning')" class="hidden px-3 py-1.5 rounded-xl font-bold border border-amber-600/50 text-amber-300">⚠️ Cảnh báo khác (0)</button>
                     <button type="button" id="btnAccFilterErr" onclick="setAccountCheckFilter('error')" class="hidden px-3 py-1.5 rounded-xl font-bold bg-slate-800/90 border border-slate-600 text-slate-300 hover:bg-slate-700 transition">❌ Lỗi (0)</button>
                 </div>
 
@@ -1164,6 +1165,7 @@
                         <button type="button" id="accHistFilterAll" onclick="setAccountCheckHistoryFilter('all')" class="px-3 py-1.5 rounded-xl bg-cyan-600 text-white transition whitespace-nowrap">Tất cả (0)</button>
                         <button type="button" id="accHistFilterNotRec" onclick="setAccountCheckHistoryFilter('not_recommended')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 transition whitespace-nowrap">⚠️ Không được đề xuất (0)</button>
                         <button type="button" id="accHistFilterOk" onclick="setAccountCheckHistoryFilter('ok')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition whitespace-nowrap">✅ Đề xuất bình thường (0)</button>
+                        <button type="button" id="accHistFilterWarning" onclick="setAccountCheckHistoryFilter('warning')" class="hidden px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-slate-700 transition whitespace-nowrap">⚠️ Cảnh báo khác (0)</button>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end text-xs">
                         <div class="relative flex-grow sm:flex-grow-0 sm:w-52">
@@ -6837,7 +6839,8 @@
         function _filterAccountsByMode(items, mode) {
             return (Array.isArray(items) ? items : []).filter(it => {
                 if (!it || it.ok === false) return false;
-                if (mode === 'not_recommended') return it.recommend_status === 'not_recommended' || it.recommend_status === 'warning';
+                if (mode === 'not_recommended') return it.recommend_status === 'not_recommended';
+                if (mode === 'warning') return it.recommend_status === 'warning';
                 if (mode === 'ok') return it.recommend_status === 'ok';
                 return true;
             });
@@ -7154,7 +7157,7 @@
                     loadCheckHistory(false);
                 }
                 const sum = data.summary || {};
-                showToast(`✅ Đã check ${sum.total || accountCheckResults.length} tài khoản (Đề xuất BT: ${sum.ok_count || 0} · Bị đỏ: ${sum.not_recommended_count || 0}).`);
+                showToast(`✅ Đã check ${sum.total || accountCheckResults.length} tài khoản (Không đề xuất: ${sum.not_recommended_count || 0} · Cảnh báo khác: ${sum.warning_count || 0} · Bình thường: ${sum.ok_count || 0}).`);
             } catch (err) {
                 showAccErr('Lỗi kết nối máy chủ: ' + (err?.message || 'Unknown error'));
             } finally {
@@ -7196,9 +7199,10 @@
             const createDate = escapeHtml(item.create_date || '—');
 
             const st = String(item.recommend_status || 'ok');
+            const statusNote = escapeHtml(item.recommend_note || 'Trạng thái từ nhãn API; không phải kiểm tra đăng nhập.');
             let cardCls = 'account-status-card glass-panel rounded-2xl p-3 border border-slate-700/75 hover:border-emerald-500/45 transition';
             let statusBadgeHtml = `
-                <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/85 border border-emerald-500/60 text-emerald-300 font-extrabold text-[11px] account-recommendation-badge">
+                <div title="${statusNote}" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/85 border border-emerald-500/60 text-emerald-300 font-extrabold text-[11px] account-recommendation-badge">
                     <i class="fa-solid fa-circle-check text-emerald-400"></i>
                     <span>Đề xuất bình thường</span>
                 </div>
@@ -7206,7 +7210,7 @@
             if (st === 'not_recommended') {
                 cardCls = 'account-status-card glass-panel rounded-2xl p-3 border border-rose-500/75 bg-gradient-to-br from-rose-950/35 via-slate-900/90 to-dark-900/95 shadow-lg shadow-rose-950/30 transition';
                 statusBadgeHtml = `
-                    <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/95 border border-rose-500/85 text-rose-200 font-extrabold text-[11px] account-recommendation-badge shadow-sm shadow-rose-950/60">
+                    <div title="${statusNote}" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/95 border border-rose-500/85 text-rose-200 font-extrabold text-[11px] account-recommendation-badge shadow-sm shadow-rose-950/60">
                         <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
                         <span>${escapeHtml(item.recommend_label || 'Tài khoản không được đề xuất')}</span>
                     </div>
@@ -7214,7 +7218,7 @@
             } else if (st === 'warning') {
                 cardCls = 'account-status-card glass-panel rounded-2xl p-3 border border-amber-500/65 bg-amber-950/15 transition';
                 statusBadgeHtml = `
-                    <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/90 border border-amber-500/75 text-amber-200 font-extrabold text-[11px] account-recommendation-badge">
+                    <div title="${statusNote}" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/90 border border-amber-500/75 text-amber-200 font-extrabold text-[11px] account-recommendation-badge">
                         <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
                         <span>${escapeHtml(item.recommend_label || 'Cảnh báo tài khoản')}</span>
                     </div>
@@ -7343,6 +7347,7 @@
             const totalCnt = accountCheckResults.length;
             const notRecCnt = _filterAccountsByMode(accountCheckResults, 'not_recommended').length;
             const okCnt = _filterAccountsByMode(accountCheckResults, 'ok').length;
+            const warningCnt = _filterAccountsByMode(accountCheckResults, 'warning').length;
             const errCnt = accountCheckResults.filter(it => !it || !it.ok).length;
 
             if (navBadge) {
@@ -7362,6 +7367,8 @@
             setPill('btnAccFilterAll', `Tất cả (${totalCnt})`, accountCheckFilter === 'all', 'bg-slate-800/90 border border-slate-600/70 text-slate-200 hover:bg-slate-700');
             setPill('btnAccFilterNotRec', `⚠️ Không được đề xuất (${notRecCnt})`, accountCheckFilter === 'not_recommended', 'bg-slate-800/90 border border-rose-600/50 text-rose-300 hover:bg-rose-950/80');
             setPill('btnAccFilterOk', `✅ Đề xuất bình thường (${okCnt})`, accountCheckFilter === 'ok', 'bg-slate-800/90 border border-emerald-600/50 text-emerald-300 hover:bg-emerald-950/80');
+            setPill('btnAccFilterWarning', `⚠️ Cảnh báo khác (${warningCnt})`, accountCheckFilter === 'warning', 'bg-slate-800/90 border border-amber-600/50 text-amber-300 hover:bg-amber-950/80');
+            document.getElementById('btnAccFilterWarning')?.classList.toggle('hidden', warningCnt === 0);
             const errBtn = document.getElementById('btnAccFilterErr');
             if (errBtn) {
                 setPill('btnAccFilterErr', `❌ Lỗi (${errCnt})`, accountCheckFilter === 'error', 'bg-slate-800/90 border border-slate-600 text-slate-300 hover:bg-slate-700');
@@ -7369,7 +7376,8 @@
             }
 
             const visible = accountCheckResults.filter(it => {
-                if (accountCheckFilter === 'not_recommended') return it && it.ok && (it.recommend_status === 'not_recommended' || it.recommend_status === 'warning');
+                if (accountCheckFilter === 'not_recommended') return it && it.ok && it.recommend_status === 'not_recommended';
+                if (accountCheckFilter === 'warning') return it && it.ok && it.recommend_status === 'warning';
                 if (accountCheckFilter === 'ok') return it && it.ok && it.recommend_status === 'ok';
                 if (accountCheckFilter === 'error') return !it || !it.ok;
                 return true;
@@ -7640,6 +7648,7 @@
             const totalAll = accountCheckHistoryItems.length;
             const notRecCnt = _filterAccountsByMode(accountCheckHistoryItems, 'not_recommended').length;
             const okCnt = _filterAccountsByMode(accountCheckHistoryItems, 'ok').length;
+            const warningCnt = _filterAccountsByMode(accountCheckHistoryItems, 'warning').length;
 
             const setAccHistPill = (id, label, active, activeCls, baseCls) => {
                 const el = document.getElementById(id);
@@ -7652,6 +7661,8 @@
             setAccHistPill('accHistFilterAll', `Tất cả (${totalAll})`, accountCheckHistoryFilter === 'all', 'bg-cyan-600', 'text-slate-300');
             setAccHistPill('accHistFilterNotRec', `⚠️ Không được đề xuất (${notRecCnt})`, accountCheckHistoryFilter === 'not_recommended', 'bg-rose-600', 'text-rose-300');
             setAccHistPill('accHistFilterOk', `✅ Đề xuất bình thường (${okCnt})`, accountCheckHistoryFilter === 'ok', 'bg-emerald-600', 'text-emerald-300');
+            setAccHistPill('accHistFilterWarning', `⚠️ Cảnh báo khác (${warningCnt})`, accountCheckHistoryFilter === 'warning', 'bg-amber-600', 'text-amber-300');
+            document.getElementById('accHistFilterWarning')?.classList.toggle('hidden', warningCnt === 0);
 
             const q = String(accountCheckHistorySearchQuery || '').trim().toLowerCase().replace(/^@+/, '');
             const filtered = accountCheckHistoryItems.filter(item => {
@@ -7659,8 +7670,9 @@
                 const nick = String(item.nickname || '').toLowerCase();
                 if (q && !u.includes(q) && !nick.includes(q)) return false;
                 if (accountCheckHistoryFilter === 'not_recommended') {
-                    return item.recommend_status === 'not_recommended' || item.recommend_status === 'warning';
+                    return item.recommend_status === 'not_recommended';
                 }
+                if (accountCheckHistoryFilter === 'warning') return item.recommend_status === 'warning';
                 if (accountCheckHistoryFilter === 'ok') {
                     return item.recommend_status === 'ok';
                 }
