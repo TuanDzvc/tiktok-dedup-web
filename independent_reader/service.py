@@ -77,6 +77,12 @@ def fetch_raw(value,count=18,cursor=0,state_override=None):
         if any(not isinstance(p,dict) or p.get('group_id') is None for p in data['aweme_list']):
             raise ReadFailure('Dữ liệu thiếu group_id; chưa thể kết luận trùng.','incomplete_data')
         if not data['aweme_list'] and not cursor and profile.get('videoCount',0):
+            filters = data.get('filter_reasons') or {}
+            reasons = list(filters.values()) if isinstance(filters, dict) else filters if isinstance(filters, list) else []
+            if reasons and all(reason == 'copyright_geo_filter' for reason in reasons):
+                raise ReadFailure(
+                    f'TikTok lọc {len(reasons)} video do giới hạn bản quyền theo khu vực (copyright_geo_filter). '
+                    'Hồ sơ kênh vẫn đọc được; đây không phải lỗi reader hay hết phiên.', 'geo_restricted')
             raise ReadFailure('TikTok không trả video công khai; có thể kênh riêng tư hoặc lượt đọc bị giới hạn.','target_unavailable')
         return {'profile':profile,'data':data}
 

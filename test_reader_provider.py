@@ -12,6 +12,19 @@ sys.path.insert(0,str(Path(__file__).parent/'independent_reader'))
 from session_manager import SessionManager
 
 
+def setUpModule():
+    global _country_patches
+    _country_patches = [patch.object(dedup_provider.core_dedup, '_get_cached_account_country', return_value=''),
+                        patch.object(dedup_provider.core_dedup, '_set_cached_account_country')]
+    for item in _country_patches:
+        item.start()
+
+
+def tearDownModule():
+    for item in reversed(_country_patches):
+        item.stop()
+
+
 def native_payload():
     return {'success':True,'profile':{'username':'fixture','secUid':'synthetic','videoCount':1},
         'data':{'status_code':0,'aweme_list':[{'aweme_id':'123','group_id':'456','create_time':0,
@@ -84,6 +97,15 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(self.router.blocked_until,0)
         self.assertEqual([e['query'] for e in self.router.events],['@missing.one','@missing.two'])
         self.assertTrue(all(e['source']=='target_unavailable' for e in self.router.events))
+
+    def test_geo_filter_falls_back_without_opening_reader_circuit(self):
+        self.router._bridge=Mock(return_value=Response({'success':False, 'code':'geo_restricted',
+            'error':'TikTok copyright_geo_filter; hồ sơ vẫn đọc được.'},503))
+        result=self.router.check(self.legacy,'fixture')
+        self.legacy.assert_called_once()
+        self.assertEqual(result['reader_provider']['reason'],'geo_restricted')
+        self.assertEqual(self.router.blocked_until,0)
+        self.assertIn('copyright_geo_filter',self.router.events[-1]['detail'])
 
     def test_reader_success_logged_only_on_change(self):
         self.router._bridge=Mock(return_value=Response(native_payload()))
@@ -220,7 +242,7 @@ class SessionTests(unittest.TestCase):
 
     def test_target_error_is_not_mislabeled_session_expired(self):
         manager=self.manager(Mock(),lambda _:self.new)
-        for code in ['target_unavailable','profile_not_found']:
+        for code in ['target_unavailable','geo_restricted','profile_not_found']:
             manager._update(state='healthy');manager.read_failure(code)
             self.assertEqual(manager.view()['state'],'healthy')
 

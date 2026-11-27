@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 import requests
 import core_dedup
+from account_country_evidence import country_evidence
 
 ROOT=Path(__file__).resolve().parent
 READER_DIR=Path(os.getenv('INDEPENDENT_READER_DIR',str(ROOT/'independent_reader')))
@@ -88,7 +89,12 @@ def format_native(payload, cookie_str='', proxy_str=''):
     """Map raw mobile response into existing web schema; performs zero HTTP calls."""
     profile=payload['profile'];data=payload['data'];posts=data['aweme_list']
     username=profile['username'];author=next((p.get('author') for p in posts if isinstance(p.get('author'),dict)),{}) or {}
-    region=core_dedup.normalize_country_code(author.get('region') or author.get('account_region') or '')
+    region, country_source = country_evidence(posts)
+    if not region:
+        region = core_dedup._get_cached_account_country(username, str(author.get('uid') or profile.get('uid') or ''))
+        country_source = 'shared_cache' if region else ''
+    if region:
+        core_dedup._set_cached_account_country(username, str(author.get('uid') or profile.get('uid') or ''), region)
     region_display=core_dedup.format_full_country_display(region) if region else '—'
     uid=str(author.get('uid') or profile.get('uid') or '---')
     created=core_dedup.decode_snowflake_timestamp(uid) or '—'
@@ -138,7 +144,7 @@ def format_native(payload, cookie_str='', proxy_str=''):
         'avatar':_first_url(profile.get('avatar'),author.get('avatar_larger'),author.get('avatar_thumb')),
         'followers':int(profile.get('followers') or author.get('follower_count') or 0),
         'videoCount':int(profile.get('videoCount') or author.get('aweme_count') or 0),
-        'createDate':created,'region':region,'region_display':region_display,'location_detail':''}
+        'createDate':created,'region':region,'region_display':region_display,'country_source':country_source,'location_detail':''}
     channel['followers_fmt']=core_dedup.format_count_compact(channel['followers'])
     return {'success':True,'vip_mode':True,'channel':channel,'secUid':profile['secUid'],'list':rows,
         'stats_summary':{'total_videos':len(rows),'duplicate_count':sum(r['is_dup'] for r in rows),
@@ -260,7 +266,7 @@ class ReaderRouter:
                 return result
             except Exception as exc:
                 if not detail:detail=f'Lỗi xử lý dữ liệu reader: {type(exc).__name__}'
-                if reason not in {'target_unavailable','profile_unavailable','invalid_input'}:
+                if reason not in {'target_unavailable','geo_restricted','profile_unavailable','invalid_input'}:
                     self.last_error_at=self.clock();self.blocked_until=self.clock()+30
         if not config['fallback_enabled']:
             self._record('unavailable',reason,shown_query,detail)

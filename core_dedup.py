@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 import requests
+from account_country_evidence import country_evidence
 from pathlib import Path
 
 # Cố gắng import các hàm trích xuất chuyên sâu & bảo mật từ tool (khi chạy local)
@@ -3556,6 +3557,12 @@ def fetch_channel_info_and_posts(
         channel_info["region_display"] = reg_disp
         check_user_info["country"] = reg_disp
 
+    shared_country, country_source = country_evidence(
+        (raw_items or []) + video_list, detected_account_country)
+    if shared_country:
+        channel_info['country_source'] = country_source
+        _set_cached_account_country(username, str(check_user_info.get('uid') or ''), shared_country)
+
     ch_vids = int(channel_info.get("videoCount") or 0)
     video_notice = ""
     if total_loaded == 0:
@@ -3615,6 +3622,33 @@ def _load_account_country_cache_unlocked() -> Dict[str, Dict[str, str]]:
                     if isinstance(bu, dict):
                         _ACCOUNT_COUNTRY_CACHE["by_uid"].update({str(k): str(v) for k, v in bu.items() if k and v})
         except Exception:
+            pass
+        # Restore only evidence-backed countries from channel history. The old
+        # channel display defaulted to US, so region alone must never be copied.
+        try:
+            history_file = ACCOUNT_COUNTRY_CACHE_FILE.with_name('check_history.json')
+            history = json.loads(history_file.read_text(encoding='utf-8')) if history_file.exists() else {}
+            changed = False
+            for box in history.values():
+                if not isinstance(box, dict):
+                    continue
+                for handle, entry in (box.get('entries') or {}).items():
+                    if not isinstance(entry, dict):
+                        continue
+                    country, _ = country_evidence(entry.get('videos') or [])
+                    if not country:
+                        continue
+                    key = str(handle).lstrip('@').lower()
+                    uid = str((entry.get('user_info') or {}).get('uid') or '')
+                    if key and key not in _ACCOUNT_COUNTRY_CACHE['by_handle']:
+                        _ACCOUNT_COUNTRY_CACHE['by_handle'][key] = country
+                        changed = True
+                    if uid.isdigit() and uid not in _ACCOUNT_COUNTRY_CACHE['by_uid']:
+                        _ACCOUNT_COUNTRY_CACHE['by_uid'][uid] = country
+                        changed = True
+            if changed:
+                _save_account_country_cache_unlocked()
+        except (OSError, ValueError, TypeError, AttributeError):
             pass
     return _ACCOUNT_COUNTRY_CACHE
 

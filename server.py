@@ -4616,6 +4616,15 @@ def api_get_check_history(req: Request):
             (v for v in acc_entries.values() if isinstance(v, dict)),
             key=lambda x: -int(x.get("checked_at") or 0),
         ) if can_acc_hist else []
+    # Fill missing countries from evidence already read by the channel checker.
+    # This is a read-only enrichment: no paid recheck, quota change or new date.
+    account_items = [dict(item) for item in account_items]
+    for item in account_items:
+        if not core_dedup._is_valid_country_code(item.get('region')):
+            country = core_dedup._get_cached_account_country(item.get('unique_id') or item.get('username'), item.get('uid'))
+            if country:
+                item['region'] = country
+                item['region_display'] = core_dedup.format_full_country_display(country)
     return JSONResponse(content={
         "success": True,
         "ttl_days": 7,
