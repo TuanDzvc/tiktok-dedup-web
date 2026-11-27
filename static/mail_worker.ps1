@@ -228,10 +228,10 @@ function Recovery-DestinationMatches([string]$Label,[string]$Address) {
 }
 function Newest-RecoveryRecord($Records,$Baseline,[DateTime]$Requested,[bool]$SecurityOnly=$false) {
     $since=([DateTimeOffset]$Requested).ToUnixTimeSeconds()
-    # createdAt has second precision. Snapshot IDs before clicking Send excludes
-    # older mail even if it shares the same second with the request.
+    # IDs exclude pre-existing mail. A two-second margin covers rounded HTTP
+    # Date/createdAt clocks and transit time without reusing baseline mail.
     return @($Records|Where-Object {
-        (Is-RecoveryMessage $_) -and (-not $SecurityOnly -or [string]$_.subject -notmatch 'single[- ]use code') -and -not $Baseline.ContainsKey([string]$_.id) -and [double]$_.createdAt -ge $since
+        (Is-RecoveryMessage $_) -and (-not $SecurityOnly -or [string]$_.subject -notmatch 'single[- ]use code') -and -not $Baseline.ContainsKey([string]$_.id) -and [double]$_.createdAt -ge ($since-2)
     }|Sort-Object {[double]$_.createdAt} -Descending|Select-Object -First 1)
 }
 function Recovery-Time([DateTime]$Utc) {
@@ -314,11 +314,25 @@ function Recovery-Records($Session,[string]$Part) {
     if($cache.recordsUrl -like ('*'+[Uri]::EscapeDataString($Part)+'*')){return $cache.records}
     return @()
 }
+$script:recoveryClocks=@{}
+function Recovery-RequestTime($Session) {
+    $key=[string]$Session.GetHashCode()
+    if($script:recoveryClocks.ContainsKey($key)){
+        $clock=$script:recoveryClocks[$key]
+        return $clock.server.Add(([DateTime]::UtcNow-$clock.sampled))
+    }
+    return [DateTime]::UtcNow
+}
 function Recovery-Api($Session,[string]$Path,$Query) {
     if($Path -notin @('/messages','/message')){throw 'Unexpected recovery endpoint'}
     $pairs=($Query.GetEnumerator()|ForEach-Object {[Uri]::EscapeDataString($_.Key)+'='+[Uri]::EscapeDataString([string]$_.Value)}) -join '&'
     $resource=($Path+'?'+$pairs)|ConvertTo-Json -Compress
-    return Evaluate $Session ('(async()=>{if(location.origin!=="https://fviainboxes.com")throw Error("Unexpected recovery origin");const r=await fetch('+$resource+',{cache:"no-store",credentials:"same-origin"});if(!r.ok)throw Error("Recovery request failed: "+r.status);return JSON.stringify(await r.json())})()')
+    $reply=Evaluate $Session ('(async()=>{if(location.origin!=="https://fviainboxes.com")throw Error("Unexpected recovery origin");const r=await fetch('+$resource+',{cache:"no-store",credentials:"same-origin"});if(!r.ok)throw Error("Recovery request failed: "+r.status);const payload=await r.json();const stamp=Date.parse(r.headers.get("date")||"");return JSON.stringify({__tfMailPayload:payload,serverEpoch:Number.isFinite(stamp)?Math.floor(stamp/1000):null})})()')
+    if($reply -and $reply.PSObject.Properties.Name -contains '__tfMailPayload'){
+        if($null -ne $reply.serverEpoch){$script:recoveryClocks[[string]$Session.GetHashCode()]=@{server=[DateTimeOffset]::FromUnixTimeSeconds([long]$reply.serverEpoch).UtcDateTime;sampled=[DateTime]::UtcNow}}
+        return $reply.__tfMailPayload
+    }
+    return $reply
 }
 $browser=$null;$proxy=$null;$session=$null;$recoverySession=$null
 $profileRoot=Join-Path $workerRoot ('profile-'+$job.id)
@@ -458,7 +472,7 @@ try {
             if(-not (Recovery-DestinationMatches ([string]$p.body) $recovery)){Stage ([regex]::Unescape('\u0110\u1ecba ch\u1ec9 nh\u1eadn m\u00e3 kh\u00f4ng kh\u1edbp mail kh\u00f4i ph\u1ee5c; c\u1ea7n ki\u1ec3m tra th\u1ee7 c\u00f4ng'));Start-Sleep -Milliseconds 700;continue}
             if([string]$sendCode.text -match '^(send a code to|g\u1eedi m\u00e3 \u0111\u1ebfn)'){
                 foreach($record in @(Recovery-Records $recoverySession $recovery.Split('@')[0])){$baseline[[string]$record.id]=$true}
-                $codeRequested=[DateTime]::UtcNow;$submitted.code=$false
+                $codeRequested=Recovery-RequestTime $recoverySession;$submitted.code=$false
                 $recoverySteps[$recoveryStep]=$true
                 Stage ([regex]::Unescape('\u0110ang ch\u1ecdn nh\u1eadn m\u00e3 qua mail kh\u00f4i ph\u1ee5c \u0111\u00e3 c\u1ea5u h\u00ecnh'))
                 Click $session $sendCode;continue
@@ -466,7 +480,7 @@ try {
             $textInput=@($p.inputs|Where-Object {$_.type -in @('text','email')}|Select-Object -First 1)[0]
             if($textInput -and -not $codeInput){Fill $session $textInput $recovery}
             foreach($record in @(Recovery-Records $recoverySession $recovery.Split('@')[0])){$baseline[[string]$record.id]=$true}
-            $codeRequested=[DateTime]::UtcNow;$submitted.code=$false
+            $codeRequested=Recovery-RequestTime $recoverySession;$submitted.code=$false
             Stage (([regex]::Unescape('\u0110ang y\u00eau c\u1ea7u m\u00e3 Microsoft l\u00fac '))+(Recovery-Time $codeRequested))
             Click $session $sendCode;$recoverySteps[$recoveryStep]=$true;Stage ([regex]::Unescape('\u0110ang ch\u1edd m\u00e3 Microsoft m\u1edbi g\u1eedi t\u1edbi mail kh\u00f4i ph\u1ee5c'));continue
         }

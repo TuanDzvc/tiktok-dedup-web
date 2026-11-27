@@ -5,7 +5,7 @@ $parseErrors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile($source,[ref]$null,[ref]$parseErrors)
 if($parseErrors.Count){throw 'Full worker script does not parse in Windows PowerShell'}
 if(([IO.File]::ReadAllBytes($source)|Where-Object {$_ -gt 127}).Count){throw 'Worker must remain ASCII compatible with Windows PowerShell 5.1'}
-$names=@('Code-Inputs','Is-RecoveryMessage','Extract-RecoveryCode','Submit-RecoveryCode','Update-RecoveryCache','Recovery-Records','Button','Recovery-DestinationMatches','Newest-RecoveryRecord','Event','Stage','Heartbeat','Password-First')
+$names=@('Code-Inputs','Is-RecoveryMessage','Extract-RecoveryCode','Submit-RecoveryCode','Update-RecoveryCache','Recovery-Records','Button','Recovery-DestinationMatches','Newest-RecoveryRecord','Event','Stage','Heartbeat','Password-First','Recovery-RequestTime')
 foreach($fn in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $names},$true)){Invoke-Expression $fn.Extent.Text}
 function Assert($Condition,[string]$Message){if(-not $Condition){throw $Message}}
 $boxes=@(1..6|ForEach-Object {@{id='digit'+$_;name='';type='tel';max=1;label=''}})
@@ -35,7 +35,7 @@ Assert (-not (Recovery-DestinationMatches 'Send a code to te*****@other.example'
 $request=[DateTimeOffset]::FromUnixTimeSeconds(1800000000).UtcDateTime
 $messages=@(
     @{id='new';createdAt=1800000002;from='account-security-noreply@example.com';subject='Your single-use code'},
-    @{id='old';createdAt=1799999999;from='account-security-noreply@example.com';subject='Your single-use code'},
+    @{id='old';createdAt=1799999940;from='account-security-noreply@example.com';subject='Your single-use code'},
     @{id='newest';createdAt=1800000005;from='account-security-noreply@example.com';subject='Your single-use code'},
     @{id='unrelated';createdAt=1800000008;from='other@example.com';subject='Your single-use code'}
 )
@@ -50,6 +50,14 @@ Assert ($securityPick.Count -eq 1 -and $securityPick[0].id -eq 'security') 'Sele
 Assert ((Extract-RecoveryCode '<style>.x{color:#123456}</style><p>Security code: 012345</p>') -ceq '012345') 'Security code was confused with HTML styling'
 Assert (@(Code-Inputs @{body='Enter your code';inputs=@(@{id='verificationInput';type='text';max=-1;name='';label=''})}).Count -eq 1) 'Unlabelled security input was not recognized'
 Assert (@(Code-Inputs @{body='Verify your email';inputs=@(@{id='proof-confirmation-email-input';type='text';max=-1;name='';label=''})}).Count -eq 0) 'Recovery email field was mistaken for OTP'
+$skewed=@{id='arrived-one-second-before-client-clock';createdAt=1799999999;from='account-security-noreply@accountprotection.microsoft.com';subject='Personal Microsoft account security code'}
+Assert (@(Newest-RecoveryRecord @($skewed) @{} $request $true).Count -eq 1) 'One-second clock skew rejected a fresh security mail'
+Assert (@(Newest-RecoveryRecord @($skewed) @{'arrived-one-second-before-client-clock'=$true} $request $true).Count -eq 0) 'Clock tolerance reused a baseline message'
+$script:recoveryClocks=@{}
+$clockSession=New-Object PSObject
+$script:recoveryClocks[[string]$clockSession.GetHashCode()]=@{server=$request;sampled=[DateTime]::UtcNow}
+$clockTime=Recovery-RequestTime $clockSession
+Assert ([Math]::Abs(($clockTime-$request).TotalSeconds) -lt 2) 'Recovery request time ignored mailbox server clock'
 $script:recoveryCache=@{}
 $global:fixtureEvents=@(
     @{method='Page.frameNavigated';params=@{}},
@@ -82,6 +90,13 @@ $null=Recovery-Api $session '/message' @{id='fixture-id';username='fixture';doma
 Assert ($script:recoveryExpression.Contains('id=fixture-id') -and $script:recoveryExpression.Contains('username=fixture') -and $script:recoveryExpression.Contains('domain=fviainboxes.com')) 'Message fetch omitted required mailbox parameters'
 Assert ($script:recoveryExpression.Contains('cache:"no-store"') -and $script:recoveryExpression.Contains('location.origin')) 'Client inbox fetch lacks cache/origin safeguards'
 Assert (@(Recovery-Records $session 'fixture').Count -eq 1) 'Direct client fetch did not return inbox records'
+$script:recoveryClocks=@{}
+function Evaluate($Session,[string]$Expression){return [PSCustomObject]@{__tfMailPayload=[PSCustomObject]@{result=@(@{id='clock-fixture'})};serverEpoch=1800000000}}
+$clockPayload=Recovery-Api $session '/messages' @{username='fixture';domain='fviainboxes.com'}
+Assert ($clockPayload.result[0].id -eq 'clock-fixture') 'Mailbox server-clock wrapper changed the inbox payload'
+Assert ($script:recoveryClocks.ContainsKey([string]$session.GetHashCode())) 'Mailbox HTTP Date was not captured'
+function Evaluate($Session,[string]$Expression){return [PSCustomObject]@{__tfMailPayload='Security code: 012345';serverEpoch=1800000000}}
+Assert ((Recovery-Api $session '/message' @{id='fixture';username='fixture';domain='fviainboxes.com'}) -ceq 'Security code: 012345') 'Server-clock wrapper corrupted string message body'
 $job=@{id='fixture';lease='fixture'}
 $global:apiFixture='network'
 function Api([string]$Action,$Body){
