@@ -18,14 +18,22 @@
     section.innerHTML = `
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div><h2 class="text-xl font-extrabold text-white"><i class="fa-brands fa-youtube text-rose-400 mr-2"></i>Theo Dõi Kênh YouTube</h2>
-            <p class="text-xs text-slate-400 mt-2">Chạy trên Render · Tắt PC hoặc đóng web vẫn theo dõi khi dịch vụ Render đang hoạt động.</p></div>
-            <button id="ytRefresh" class="${buttonClass}">↻ Làm mới</button>
+            <p class="text-xs text-slate-400 mt-2">Chạy trên Render · Tắt PC hoặc đóng web vẫn theo dõi khi dịch vụ Render đang hoạt động.</p>
+            <p id="ytRuntime" class="text-xs text-slate-400 mt-1"></p></div>
+            <div class="flex items-center gap-2"><button type="button" id="ytOpenSettings" aria-haspopup="dialog" class="${buttonClass}"><i class="fa-solid fa-gear mr-1"></i>Cài đặt</button>
+            <button id="ytRefresh" class="${buttonClass}">↻ Làm mới</button></div>
         </div>
-        <div class="rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 text-xs leading-relaxed text-amber-200">Render Free có thể ngủ khi thiếu truy cập. Muốn theo dõi liên tục 24/7, dùng gói Render luôn chạy. Lần quét đầu chỉ tạo mốc; không gửi lại video cũ.</div>
         <div id="ytMessage" role="status" class="text-sm text-cyan-200"></div>
-        <form id="ytSettings" class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4 space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3"><h3 class="font-bold text-cyan-200">Cấu hình thông báo</h3>
+        <dialog id="ytSettingsDialog" aria-labelledby="ytSettingsTitle" class="m-auto w-[calc(100vw-2rem)] max-w-4xl max-h-[90vh] overflow-hidden p-0 rounded-2xl border border-slate-700 bg-slate-950 text-slate-200 shadow-2xl backdrop:bg-black/70">
+        <div class="max-h-[calc(90vh-2px)] overflow-y-auto custom-scrollbar">
+        <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-700 bg-slate-950 px-4 py-3">
+            <h3 id="ytSettingsTitle" class="font-bold text-cyan-200"><i class="fa-solid fa-gear mr-2"></i>Cài Đặt Theo Dõi YouTube</h3>
+            <button type="button" id="ytCloseSettings" aria-label="Đóng cài đặt YouTube" class="w-8 h-8 rounded-lg hover:bg-slate-800 text-xl text-slate-300">×</button>
+        </div>
+        <form id="ytSettings" class="bg-slate-900/70 p-4 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3"><h4 class="font-bold text-cyan-200">Cấu hình thông báo</h4>
             <label class="text-sm text-emerald-300 flex items-center gap-2"><input id="ytEnabled" type="checkbox"> Bật theo dõi trên Render</label></div>
+            <div class="rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 text-xs leading-relaxed text-amber-200">Render Free có thể ngủ khi thiếu truy cập. Muốn theo dõi liên tục 24/7, dùng gói Render luôn chạy. Lần quét đầu chỉ tạo mốc; không gửi lại video cũ.</div>
             <div class="grid md:grid-cols-2 gap-4">
                 <label class="text-xs text-slate-300 space-y-2"><span>YouTube API key — mỗi dòng một key (có thể để trống để dùng RSS/web)</span>
                     <textarea id="ytKeys" rows="3" autocomplete="off" spellcheck="false" class="${inputClass}" placeholder="Để trống để giữ key đã lưu"></textarea>
@@ -45,9 +53,10 @@
                     <p class="text-xs text-slate-400">Có thể dùng Telegram, Discord hoặc cả hai. Lưu cấu hình trước khi gửi thử.</p>
                     <button type="button" id="ytTestDiscord" class="${buttonClass}">Gửi thử Discord</button></div>
             </div>
-            <div class="flex flex-wrap items-center justify-between gap-3"><p id="ytRuntime" class="text-xs text-slate-400"></p>
+            <div class="flex flex-wrap items-center justify-between gap-3"><p id="ytSettingsMessage" role="status" class="text-xs text-cyan-200"></p>
                 <button id="ytSave" disabled class="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-2 text-sm font-bold text-white disabled:opacity-40">Lưu cấu hình</button></div>
         </form>
+        </div></dialog>
         <div class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4 space-y-4">
             <form id="ytAddForm" class="flex flex-wrap gap-2"><input id="ytChannel" required class="${inputClass} flex-1 min-w-[220px]" placeholder="Dán @handle, Channel ID UC… hoặc link kênh YouTube">
                 <button id="ytAdd" class="${buttonClass}">＋ Thêm kênh</button></form>
@@ -56,9 +65,22 @@
         <div class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h3 class="font-bold text-cyan-200 mb-3">Nhật ký video mới & thông báo</h3><div id="ytEvents" class="space-y-3 max-h-[500px] overflow-auto"></div></div>`;
     document.querySelector('main').appendChild(section);
 
+    window.closeYoutubeMonitorSettings = () => {
+        if (byId('ytSettingsDialog').open) byId('ytSettingsDialog').close();
+    };
+    byId('ytOpenSettings').onclick = () => {
+        if (currentVipUser?.role === 'admin') byId('ytSettingsDialog').showModal();
+    };
+    byId('ytCloseSettings').onclick = closeYoutubeMonitorSettings;
+    byId('ytSettingsDialog').onclick = event => {
+        if (event.target === byId('ytSettingsDialog')) closeYoutubeMonitorSettings();
+    };
+
     function message(text, error = false) {
-        byId('ytMessage').textContent = text;
-        byId('ytMessage').className = error ? 'text-sm text-rose-300' : 'text-sm text-cyan-200';
+        for (const id of ['ytMessage', 'ytSettingsMessage']) {
+            byId(id).textContent = text;
+            byId(id).className = error ? 'text-sm text-rose-300' : 'text-sm text-cyan-200';
+        }
     }
     async function api(action, body) {
         const response = await fetch('/api/youtube-monitor/' + action, {
