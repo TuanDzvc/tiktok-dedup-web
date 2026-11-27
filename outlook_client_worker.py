@@ -200,13 +200,30 @@ class ClientMailWorker:
                     if body.get('recovery_email'):row['recovery_email']=str(body['recovery_email'])[:254]
                     job['status']='done'
                 else:
-                    row.update(status='Lỗi đăng nhập/xác minh',active_running=False)
+                    reasons={
+                        'runtime':'Không chuẩn bị được Chromium trên máy khách',
+                        'browser_start':'Windows không khởi động được Chromium',
+                        'browser_policy_blocked':'Windows chặn Chromium; không có Microsoft Edge đã xác thực để dự phòng',
+                        'browser_exited':'Chromium tự thoát trước khi mở cổng điều khiển',
+                        'browser_start_timeout':'Chromium chưa mở cổng điều khiển sau 20 giây',
+                        'cdp_connect':'Không kết nối được cổng điều khiển Chromium',
+                        'oauth_setup':'Lỗi khởi tạo OAuth trước khi đăng nhập',
+                        'microsoft_login':'Lỗi trong luồng đăng nhập Microsoft',
+                        'verification_timeout':'Hết thời gian chờ đăng nhập/xác minh',
+                    }
+                    reason=reasons.get(body.get('failure_code'),'Worker lỗi; chưa nhận được chi tiết từ bản cũ')
+                    details=[]
+                    if str(body.get('failure_line') or '').isdigit():details.append('dòng '+str(body['failure_line']))
+                    if isinstance(body.get('browser_exit'),int):details.append('exit '+str(body['browser_exit']))
+                    if isinstance(body.get('native_error'),int):details.append('Windows '+str(body['native_error']))
+                    if details:reason+=' ('+', '.join(details)+')'
+                    row.update(status=reason,active_running=False)
                     job['status']='error'
                 try:self.service._save_unlocked()
                 except Exception:
                     self.service._state=before
                     raise
-                self.service._add_log('Worker hoàn tất một mail: '+('OK' if job['status']=='done' else 'cần kiểm tra xác minh.'),'summary')
+                self.service._add_log('Worker hoàn tất một mail: '+('OK' if job['status']=='done' else reason),'summary')
                 self.refresh_status()
             return {'success':True,'cancel':False}
 

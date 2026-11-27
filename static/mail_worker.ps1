@@ -142,8 +142,31 @@ function Button($Probe,[string]$Pattern) {return @($Probe.buttons|Where-Object {
 function New-Tab([string]$Base,[string]$Url) {
     $page=Invoke-RestMethod -UseBasicParsing -Method Put -Uri ($Base+'/json/new?'+[Uri]::EscapeDataString($Url))
     $session=New-Object TikFlowMailHelper.CdpSession
-    $null=$session.ConnectAsync($page.webSocketDebuggerUrl,12000).GetAwaiter().GetResult()
+    try{$null=$session.ConnectAsync($page.webSocketDebuggerUrl,12000).GetAwaiter().GetResult()}
+    catch{$session.Dispose();throw}
     return $session
+}
+function Start-ClientBrowser([string]$Executable,[string[]]$BrowserArguments) {
+    try{return Start-Process -FilePath $Executable -ArgumentList $BrowserArguments -WindowStyle Normal -PassThru}
+    catch{
+        $errorRecord=$_
+        $cause=$_.Exception;$nativeCode=0
+        while($cause){if($cause -is [ComponentModel.Win32Exception]){$nativeCode=$cause.NativeErrorCode};$cause=$cause.InnerException}
+        $blocked=$nativeCode -in @(577,1260,4551) -or $errorRecord.Exception.Message -match 'Application Control policy|blocked by group policy'
+        if(-not $blocked){throw}
+        $edgePaths=@((Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),(Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'))
+        $edge=$null
+        foreach($candidate in $edgePaths){
+            if(Test-Path -LiteralPath $candidate){
+                $signature=Get-AuthenticodeSignature -LiteralPath $candidate
+                if($signature.Status -eq 'Valid' -and $signature.SignerCertificate.Subject -match 'O=Microsoft Corporation'){$edge=$candidate;break}
+            }
+        }
+        if(-not $edge){$script:failureCode='browser_policy_blocked';throw 'Application Control blocked Chromium; no verified Microsoft Edge fallback is installed'}
+        Stage 'Windows Application Control blocked Fingerprint Chromium; using verified Microsoft Edge on this client'
+        $script:activeBrowser='Microsoft Edge (Application Control fallback)'
+        return Start-Process -FilePath $edge -ArgumentList $BrowserArguments -WindowStyle Normal -PassThru
+    }
 }
 function Recovery-Records($Session,[string]$Part) {
     $records=@()
@@ -157,6 +180,8 @@ function Recovery-Records($Session,[string]$Part) {
 $browser=$null;$proxy=$null;$session=$null;$recoverySession=$null
 $profileRoot=Join-Path $workerRoot ('profile-'+$job.id)
 $ok=$false;$refresh='';$recovery=[string]$job.account.recovery_email
+$script:phase='runtime';$failureCode='';$failureLine=0;$failureType='';$browserExit=$null;$nativeError=$null
+$script:activeBrowser='Fingerprint Chromium 148'
 try {
     $exe=Ensure-Browser
     Heartbeat
@@ -170,18 +195,37 @@ try {
         if($userName){$proxy=New-Object TikFlowMailHelper.LocalProxyForwarder($hostName,$port,$userName,$password);$proxyArgument='--proxy-server=http://127.0.0.1:'+$proxy.LocalPort}
         else{$proxyArgument='--proxy-server=http://'+$hostName+':'+$port}
     }
+    $script:phase='browser_start'
     Stage 'Opening isolated Chromium on this client'
     New-Item -ItemType Directory -Force -Path $profileRoot|Out-Null
     $browserArguments=@(('--user-data-dir="'+$profileRoot+'"'),'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--window-size=1000,800')
     if($proxyArgument){$browserArguments+=$proxyArgument}
     if(-not $job.show_browser){$browserArguments+='--headless=new'}
     $browserArguments+='about:blank'
-    $browser=Start-Process -FilePath $exe -ArgumentList $browserArguments -WindowStyle Normal -PassThru
+    $browser=Start-ClientBrowser $exe $browserArguments
     $activePort=Join-Path $profileRoot 'DevToolsActivePort'
     $until=[DateTime]::UtcNow.AddSeconds(20)
-    while(-not (Test-Path -LiteralPath $activePort)){Heartbeat;if($browser.HasExited -or [DateTime]::UtcNow -gt $until){throw 'Client Chromium did not start'};Start-Sleep -Milliseconds 250}
-    $port=[int]([IO.File]::ReadAllLines($activePort)[0]);$cdpBase='http://127.0.0.1:'+$port
-    $session=New-Tab $cdpBase 'about:blank'
+    while(-not (Test-Path -LiteralPath $activePort)){
+        Heartbeat
+        if($browser.HasExited){$browserExit=$browser.ExitCode;$failureCode='browser_exited';throw 'Client Chromium exited before CDP was ready'}
+        if([DateTime]::UtcNow -gt $until){$failureCode='browser_start_timeout';throw 'Client Chromium did not start'}
+        Start-Sleep -Milliseconds 250
+    }
+    $script:phase='cdp_connect'
+    Stage 'Chromium started; connecting to its local control port'
+    $port=0
+    do {
+        try{$port=[int]([IO.File]::ReadAllLines($activePort)[0])}catch{}
+        if($port -gt 0 -and $port -le 65535){break}
+        if([DateTime]::UtcNow -gt $until){throw 'Chromium control port file was not ready'}
+        Heartbeat;Start-Sleep -Milliseconds 150
+    }while($true)
+    $cdpBase='http://127.0.0.1:'+$port
+    do {
+        try{$session=New-Tab $cdpBase 'about:blank';break}
+        catch{if([DateTime]::UtcNow -gt $until){throw};Heartbeat;Start-Sleep -Milliseconds 300}
+    }while($true)
+    $script:phase='oauth_setup'
     $null=Cdp $session 'Fetch.enable' @{patterns=@(@{urlPattern='https://localhost*';requestStage='Request'})}
     $rng=New-Object Security.Cryptography.RNGCryptoServiceProvider
     $bytes=New-Object byte[] 48;$rng.GetBytes($bytes);$verifier=[Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
@@ -189,6 +233,8 @@ try {
     $sha=[Security.Cryptography.SHA256]::Create();$challenge=[Convert]::ToBase64String($sha.ComputeHash([Text.Encoding]::ASCII.GetBytes($verifier))).TrimEnd('=').Replace('+','-').Replace('/','_');$sha.Dispose()
     $params=@{client_id=$job.client_id;redirect_uri='https://localhost';response_type='code';scope='openid offline_access https://graph.microsoft.com/Mail.Read';code_challenge=$challenge;code_challenge_method='S256';state=$oauthState;login_hint=$job.account.email;prompt='select_account'}
     $query=($params.GetEnumerator()|ForEach-Object {[Uri]::EscapeDataString($_.Key)+'='+[Uri]::EscapeDataString([string]$_.Value)}) -join '&'
+    $script:phase='microsoft_login'
+    Stage 'Opening Microsoft sign-in on this client'
     $null=Cdp $session 'Page.navigate' @{url=('https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?'+$query)}
     $deadline=[DateTime]::UtcNow.AddSeconds([int]$job.timeout)
     $submitted=@{};$callback='';$baseline=@{};$lastRecovery=[DateTime]::UtcNow.AddMinutes(-1);$codeRequested=[DateTime]::UtcNow
@@ -286,8 +332,17 @@ try {
         Stage 'Waiting for Microsoft; complete any additional verification in this client browser'
         Start-Sleep -Milliseconds 500
     }
-    if(-not $ok){throw 'Login or verification timed out'}
-} catch { $ok=$false }
+    if(-not $ok){$failureCode='verification_timeout';throw 'Login or verification timed out'}
+} catch {
+    $ok=$false
+    if(-not $failureCode){$failureCode=$script:phase}
+    $failureLine=[int]$_.InvocationInfo.ScriptLineNumber
+    $failureType=$_.Exception.GetType().Name
+    $cause=$_.Exception
+    while($cause){if($cause -is [ComponentModel.Win32Exception]){$nativeError=$cause.NativeErrorCode};$cause=$cause.InnerException}
+    # Never upload exception messages: upstream responses may contain credentials.
+    try{$null=Event 'log' ('Worker error: '+$failureCode+'; '+$failureType+'; line '+$failureLine)}catch{}
+}
 finally {
     if($session){$session.Dispose()};if($recoverySession){$recoverySession.Dispose()}
     if($browser){Stop-OwnedProcess $browser};if($proxy){$proxy.Dispose()}
@@ -298,7 +353,7 @@ finally {
     }
 }
 $resultPath=Join-Path $workerRoot ('result-'+$job.id+'.bin')
-$resultBody=@{job_id=$job.id;lease=$job.lease;kind='result';ok=$ok;refresh_token=$refresh;recovery_email=$recovery}
+$resultBody=@{job_id=$job.id;lease=$job.lease;kind='result';ok=$ok;refresh_token=$refresh;recovery_email=$recovery;failure_code=$failureCode;failure_line=$failureLine;failure_type=$failureType;browser_exit=$browserExit;native_error=$nativeError}
 Write-Protected $resultPath $resultBody
 for($attempt=0;$attempt -lt 3;$attempt++){
     try {$null=Api 'event' $resultBody;Remove-Item -LiteralPath $resultPath -Force -ErrorAction SilentlyContinue;break}

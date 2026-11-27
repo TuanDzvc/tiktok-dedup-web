@@ -16,6 +16,7 @@ Quản Lý Mail chỉ dành cho `tuandzvcc`. Render giữ duy nhất hàng đợ
 ## Vận hành
 
 - Chỉ HTTP proxy được worker hỗ trợ, gồm IP:PORT:USER:PASS. Proxy có xác thực được chuyển qua cầu nối loopback trên chính máy khách.
+- Nếu Windows Application Control chặn Fingerprint Chromium, worker thử Microsoft Edge trong thư mục cài đặt hệ thống, chỉ khi chữ ký Microsoft hợp lệ. Log ghi rõ dùng Edge dự phòng; không tự đổi chính sách bảo mật của Windows. Nếu không có Edge hợp lệ, web báo rõ lỗi chặn trình duyệt.
 - Worker poll mỗi 2 giây, không tự chuyển job sang máy khác khi mất kết nối. Hết 90 giây không có heartbeat, job chuyển trạng thái mất kết nối để admin kiểm tra/chạy lại.
 - Kết quả chưa gửi được giữ trong outbox DPAPI và thử lại khi worker kết nối. Thu hồi/dừng job không lưu kết quả muộn.
 - Render phải hoạt động để nhận lệnh. Render Free có thể khởi động chậm sau khi ngủ; không có bảo đảm 24/7.

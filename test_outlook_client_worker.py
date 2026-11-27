@@ -111,6 +111,21 @@ class ClientWorkerTests(unittest.TestCase):
         self.w.event(self.wid, self.key, {'job_id': job['id'], 'lease': job['lease'], 'kind': 'log', 'text': 'fixture-password'})
         self.assertNotIn('fixture-password', self.s.logs[-1])
 
+    def test_browser_failure_is_not_misreported_as_account_verification(self):
+        job=self.claim()
+        self.result(job,ok=False,failure_code='cdp_connect',failure_line=203,
+                    failure_message='fixture-password should never be logged')
+        row=self.s._state['folders']['Default'][0]
+        self.assertIn('Chromium',row['status'])
+        self.assertIn('203',row['status'])
+        self.assertNotIn('fixture-password',' '.join(self.s.logs))
+        self.assertNotIn('xác minh',row['status'])
+
+    def test_browser_exit_diagnostic_survives_save(self):
+        job=self.claim()
+        self.result(job,ok=False,failure_code='browser_exited',browser_exit=-1073741515)
+        self.assertIn('-1073741515',self.s.saved['folders']['Default'][0]['status'])
+
     def test_launcher_contains_only_scoped_key(self):
         bat = launcher('https://checktiktok.site', self.wid, self.key, Path(__file__).parent)
         self.assertIn(self.key, bat)
