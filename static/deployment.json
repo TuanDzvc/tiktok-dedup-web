@@ -1,5 +1,5 @@
 {
-  "release": "2026-11-27.14",
+  "release": "2026-11-27.15",
   "group_assets": "20261126_27",
   "features": [
     "channel_groups",
@@ -15,6 +15,7 @@
     "toast_above_workspace_tabs",
     "consistent_notice_fonts_and_day_only_vip_expiry",
     "admin_youtube_cloud_monitor",
-    "progressive_account_check_results"
+    "progressive_account_check_results",
+    "compact_account_cards_with_inline_status"
   ]
 }

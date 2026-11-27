@@ -7131,9 +7131,9 @@
                 const dispIn = escapeHtml((item && (item.unique_id ? '@' + item.unique_id : item.input)) || 'Không rõ');
                 const errTxt = escapeHtml((item && item.error) || 'Không tìm thấy tài khoản.');
                 return `
-                    <div class="glass-panel rounded-2xl p-4 border border-slate-700/70 bg-slate-900/70 flex flex-wrap items-center justify-between gap-3">
+                    <div class="account-status-card glass-panel rounded-2xl p-3 border border-slate-700/70 bg-slate-900/70 flex flex-wrap items-center justify-between gap-3">
                         <div class="flex items-center gap-3">
-                            <div class="w-11 h-11 rounded-xl bg-rose-950/80 border border-rose-600/50 flex items-center justify-center text-rose-400">
+                            <div class="w-9 h-9 rounded-xl bg-rose-950/80 border border-rose-600/50 flex items-center justify-center text-rose-400">
                                 <i class="fa-solid fa-user-xmark"></i>
                             </div>
                             <div>
@@ -7157,25 +7157,25 @@
             const createDate = escapeHtml(item.create_date || '—');
 
             const st = String(item.recommend_status || 'ok');
-            let cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-slate-700/75 hover:border-emerald-500/45 transition';
+            let cardCls = 'account-status-card glass-panel rounded-2xl p-3 border border-slate-700/75 hover:border-emerald-500/45 transition';
             let statusBadgeHtml = `
-                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/85 border border-emerald-500/60 text-emerald-300 font-extrabold">
+                <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/85 border border-emerald-500/60 text-emerald-300 font-extrabold text-[11px] account-recommendation-badge">
                     <i class="fa-solid fa-circle-check text-emerald-400"></i>
                     <span>Đề xuất bình thường</span>
                 </div>
             `;
             if (st === 'not_recommended') {
-                cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-rose-500/75 bg-gradient-to-br from-rose-950/35 via-slate-900/90 to-dark-900/95 shadow-lg shadow-rose-950/30 transition';
+                cardCls = 'account-status-card glass-panel rounded-2xl p-3 border border-rose-500/75 bg-gradient-to-br from-rose-950/35 via-slate-900/90 to-dark-900/95 shadow-lg shadow-rose-950/30 transition';
                 statusBadgeHtml = `
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/95 border border-rose-500/85 text-rose-200 font-extrabold shadow-sm shadow-rose-950/60">
+                    <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/95 border border-rose-500/85 text-rose-200 font-extrabold text-[11px] account-recommendation-badge shadow-sm shadow-rose-950/60">
                         <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
                         <span>${escapeHtml(item.recommend_label || 'Tài khoản không được đề xuất')}</span>
                     </div>
                 `;
             } else if (st === 'warning') {
-                cardCls = 'glass-panel rounded-3xl p-4 sm:p-5 border border-amber-500/65 bg-amber-950/15 transition';
+                cardCls = 'account-status-card glass-panel rounded-2xl p-3 border border-amber-500/65 bg-amber-950/15 transition';
                 statusBadgeHtml = `
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-500/75 text-amber-200 font-extrabold">
+                    <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/90 border border-amber-500/75 text-amber-200 font-extrabold text-[11px] account-recommendation-badge">
                         <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
                         <span>${escapeHtml(item.recommend_label || 'Cảnh báo tài khoản')}</span>
                     </div>
@@ -7218,7 +7218,7 @@
                 <button
                     type="button"
                     onclick="jumpToChannelCheckFromAccount('${rawUidClean}')"
-                    class="px-3 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-800 border border-cyan-500/50 text-cyan-200 hover:text-white text-xs font-extrabold transition inline-flex items-center gap-1.5 whitespace-nowrap"
+                    class="px-2.5 py-1 rounded-lg bg-cyan-950/90 hover:bg-cyan-800 border border-cyan-500/50 text-cyan-200 hover:text-white text-xs font-extrabold transition inline-flex items-center gap-1.5 whitespace-nowrap"
                     title="Chuyển sang tab Kiểm Tra Kênh để quét trùng lặp & video của kênh này"
                 >
                     <i class="fa-solid fa-bolt text-amber-300"></i>
@@ -7228,12 +7228,12 @@
 
             return `
                 <div class="${cardCls}">
-                    <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-5">
+                    <div class="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-3 sm:gap-4">
                         <div class="relative group flex-shrink-0">
                             <img
                                 src="${avatarSrc}"
                                 alt="${nickSafe}"
-                                class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 ${st === 'not_recommended' ? 'border-rose-500/70' : 'border-cyan-500/50'} shadow-xl group-hover:scale-105 transition duration-300"
+                                class="w-16 h-16 sm:w-[76px] sm:h-[76px] rounded-2xl object-cover border-2 ${st === 'not_recommended' ? 'border-rose-500/70' : 'border-cyan-500/50'} shadow-xl group-hover:scale-105 transition duration-300"
                                 onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(rawUidClean || 'TikTok')}&background=0d111a&color=38bdf8&size=128'"
                             />
                             <div class="absolute -bottom-2 -right-2 px-2 py-0.5 rounded-md bg-dark-900 border border-slate-700 text-[10px] font-bold text-cyan-400 shadow">
@@ -7241,43 +7241,43 @@
                             </div>
                         </div>
 
-                        <div class="space-y-1.5 flex-grow min-w-0 w-full">
+                        <div class="space-y-0.5 flex-grow min-w-0 w-full">
                             <div class="flex flex-wrap items-center justify-center sm:justify-between gap-2">
                                 <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-                                    <h3 class="text-xl sm:text-2xl font-black text-white tracking-tight">${nickSafe}</h3>
+                                    <h3 class="text-lg sm:text-xl font-black text-white tracking-tight">${nickSafe}</h3>
                                     <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-900/80 border border-blue-600/80 text-blue-200 font-bold inline-flex items-center gap-1.5">${flagHtml} <span>${escapeHtml(regFull)}</span></span>
                                     ${item.is_private ? `<span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-600 text-slate-300 font-bold">🔒 Riêng tư</span>` : ''}
                                 </div>
                                 ${rightActionsHtml}
                             </div>
 
-                            <div class="flex items-center justify-center sm:justify-start gap-2 text-amber-400 font-mono text-sm font-bold">
-                                <span>${escapeHtml(cleanHandle)}</span>
+                            <div class="account-handle-line flex flex-wrap items-center justify-center sm:justify-start gap-2 text-amber-400 text-xs font-bold">
+                                <span class="font-mono">${escapeHtml(cleanHandle)}</span>
                                 <button type="button" onclick="copyText('${escapeHtml(cleanHandle)}')" title="Copy username" class="text-slate-400 hover:text-white transition">
                                     <i class="fa-regular fa-copy text-xs"></i>
                                 </button>
                                 <a href="https://www.tiktok.com/@${encodeURIComponent(rawUidClean)}" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-cyan-400 ml-1 transition" title="Mở trang cá nhân trên TikTok">
                                     <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                                 </a>
+                                ${statusBadgeHtml}
                             </div>
 
-                            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1.5 text-xs font-semibold">
-                                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-emerald-400">
+                            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-0.5 text-[11px] font-semibold">
+                                <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-emerald-400">
                                     <i class="fa-regular fa-calendar-check text-emerald-400"></i>
                                     <span>Ngày tạo:</span>
                                     <span class="text-white font-mono font-bold">${createDate}</span>
                                 </div>
-                                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-sky-400">
+                                <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-sky-400">
                                     <i class="fa-solid fa-globe text-sky-400"></i>
                                     <span>Quốc gia:</span>
                                     <span class="text-white font-medium inline-flex items-center gap-1.5">${flagHtml} <span>${escapeHtml(regFull)}</span></span>
                                 </div>
-                                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-purple-400">
+                                <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-purple-400">
                                     <i class="fa-solid fa-user-group text-purple-400"></i>
                                     <span class="text-white font-bold">${folFmt}</span>
                                     <span>followers</span>
                                 </div>
-                                ${statusBadgeHtml}
                             </div>
                         </div>
                     </div>
