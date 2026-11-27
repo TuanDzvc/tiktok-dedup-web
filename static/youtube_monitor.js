@@ -30,8 +30,8 @@
                 <label class="text-xs text-slate-300 space-y-2"><span>YouTube API key — mỗi dòng một key (có thể để trống để dùng RSS/web)</span>
                     <textarea id="ytKeys" rows="3" autocomplete="off" spellcheck="false" class="${inputClass}" placeholder="Để trống để giữ key đã lưu"></textarea>
                     <span id="ytKeyState" class="block text-cyan-300"></span></label>
-                <div class="space-y-2"><label class="block text-xs text-slate-300" for="ytInterval">Chu kỳ kiểm tra mỗi kênh (giây, tối thiểu 30)</label>
-                    <input id="ytInterval" type="number" min="30" max="86400" value="60" class="${inputClass}">
+                <div class="space-y-2"><label class="block text-xs text-slate-300" for="ytInterval">Chu kỳ kiểm tra mỗi kênh (giây, tối thiểu 3)</label>
+                    <input id="ytInterval" type="number" min="3" max="86400" value="60" class="${inputClass}">
                     <p id="ytQuota" class="text-xs text-slate-400 leading-relaxed"></p>
                     <p class="text-xs text-slate-400 leading-relaxed">Theo dõi cả video thường và Shorts. Video mới hiển thị trong nhật ký; chỉ gửi ra nơi bạn đã cấu hình.</p></div>
                 <div class="space-y-2"><label class="block text-xs text-slate-300" for="ytToken">Telegram Bot Token</label>

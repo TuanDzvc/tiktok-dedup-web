@@ -136,6 +136,16 @@ class MonitorTests(unittest.TestCase):
         self.monitor.test('telegram')
         self.deliver.assert_called_once()
 
+    def test_three_second_interval_is_saved_and_reschedules_channels(self):
+        self.monitor.tick()
+        self.assertGreater(self.monitor.data['channels'][CID]['next_check'], 0)
+        result = self.monitor.action('settings', {'enabled': True, 'interval_seconds': 3})
+        self.assertEqual(result['settings']['interval_seconds'], 3)
+        self.assertEqual(self.store.data['settings']['interval_seconds'], 3)
+        self.assertEqual(self.monitor.data['channels'][CID]['next_check'], 0)
+        result = self.monitor.action('settings', {'enabled': True, 'interval_seconds': 1})
+        self.assertEqual(result['settings']['interval_seconds'], 3)
+
 
 class SourceTests(unittest.TestCase):
     def test_channel_input_limits_targets_to_youtube(self):

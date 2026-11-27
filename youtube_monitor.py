@@ -235,7 +235,11 @@ class YouTubeMonitor:
             settings = data['settings']
             if action == 'settings':
                 settings['enabled'] = bool(body.get('enabled'))
-                settings['interval_seconds'] = max(30, min(86400, int(body.get('interval_seconds') or 60)))
+                previous_interval = settings.get('interval_seconds', 60)
+                settings['interval_seconds'] = max(3, min(86400, int(body.get('interval_seconds') or 60)))
+                if settings['interval_seconds'] != previous_interval:
+                    for row in data['channels'].values():
+                        row['next_check'] = 0
                 for key, limit in [('api_keys', 20), ('telegram_token', 256), ('discord_webhook', 512)]:
                     if key not in body:
                         continue
@@ -454,7 +458,7 @@ class YouTubeMonitor:
                     self.error = str(exc)
                 except Exception:
                     self.error = 'Theo dõi gặp lỗi; sẽ tự thử lại. Cấu hình vẫn được lưu.'
-                self.stop_event.wait(5)
+                self.stop_event.wait(1)
         self.thread = threading.Thread(target=loop, name='youtube-monitor', daemon=True)
         self.thread.start()
 
