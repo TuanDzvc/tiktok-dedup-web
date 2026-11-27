@@ -139,11 +139,11 @@ class MonitorTests(unittest.TestCase):
     def test_three_second_interval_is_saved_and_reschedules_channels(self):
         self.monitor.tick()
         self.assertGreater(self.monitor.data['channels'][CID]['next_check'], 0)
-        result = self.monitor.action('settings', {'enabled': True, 'interval_seconds': 3})
+        result = self.monitor.action('settings', {'enabled': True, 'interval_seconds': 3, 'telegram_chat_id': '123'})
         self.assertEqual(result['settings']['interval_seconds'], 3)
         self.assertEqual(self.store.data['settings']['interval_seconds'], 3)
         self.assertEqual(self.monitor.data['channels'][CID]['next_check'], 0)
-        result = self.monitor.action('settings', {'enabled': True, 'interval_seconds': 1})
+        result = self.monitor.action('settings', {'enabled': True, 'interval_seconds': 1, 'telegram_chat_id': '123'})
         self.assertEqual(result['settings']['interval_seconds'], 3)
 
 
