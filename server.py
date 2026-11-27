@@ -2308,7 +2308,7 @@ def api_download_mail_worker(req: Request):
     from outlook_client_worker import launcher
     service=_prepare_client_mail_service()
     worker_id,token=service._client_worker.pair()
-    return Response(launcher('https://checktiktok.site',worker_id,token,BASE_DIR).encode('ascii'),
+    return Response(launcher('https://checktiktok.site',worker_id,token,BASE_DIR,asset_origin=RENDER_SYNC_BASE).encode('ascii'),
         media_type='application/octet-stream',headers={'Content-Disposition':'attachment; filename="tikflow_mail_worker.bat"','Cache-Control':'no-store','X-Mail-Worker-Id':worker_id})
 
 

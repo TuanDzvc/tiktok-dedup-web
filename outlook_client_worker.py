@@ -211,12 +211,13 @@ class ClientMailWorker:
             return {'success':True,'cancel':False}
 
 
-def launcher(origin, wid, token, root):
+def launcher(origin, wid, token, root, asset_origin=None):
     """A scoped pairing key, never a web JWT or mailbox password, goes in the BAT."""
     hashes={name:hashlib.sha256((root/'static'/name).read_bytes()).hexdigest()
             for name in ('mail_worker.ps1','mail_cdp_worker.cs')}
     script = r'''$ErrorActionPreference='Stop';[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;Add-Type -AssemblyName System.Security;$r=Join-Path $env:LOCALAPPDATA ('TikFlow\MailWorker\'+$env:TF_MAIL_ID);New-Item -ItemType Directory -Force -Path $r|Out-Null;$j=@{origin=$env:TF_MAIL_ORIGIN;id=$env:TF_MAIL_ID;token=$env:TF_MAIL_TOKEN}|ConvertTo-Json -Compress;$b=[Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($j),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser);[IO.File]::WriteAllBytes((Join-Path $r 'config.bin'),$b);$files=@{'mail_worker.ps1'='PSHASH';'mail_cdp_worker.cs'='CSHASH'};foreach($n in $files.Keys){$p=Join-Path $r $n;Invoke-WebRequest -UseBasicParsing -Uri ($env:TF_MAIL_ORIGIN+'/static/'+$n) -OutFile ($p+'.tmp');if((Get-FileHash -LiteralPath ($p+'.tmp') -Algorithm SHA256).Hash.ToLower() -ne $files[$n]){throw 'Worker hash mismatch'};Move-Item -LiteralPath ($p+'.tmp') -Destination $p -Force};Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+(Join-Path $r 'mail_worker.ps1')+'"'),'-ConfigPath',('"'+(Join-Path $r 'config.bin')+'"'))'''
     script=script.replace('PSHASH',hashes['mail_worker.ps1']).replace('CSHASH',hashes['mail_cdp_worker.cs'])
-    return ('@echo off\r\nsetlocal\r\nset "TF_MAIL_ORIGIN='+origin+'"\r\nset "TF_MAIL_ID='+wid+'"\r\nset "TF_MAIL_TOKEN='+token+'"\r\n'
+    script=script.replace("$env:TF_MAIL_ORIGIN+'/static/'", "$env:TF_MAIL_ASSETS+'/static/'")
+    return ('@echo off\r\nsetlocal\r\nset "TF_MAIL_ORIGIN='+origin+'"\r\nset "TF_MAIL_ASSETS='+(asset_origin or origin)+'"\r\nset "TF_MAIL_ID='+wid+'"\r\nset "TF_MAIL_TOKEN='+token+'"\r\n'
             'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "'+script.replace('"','\\"')+'"\r\n'
             'if errorlevel 1 (echo Worker setup failed. & pause & exit /b 1)\r\necho TikFlow Mail worker started. You can close this window.\r\nexit /b 0\r\n')

@@ -118,6 +118,13 @@ class ClientWorkerTests(unittest.TestCase):
         self.assertIn('ProtectedData', bat)
         self.assertIn('Get-FileHash', bat)
 
+    def test_package_uses_same_cloud_origin_as_its_hashes(self):
+        bat=launcher('https://checktiktok.site',self.wid,self.key,Path(__file__).parent,
+                     asset_origin='https://tiktok-dedup-web.onrender.com')
+        self.assertIn('TF_MAIL_ORIGIN=https://checktiktok.site',bat)
+        self.assertIn('TF_MAIL_ASSETS=https://tiktok-dedup-web.onrender.com',bat)
+        self.assertIn("$env:TF_MAIL_ASSETS+'/static/'",bat)
+
     def test_api_worker_key_and_owner_boundary(self):
         import server
         from fastapi.testclient import TestClient
