@@ -29,21 +29,19 @@
             <div class="grid md:grid-cols-2 gap-4">
                 <label class="text-xs text-slate-300 space-y-2"><span>YouTube API key — mỗi dòng một key (có thể để trống để dùng RSS/web)</span>
                     <textarea id="ytKeys" rows="3" autocomplete="off" spellcheck="false" class="${inputClass}" placeholder="Để trống để giữ key đã lưu"></textarea>
-                    <span id="ytKeyState" class="block text-cyan-300"></span><span class="block"><input id="ytClearKeys" type="checkbox"> Xóa toàn bộ API key đã lưu</span></label>
+                    <span id="ytKeyState" class="block text-cyan-300"></span></label>
                 <div class="space-y-2"><label class="block text-xs text-slate-300" for="ytInterval">Chu kỳ kiểm tra mỗi kênh (giây, tối thiểu 30)</label>
                     <input id="ytInterval" type="number" min="30" max="86400" value="60" class="${inputClass}">
                     <p id="ytQuota" class="text-xs text-slate-400 leading-relaxed"></p>
                     <p class="text-xs text-slate-400 leading-relaxed">Theo dõi cả video thường và Shorts. Video mới hiển thị trong nhật ký; chỉ gửi ra nơi bạn đã cấu hình.</p></div>
                 <div class="space-y-2"><label class="block text-xs text-slate-300" for="ytToken">Telegram Bot Token</label>
                     <input id="ytToken" type="password" autocomplete="new-password" class="${inputClass}" placeholder="Chưa cấu hình">
-                    <label class="text-xs text-slate-400"><input id="ytClearToken" type="checkbox"> Xóa token đã lưu</label>
                     <label class="block text-xs text-slate-300" for="ytChat">Telegram Chat ID / @tên_kênh</label>
                     <input id="ytChat" class="${inputClass}" placeholder="Ví dụ: -100… hoặc Chat ID cá nhân">
                     <p class="text-xs text-slate-400">Nhắn /start cho bot; nếu gửi vào nhóm/kênh, thêm bot và cấp quyền gửi tin.</p>
                     <button type="button" id="ytTestTelegram" class="${buttonClass}">Gửi thử Telegram</button></div>
                 <div class="space-y-2"><label class="block text-xs text-slate-300" for="ytDiscord">Discord Webhook URL (tùy chọn)</label>
                     <input id="ytDiscord" type="password" autocomplete="new-password" class="${inputClass}" placeholder="https://discord.com/api/webhooks/…">
-                    <label class="text-xs text-slate-400"><input id="ytClearDiscord" type="checkbox"> Xóa webhook đã lưu</label>
                     <p class="text-xs text-slate-400">Có thể dùng Telegram, Discord hoặc cả hai. Lưu cấu hình trước khi gửi thử.</p>
                     <button type="button" id="ytTestDiscord" class="${buttonClass}">Gửi thử Discord</button></div>
             </div>
@@ -127,13 +125,12 @@
     byId('ytSettings').onsubmit = async event => {
         event.preventDefault();
         const body = {enabled:byId('ytEnabled').checked, interval_seconds:Number(byId('ytInterval').value), telegram_chat_id:byId('ytChat').value};
-        for (const [field,key,clear] of [['ytKeys','api_keys','ytClearKeys'],['ytToken','telegram_token','ytClearToken'],['ytDiscord','discord_webhook','ytClearDiscord']]) {
+        for (const [field,key] of [['ytKeys','api_keys'],['ytToken','telegram_token'],['ytDiscord','discord_webhook']]) {
             const value = byId(field).value.trim();
-            if (byId(clear).checked || value) body[key] = key === 'api_keys' ? (byId(clear).checked ? [] : value.split(/\r?\n/).filter(Boolean)) : byId(clear).checked ? '' : value;
+            if (value) body[key] = key === 'api_keys' ? value.split(/\r?\n/).filter(Boolean) : value;
         }
         if (await mutate('settings', body)) {
             for (const id of ['ytKeys','ytToken','ytDiscord']) byId(id).value = '';
-            for (const id of ['ytClearKeys','ytClearToken','ytClearDiscord']) byId(id).checked = false;
         }
     };
     byId('ytAddForm').onsubmit = async event => { event.preventDefault(); if (await mutate('add',{channel:byId('ytChannel').value})) byId('ytChannel').value = ''; };
