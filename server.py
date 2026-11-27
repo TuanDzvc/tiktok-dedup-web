@@ -46,7 +46,7 @@ import uvicorn
 import asyncio
 from io import BytesIO
 from fastapi import FastAPI, Request, Query, HTTPException, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import requests
@@ -4180,6 +4180,119 @@ async def api_check_channel(req: Request, background_tasks: BackgroundTasks):
     return JSONResponse(content=res)
 
 
+_ACCOUNT_STREAM_TASKS = set()
+
+
+async def _stream_account_checks(username, unique_inputs, pre_dup_skipped):
+    """Keep the existing per-user wallet lock until all authorized work finishes.
+
+    Browser disconnects do not cancel billing/history for work already submitted.
+    Completed profiles are saved and billed before they are sent to the browser.
+    """
+    user_lock = _get_user_account_check_lock(username)
+    await user_lock.acquire()
+    ready = False
+    try:
+        with _VIP_LOCK:
+            user = _load_vip_users_unlocked().get(username)
+            if not isinstance(user, dict):
+                return JSONResponse(status_code=401, content={'success': False, 'login_required': True, 'error': 'Tài khoản không tồn tại.'})
+            admin = user.get('role') == 'admin'
+            balance = max(0, int(user.get('account_balance_vnd') or 0))
+            required = len(unique_inputs) * ACCOUNT_CHECK_UNIT_PRICE_VND
+            if not admin and balance < required:
+                return JSONResponse(status_code=402, content={'success': False, 'insufficient_balance': True,
+                    'balance_vnd': balance, 'checks_left': _calc_account_checks_left(balance),
+                    'required_vnd': required, 'requested_count': len(unique_inputs),
+                    'error': 'Số dư Check Tài Khoản không đủ cho danh sách này. Vui lòng nạp thêm.'})
+            ready = True
+    finally:
+        # The running job takes over ownership below; early preflight responses
+        # must release the lock as well.
+        if not ready:
+            user_lock.release()
+
+    queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+    totals = {'completed': 0, 'charged_count': 0, 'error_count': 0, 'calls': 0, 'cached': 0}
+
+    def publish(event):
+        loop.call_soon_threadsafe(queue.put_nowait, event)
+
+    def completed(event):
+        result = event['result']
+        ok = result.get('ok') is True
+        totals['completed'] += 1
+        totals['charged_count'] += int(ok)
+        totals['error_count'] += int(not ok)
+        totals['calls'] += event['api_calls']
+        totals['cached'] += event['cached_country_hits']
+        with _VIP_LOCK:
+            users = _load_vip_users_unlocked()
+            user = users.get(username)
+            if not isinstance(user, dict):
+                raise RuntimeError('Tài khoản không còn tồn tại; đã dừng ghi kết quả.')
+            if not admin and ok:
+                user['account_balance_vnd'] = max(0, int(user.get('account_balance_vnd') or 0) - ACCOUNT_CHECK_UNIT_PRICE_VND)
+                user['account_balance_updated_at'] = int(time.time())
+            record_account_results(user, int(ok), 1)
+            user['updated_at'] = int(time.time())
+            _save_vip_users_unlocked(users)
+            balance = max(0, int(user.get('account_balance_vnd') or 0))
+            billing = {'is_admin_free': admin, 'unit_price_vnd': ACCOUNT_CHECK_UNIT_PRICE_VND,
+                'charged_count': totals['charged_count'], 'error_skipped_count': totals['error_count'],
+                'charged_vnd': 0 if admin else totals['charged_count'] * ACCOUNT_CHECK_UNIT_PRICE_VND,
+                'balance_vnd': balance, 'checks_left': _calc_account_checks_left(balance),
+                'dedup_checks_left': _calc_dedup_checks_left(balance), 'is_vip': _has_vip_privilege(user)}
+        try:
+            _record_account_check_history_for_user(username, [result])
+        except Exception:
+            logger.warning('[CheckHistory] Chưa lưu được một kết quả Check Tài Khoản.')
+        publish({'type': 'result', 'success': True, 'index': event['index'], 'total': event['total'],
+            'completed': totals['completed'], 'result': result, 'user_billing': billing,
+            'scan_cost_usd': round(totals['calls'] * 0.001, 4) if admin else None,
+            'scan_cost_vnd': int(round(totals['calls'] * 0.001 * _TIKHUB_USD_TO_VND)) if admin else None})
+
+    async def run():
+        try:
+            result = await asyncio.to_thread(check_accounts_batch_tikhub, unique_inputs, 6, completed)
+            result['duplicate_lines_skipped'] = int(result.get('duplicate_lines_skipped') or 0) + pre_dup_skipped
+            if admin:
+                info = await asyncio.to_thread(_get_tikhub_live_balance, totals['calls'] > 0)
+                cost = round(float(result.get('cost_usd') or 0), 4)
+                result['admin_billing'] = {'scan_cost_usd': cost, 'scan_cost_vnd': int(round(cost * _TIKHUB_USD_TO_VND)),
+                    'api_calls': totals['calls'], 'cached_hits': totals['cached'],
+                    'balance_known': info['balance_known'], 'balance_stale': info['balance_stale'],
+                    'balance_usd': info['total_usd'], 'balance_vnd': info['total_vnd'],
+                    'est_scans_left': info['est_scans_left'], 'usd_rate': _TIKHUB_USD_TO_VND}
+            publish({'type': 'done', **result})
+        except Exception:
+            logger.exception('[AccountCheck] Lỗi khi xử lý danh sách đang truyền kết quả.')
+            publish({'type': 'error', 'success': False,
+                'error': 'Lượt kiểm tra bị gián đoạn. Các kết quả đã hiện vẫn được lưu trong lịch sử; kiểm tra lại lịch sử trước khi chạy lại.'})
+        finally:
+            user_lock.release()
+
+    task = asyncio.create_task(run())
+    _ACCOUNT_STREAM_TASKS.add(task)
+    task.add_done_callback(_ACCOUNT_STREAM_TASKS.discard)
+
+    async def events():
+        yield json.dumps({'type': 'start', 'total': len(unique_inputs)}) + '\n'
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=10)
+            except asyncio.TimeoutError:
+                yield '{"type":"heartbeat"}\n'
+                continue
+            yield json.dumps(event, ensure_ascii=False) + '\n'
+            if event['type'] in ('done', 'error'):
+                return
+
+    return StreamingResponse(events(), media_type='application/x-ndjson',
+        headers={'Cache-Control': 'no-cache, no-store, no-transform', 'X-Accel-Buffering': 'no'})
+
+
 @app.post("/api/check-accounts")
 async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
     """Kiểm tra hàng loạt trạng thái đề xuất (account_labels), ngày tạo, quốc gia và follow theo danh sách user/link."""
@@ -4259,6 +4372,9 @@ async def api_check_accounts(req: Request, background_tasks: BackgroundTasks):
 
     req_count = len(unique_inputs)
     required_vnd = req_count * ACCOUNT_CHECK_UNIT_PRICE_VND
+
+    if body.get('stream') is True:
+        return await _stream_account_checks(checked_username, unique_inputs, pre_dup_skipped)
 
     async with _get_user_account_check_lock(checked_username):
         with _VIP_LOCK:

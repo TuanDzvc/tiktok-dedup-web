@@ -6904,6 +6904,76 @@
             handleCheck();
         }
 
+        function applyAccountCheckBilling(data) {
+            const billing = data?.user_billing;
+            if (!billing || !currentVipUser || billing.is_admin_free) return;
+            const balance = Number(billing.balance_vnd ?? currentVipUser.account_balance_vnd ?? 0);
+            currentVipUser.account_balance_vnd = balance;
+            currentVipUser.dedup_checks_left = Number(billing.dedup_checks_left ?? Math.floor(balance / DEDUP_CHECK_UNIT_PRICE_VND));
+            currentVipUser.account_checks_left = Number(billing.checks_left ?? Math.floor(balance / ACCOUNT_CHECK_UNIT_PRICE_VND));
+            if (billing.is_vip !== undefined) currentVipUser.is_vip = Boolean(billing.is_vip);
+            renderVipNav();
+            syncAccountWalletUI();
+            updateAccountCheckInputCount();
+        }
+
+        function updateAccountCheckLiveCost(event) {
+            const el = document.getElementById('accountCheckCostInfo');
+            if (!el) return;
+            const billing = event.user_billing;
+            if (billing?.is_admin_free && canCurrentUserSeeBilling()) {
+                const cost = Number(event.scan_cost_usd || 0);
+                el.innerText = `Chi phí: $${cost.toFixed(4)} (~${Number(event.scan_cost_vnd || 0).toLocaleString('vi-VN')}đ)`;
+            } else if (billing && !billing.is_admin_free) {
+                el.innerText = `Đã trừ ${Number(billing.charged_vnd || 0).toLocaleString('vi-VN')}đ (${billing.charged_count} acc thành công · ${billing.error_skipped_count} acc lỗi 0đ) · Còn: ${Number(billing.balance_vnd || 0).toLocaleString('vi-VN')}đ`;
+            } else return;
+            el.classList.remove('hidden');
+        }
+
+        async function readAccountCheckStream(response, onProgress) {
+            if (!response.ok || !response.headers.get('content-type')?.includes('application/x-ndjson')) {
+                return await safeParseJson(response);
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '', final = null, lastBilling = null;
+            const results = [];
+            function consume(line) {
+                if (!line.trim()) return;
+                const event = JSON.parse(line);
+                if (event.type === 'result') {
+                    results[event.index] = event.result;
+                    lastBilling = event.user_billing;
+                    accountCheckResults = results.filter(Boolean);
+                    applyAccountCheckBilling(event);
+                    updateAccountCheckLiveCost(event);
+                    renderAccountCheckResults();
+                    onProgress(event.completed, event.total);
+                } else if (event.type === 'done') {
+                    final = {...event, user_billing: lastBilling};
+                } else if (event.type === 'error') {
+                    throw Error(event.error);
+                }
+            }
+            try {
+                while (true) {
+                    const {value, done} = await reader.read();
+                    buffer += decoder.decode(value || new Uint8Array(), {stream: !done});
+                    let newline;
+                    while ((newline = buffer.indexOf('\n')) !== -1) {
+                        const line = buffer.slice(0, newline);
+                        buffer = buffer.slice(newline + 1);
+                        consume(line);
+                    }
+                    if (done) { if (buffer.trim()) consume(buffer); break; }
+                }
+                if (!final) throw Error('Kết nối bị ngắt trước khi kiểm tra xong. Các kết quả đã hiện vẫn được giữ; xem lịch sử trước khi chạy lại.');
+                return final;
+            } finally {
+                reader.releaseLock();
+            }
+        }
+
         async function runBulkAccountCheck() {
             if (!canCurrentUserUseAccountCheck()) {
                 showToast('🔐 Vui lòng đăng nhập tài khoản để sử dụng Check Tài Khoản (250đ / tài khoản)!');
@@ -6956,6 +7026,10 @@
             if (btn) btn.disabled = true;
             if (btnIcon) btnIcon.className = 'fa-solid fa-spinner fa-spin text-white';
             if (btnText) btnText.innerText = `Đang check ${unique.length} acc...`;
+            accountCheckResults = [];
+            accountCheckFilter = 'all';
+            renderAccountCheckResults();
+            document.getElementById('accountCheckCostInfo')?.classList.add('hidden');
 
             try {
                 const tok = getVipToken();
@@ -6964,27 +7038,19 @@
                     headers: { 'Content-Type': 'application/json', ...getDeviceHeaders(Boolean(tok)) },
                     body: JSON.stringify({
                         inputs: unique,
+                        stream: true,
                         vip_token: tok,
                         device_id: getHardwareDeviceId(),
                         device_label: getDeviceLabel(),
                     }),
                 });
-                const data = await safeParseJson(resp);
+                const data = await readAccountCheckStream(resp, (completed, total) => {
+                    if (btnText) btnText.innerText = `Đã check ${completed}/${total} acc...`;
+                });
                 if (data && data.free_quota) {
                     updateFreeQuotaBannerUI(data.free_quota);
                 }
-                if (data && data.user_billing && currentVipUser && !data.user_billing.is_admin_free) {
-                    const remBalU = Number(data.user_billing.balance_vnd ?? currentVipUser.account_balance_vnd ?? 0);
-                    currentVipUser.account_balance_vnd = remBalU;
-                    currentVipUser.dedup_checks_left = Number(data.user_billing.dedup_checks_left ?? Math.floor(remBalU / DEDUP_CHECK_UNIT_PRICE_VND));
-                    currentVipUser.account_checks_left = Number(data.user_billing.checks_left ?? Math.floor(remBalU / ACCOUNT_CHECK_UNIT_PRICE_VND));
-                    if (data.user_billing.is_vip !== undefined) {
-                        currentVipUser.is_vip = Boolean(data.user_billing.is_vip);
-                    }
-                    renderVipNav();
-                    syncAccountWalletUI();
-                    updateAccountCheckInputCount();
-                }
+                applyAccountCheckBilling(data);
                 if (data && data.admin_billing && canCurrentUserSeeBilling()) {
                     updateAdminBillingUI(data.admin_billing, false);
                 }

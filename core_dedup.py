@@ -14,7 +14,7 @@ import string
 import urllib.parse
 import datetime
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 import requests
@@ -3988,7 +3988,7 @@ def check_single_account_profile_tikhub(raw_input: str, api_key: str = "") -> Di
     }
 
 
-def check_accounts_batch_tikhub(raw_inputs: List[str], max_workers: int = 6) -> Dict[str, Any]:
+def check_accounts_batch_tikhub(raw_inputs: List[str], max_workers: int = 6, on_result=None) -> Dict[str, Any]:
     """Kiểm tra song song danh sách tài khoản TikTok (lọc trùng & giữ nguyên thứ tự)."""
     cleaned_raws = [str(x or "").strip() for x in (raw_inputs or []) if str(x or "").strip()]
     if not cleaned_raws:
@@ -4022,7 +4022,20 @@ def check_accounts_batch_tikhub(raw_inputs: List[str], max_workers: int = 6) -> 
     api_key = _get_tikhub_api_key()
     workers = min(max(1, int(max_workers or 6)), max(1, len(unique_items)))
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        raw_results = list(ex.map(lambda pair: check_single_account_profile_tikhub(pair[1], api_key=api_key), unique_items))
+        pending = {ex.submit(check_single_account_profile_tikhub, pair[1], api_key=api_key): index
+                   for index, pair in enumerate(unique_items)}
+        raw_results = [None] * len(unique_items)
+        for future in as_completed(pending):
+            index = pending[future]
+            item = future.result()
+            raw_results[index] = item
+            if on_result:
+                clean = dict(item)
+                calls = int(clean.pop('_api_calls', 0) or 0)
+                cached = bool(clean.pop('_cached_country_hit', False))
+                clean['input'] = unique_items[index][0]
+                on_result({'index': index, 'total': len(unique_items), 'result': clean,
+                           'api_calls': calls, 'cached_country_hits': int(cached)})
 
     results: List[Dict[str, Any]] = []
     total_calls = 0
