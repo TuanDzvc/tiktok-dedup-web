@@ -119,7 +119,7 @@ Assert $cancelled 'Explicit web cancellation was swallowed'
 # Password-first routing across actual Microsoft page variants.
 function Stage([string]$Text){}
 $global:routeClicks=@();$global:routeFills=@()
-function Click($Session,$Element){if($Element){$global:routeClicks+=,[string]$Element.text}}
+function Click($Session,$Element){if($Element){$global:routeClicks+=,[string]$Element.text;$global:lastClickedId=$Element.id}}
 function Fill($Session,$Element,[string]$Value){$global:routeFills+=,[string]$Element.id}
 $state=@{}
 $confirm=@{inputs=@(@{id='proof-confirmation-email-input';type='text'});buttons=@(@{text='Send code'},@{text='Other ways to sign in'})}
@@ -135,8 +135,19 @@ Assert ($global:routeClicks[-1] -eq "Didn't get a code?" -and $global:routeFills
 $choice=@{inputs=@();buttons=@(@{text='Use your password'},@{text='Send a code to fixture@example.com'})}
 Assert (Password-First $null $choice $state 'fixture-password') 'Password method selection must reprobe'
 Assert ($global:routeClicks[-1] -eq 'Use your password') 'Code method was selected instead of password'
-$form=@{inputs=@(@{id='password';type='password'});buttons=@(@{text='Sign in'})}
+$form=@{inputs=@(@{id='password';type='password'});buttons=@(@{text='Sign in';id='stale-button'})}
+$global:passwordFreshProbe=@{inputs=$form.inputs;buttons=@(@{text='Next';id='fresh-button'})}
+function Probe($Session){return $global:passwordFreshProbe}
 Assert (Password-First $null $form $state 'fixture-password') 'Password submission must reprobe'
 Assert ($state.password -and $global:routeFills[-1] -eq 'password') 'Password was not submitted'
+Assert ($global:lastClickedId -eq 'fresh-button') 'Used button coordinates captured before password fill'
+$state.passwordSentAt=[DateTime]::UtcNow.AddSeconds(-6)
+Assert (Password-First $null $global:passwordFreshProbe $state 'fixture-password') 'Unchanged password page was treated as success'
+Assert ($state.passwordClicks -eq 2) 'Did not retry the unchanged password page once'
+$state.passwordSentAt=[DateTime]::UtcNow.AddSeconds(-6)
+Assert (Password-First $null $global:passwordFreshProbe $state 'fixture-password') 'Inspection state released recovery prematurely'
+Assert ($state.passwordClicks -eq 2 -and $script:passwordNeedsInspection) 'Repeated password requests beyond retry bound'
+Assert ($global:routeFills.Count -eq 1) 'Password was filled repeatedly'
+Assert (-not (Button @{buttons=@(@{text='Next';disabled=$true})} '^Next$')) 'Disabled Next button was treated as ready'
 Assert (-not (Password-First $null $confirm $state 'fixture-password')) 'Recovery remained blocked after password submission'
 Write-Output 'PASS: six-box OTP, single-use subject, sender matching, safe extraction, delayed body retry and retained inbox'

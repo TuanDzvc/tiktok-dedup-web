@@ -141,7 +141,7 @@ function Evaluate($Session,[string]$Expression) {
 }
 function Probe($Session) {
     return Evaluate $Session @'
-JSON.stringify((()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const point=e=>{const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}};return{url:location.href,body:(document.body?.innerText||'').slice(0,24000),inputs:[...document.querySelectorAll('input')].filter(e=>visible(e)&&!['hidden','submit','button','checkbox'].includes(e.type)).map(e=>({...point(e),type:e.type,id:e.id,name:e.name,label:e.getAttribute('aria-label')||e.placeholder||'',auto:e.autocomplete,inputMode:e.inputMode,max:e.maxLength})),buttons:[...document.querySelectorAll('button,input[type=submit],input[type=button],a,[role=button],[role=listitem],li')].filter(visible).map(e=>({...point(e),text:(e.innerText||e.value||e.getAttribute('aria-label')||'').trim(),id:e.id}))}})())
+JSON.stringify((()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const point=e=>{const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}};return{url:location.href,body:(document.body?.innerText||'').slice(0,24000),inputs:[...document.querySelectorAll('input')].filter(e=>visible(e)&&!['hidden','submit','button','checkbox'].includes(e.type)).map(e=>({...point(e),type:e.type,id:e.id,name:e.name,label:e.getAttribute('aria-label')||e.placeholder||'',auto:e.autocomplete,inputMode:e.inputMode,disabled:Boolean(e.disabled),max:e.maxLength})),buttons:[...document.querySelectorAll('button,input[type=submit],input[type=button],a,[role=button],[role=listitem],li')].filter(visible).map(e=>({...point(e),text:(e.innerText||e.value||e.getAttribute('aria-label')||'').trim(),id:e.id,disabled:Boolean(e.disabled)||e.getAttribute('aria-disabled')==='true'}))}})())
 '@
 }
 function Click($Session,$Element) {if($Element){$null=$Session.ClickPointAsync([double]$Element.x,[double]$Element.y).GetAwaiter().GetResult();Start-Sleep -Milliseconds 250}}
@@ -151,7 +151,7 @@ function Fill($Session,$Element,[string]$Value) {
     $null=Cdp $Session 'Input.dispatchKeyEvent' @{type='keyUp';key='a';code='KeyA';windowsVirtualKeyCode=65;modifiers=2}
     $null=Cdp $Session 'Input.insertText' @{text=$Value}
 }
-function Button($Probe,[string]$Pattern) {return @($Probe.buttons|Where-Object {$_.text -match $Pattern}|Select-Object -First 1)[0]}
+function Button($Probe,[string]$Pattern) {return @($Probe.buttons|Where-Object {$_.text -match $Pattern -and -not $_.disabled}|Select-Object -First 1)[0]}
 function New-Tab([string]$Base,[string]$Url) {
     $page=Invoke-RestMethod -UseBasicParsing -Method Put -Uri ($Base+'/json/new?'+[Uri]::EscapeDataString($Url))
     $session=New-Object TikFlowMailHelper.CdpSession
@@ -194,15 +194,45 @@ function Code-Inputs($Probe) {
 
 }
 function Password-First($Session,$Probe,$Submitted,[string]$Password) {
-    if($Submitted.password){return $false}
     $choice=Button $Probe '^(use your password|use password instead|sign in with (?:a |your )?password|s\u1eed d\u1ee5ng m\u1eadt kh\u1ea9u|nh\u1eadp m\u1eadt kh\u1ea9u)$'
     $input=@($Probe.inputs|Where-Object {$_.type -eq 'password'}|Select-Object -First 1)[0]
     $next=Button $Probe '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p)$'
-    if($input -and $next){
+    if($Submitted.password){
+        if(-not $input){$script:passwordNeedsInspection=$false;return $false}
+        if($input.disabled -or -not $next -or ([DateTime]::UtcNow-$Submitted.passwordSentAt).TotalSeconds -lt 5){
+            Stage ([regex]::Unescape('\u0110\u00e3 b\u1ea5m Next; \u0111ang ch\u1edd Microsoft x\u00e1c nh\u1eadn m\u1eadt kh\u1ea9u'))
+            Start-Sleep -Milliseconds 350;return $true
+        }
+        if([int]$Submitted.passwordClicks -lt 2){
+            Stage ([regex]::Unescape('Trang m\u1eadt kh\u1ea9u ch\u01b0a chuy\u1ec3n; b\u1ea5m l\u1ea1i \u0111\u00fang n\u00fat Next hi\u1ec7n t\u1ea1i'))
+            Click $Session $next
+            $Submitted.passwordClicks=[int]$Submitted.passwordClicks+1
+            $Submitted.passwordSentAt=[DateTime]::UtcNow
+            return $true
+        }
+        $script:passwordNeedsInspection=$true
+        Stage ([regex]::Unescape('Microsoft ch\u01b0a chuy\u1ec3n sau n\u00fat Next. Gi\u1eef nguy\u00ean tr\u00ecnh duy\u1ec7t \u0111\u1ec3 ki\u1ec3m tra; kh\u00f4ng nh\u1eadp l\u1ea1i pass ho\u1eb7c g\u1eedi l\u1eb7p li\u00ean t\u1ee5c.'))
+        Start-Sleep -Milliseconds 700;return $true
+    }
+    if($input){
+        if(-not $Submitted.passwordFilled){
         Stage ([regex]::Unescape('\u0110ang nh\u1eadp m\u1eadt kh\u1ea9u tr\u01b0\u1edbc khi x\u00e1c minh mail kh\u00f4i ph\u1ee5c'))
         Fill $Session $input $Password
-        Click $Session $next
-        $Submitted.password=$true
+            $Submitted.passwordFilled=$true
+        }
+        # Filling can reflow the form or briefly disable Next. Never use the
+        # button coordinates captured before filling the password.
+        $fresh=Probe $Session
+        $ready=Button $fresh '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p)$'
+        if($ready){
+            Click $Session $ready
+            $Submitted.password=$true
+            $Submitted.passwordSentAt=[DateTime]::UtcNow
+            $Submitted.passwordClicks=1
+        }else{
+            Stage ([regex]::Unescape('\u0110\u00e3 \u0111i\u1ec1n m\u1eadt kh\u1ea9u; \u0111ang ch\u1edd n\u00fat Next s\u1eb5n s\u00e0ng'))
+            Start-Sleep -Milliseconds 350
+        }
     }elseif($choice){
         Stage ([regex]::Unescape('\u0110ang ch\u1ecdn \u0111\u0103ng nh\u1eadp b\u1eb1ng m\u1eadt kh\u1ea9u; ch\u01b0a y\u00eau c\u1ea7u m\u00e3 email'))
         Click $Session $choice
@@ -445,7 +475,10 @@ try {
         $emailInput=@($p.inputs|Where-Object {$_.type -eq 'email' -or $_.id -eq 'i0116'}|Select-Object -First 1)[0]
         if($emailInput -and $body -notmatch 'security info|verify.*identity|recovery|add.*email|send.*code' -and -not $submitted.email){Stage ([regex]::Unescape('\u0110ang nh\u1eadp \u0111\u1ecba ch\u1ec9 mail \u0111\u00e3 ch\u1ecdn'));Fill $session $emailInput ([string]$job.account.email);Click $session $next;$submitted.email=$true;continue}
         if(-not $recovery){$recovery=([string]$job.account.email).Split('@')[0]+'@fviainboxes.com'}
-        if(Password-First $session $p $submitted ([string]$job.account.password)){continue}
+        if(Password-First $session $p $submitted ([string]$job.account.password)){
+            if($script:passwordNeedsInspection){$deadline=[DateTime]::UtcNow.AddSeconds([int]$job.timeout)}
+            continue
+        }
         # Wait for Microsoft to leave the password form before recovery handling.
         if($passwordInput){Start-Sleep -Milliseconds 500;continue}
         $sendCode=Button $p '(send.*code|email.*code|g.i m.)'
