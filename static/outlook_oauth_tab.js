@@ -208,6 +208,18 @@
     }
 
     let selectedWorkerId = '';
+    try { selectedWorkerId = localStorage.getItem('tikflow_mail_worker_selected') || ''; } catch (_) {}
+    function rememberWorker(id) {
+        selectedWorkerId = id || '';
+        try { localStorage.setItem('tikflow_mail_worker_selected', selectedWorkerId); } catch (_) {}
+    }
+    function requireOnlineWorker() {
+        const selected = byId('omWorkerSelect');
+        if ((omState.workers || []).some(w => w.id === selected?.value && w.online && !w.revoked)) return true;
+        toast(selected?.value ? 'M?y ?? ch?n ?ang Offline. M? BAT tr?n m?y ?? v? ch? Online.' : 'Ch?n m?y ch?y trong danh s?ch ph?a tr?n r?i b?m B?t ??u.');
+        selected?.focus();
+        return false;
+    }
     let omState = {
         folders: ['Default'],
         current_folder: 'Default',
@@ -276,11 +288,11 @@
                 : !hasChecked ? 'Tích chọn ít nhất một mail để chạy.'
                 : !workerOnline ? 'Worker máy khách đang Offline. Mở lại file BAT trong máy khách/Sandbox và chờ Online.'
                 : '';
-            byId('omBtnStart').disabled = Boolean(reason);
+            byId('omBtnStart').disabled = running;
             byId('omBtnStart').title = reason || 'Chạy các mail đã chọn trên máy khách';
         }
         if (byId('omBtnStop')) byId('omBtnStop').disabled = !running;
-        if (byId('omBtnRetryFailed')) byId('omBtnRetryFailed').disabled = running || !hasFailed || !workerOnline;
+        if (byId('omBtnRetryFailed')) byId('omBtnRetryFailed').disabled = running || !hasFailed;
 
         if (byId('omBtnBatchGetCode')) byId('omBtnBatchGetCode').disabled = !hasCheckedWithToken;
         if (byId('omBtnVerifyTokens')) byId('omBtnVerifyTokens').disabled = !hasCheckedWithToken;
@@ -301,7 +313,7 @@
             workerSelect.innerHTML = '<option value="">Chọn máy chạy</option>' + workers.map(worker => `<option value="${esc(worker.id)}">${esc(worker.name)} · ${worker.online ? '🟢 Online' : '⚪ Offline'}</option>`).join('');
             if (workers.some(worker => worker.id === previous)) workerSelect.value = previous;
             else if (!previous && workers.filter(worker => worker.online).length === 1) workerSelect.value = workers.find(worker => worker.online).id;
-            selectedWorkerId = workerSelect.value;
+            rememberWorker(workerSelect.value);
             byId('omWorkerStatus').textContent = workers.some(worker => worker.id === workerSelect.value && worker.online)
                 ? 'Trình duyệt sẽ mở trên máy khách đã chọn.'
                 : 'Chưa kết nối máy chạy. Tải và mở .bat trong máy khách/máy ảo.';
@@ -672,7 +684,8 @@
 
     byId('omBtnStart')?.addEventListener('click', async () => {
         const checkedIds = visibleRows().filter((r) => r.checked).map((r) => r.row_id);
-        if (!checkedIds.length) return;
+        if (!checkedIds.length) { toast('T?ch ch?n ?t nh?t m?t mail trong b?ng ?? ch?y.'); return; }
+        if (!requireOnlineWorker()) return;
         try {
             const snap = await omApi('start', { mode: 'ids', row_ids: checkedIds, settings: currentSettingsPayload() });
             applySnapshot(snap, false);
@@ -682,7 +695,7 @@
         }
     });
     byId('omWorkerSelect')?.addEventListener('change', () => {
-        selectedWorkerId = byId('omWorkerSelect').value;
+        rememberWorker(byId('omWorkerSelect').value);
         syncActionButtons();
     });
     byId('omDownloadWorker')?.addEventListener('click', async () => {
@@ -691,7 +704,7 @@
         try {
             const response = await fetch('/api/outlook-oauth/worker/download', {method:'POST', headers:authHeaders(), body:'{}', cache:'no-store'});
             if (!response.ok) throw Error((await response.json()).error || 'Không tải được worker.');
-            selectedWorkerId = response.headers.get('X-Mail-Worker-Id') || '';
+            rememberWorker(response.headers.get('X-Mail-Worker-Id') || '');
             const url = URL.createObjectURL(await response.blob());
             const link = document.createElement('a');
             link.href = url; link.download = 'tikflow_mail_worker.bat'; link.click();
@@ -718,6 +731,7 @@
     });
 
     byId('omBtnRetryFailed')?.addEventListener('click', async () => {
+        if (!requireOnlineWorker()) return;
         try {
             const snap = await omApi('start', { mode: 'retry_failed', settings: currentSettingsPayload() });
             applySnapshot(snap, false);
