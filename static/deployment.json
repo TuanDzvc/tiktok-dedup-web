@@ -1,5 +1,5 @@
 {
-  "release": "2026-11-27.10",
+  "release": "2026-11-27.11",
   "group_assets": "20261126_27",
   "features": [
     "channel_groups",
@@ -13,6 +13,7 @@
     "two_line_hero_and_updated_notice",
     "revised_free_vip_notice_copy",
     "toast_above_workspace_tabs",
-    "consistent_notice_fonts_and_day_only_vip_expiry"
+    "consistent_notice_fonts_and_day_only_vip_expiry",
+    "admin_youtube_cloud_monitor"
   ]
 }

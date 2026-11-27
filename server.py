@@ -60,6 +60,9 @@ from vip_subscription import activate_paid_membership, restore_paid_memberships
 from usage_counts import (ensure_usage_counts, record_dedup_success, record_account_results,
                           record_dedup_blocked, backfill_dedup_counts)
 import channel_groups_store
+import youtube_monitor
+
+_YOUTUBE_MONITOR = None
 
 # Cấu hình Google Sheet Webhook lưu vết người dùng
 SHEET_WEBHOOK_URL = os.getenv(
@@ -2398,6 +2401,16 @@ def on_startup():
     except Exception as e_bf:
         logger.warning(f"[UsageBackfill] Bỏ qua cộng bù: {e_bf}")
 
+    # Only Render owns YouTube scheduling and its separate private cloud object.
+    global _YOUTUBE_MONITOR
+    if _is_cloud_runtime():
+        try:
+            _YOUTUBE_MONITOR = youtube_monitor.YouTubeMonitor(
+                youtube_monitor.CloudStore(_get_supabase_sync_config(), SUPABASE_SYNC_BUCKET))
+            _YOUTUBE_MONITOR.start()
+        except youtube_monitor.MonitorError as exc:
+            logger.warning('[YouTubeMonitor] %s', exc)
+
     # Chỉ bật cloudflare tunnel trên máy tính local, không bật khi chạy trên cloud (Render/VPS)
     if not _is_cloud_runtime():
         t = threading.Thread(target=start_cloudflare_tunnel, args=(int(os.getenv("PORT", 8000)),), daemon=True)
@@ -2410,6 +2423,69 @@ def on_startup():
             time.sleep(PEER_SYNC_INTERVAL_SEC)
 
     threading.Thread(target=_peer_sync_loop, daemon=True).start()
+
+
+@app.on_event('shutdown')
+def stop_youtube_monitor():
+    if _YOUTUBE_MONITOR:
+        _YOUTUBE_MONITOR.stop()
+
+
+@app.api_route('/api/youtube-monitor/{action:path}', methods=['GET', 'POST'])
+async def api_youtube_monitor(req: Request, action: str):
+    user = _extract_vip_user(req)
+    # PC validates the admin's current session, then delegates to Render.
+    if not user and _is_cloud_runtime():
+        trusted = req.headers.get('x-sync-token', '')
+        if trusted and hmac.compare_digest(trusted, _get_sync_token()):
+            username = req.headers.get('x-youtube-admin', '').strip().lower()
+            with _VIP_LOCK:
+                candidate = _load_vip_users_unlocked().get(username)
+            if candidate and candidate.get('active', True):
+                user = candidate
+    if not user or user.get('role') != 'admin':
+        return JSONResponse(status_code=403, content={'success': False, 'error': 'Chỉ admin được dùng Theo Dõi YouTube.'})
+    if action not in ('state', 'settings', 'add', 'toggle', 'delete', 'check', 'test-telegram', 'test-discord'):
+        return JSONResponse(status_code=404, content={'success': False, 'error': 'Không tìm thấy thao tác.'})
+    if (action == 'state') != (req.method == 'GET'):
+        return JSONResponse(status_code=405, content={'success': False, 'error': 'Phương thức không hợp lệ.'})
+    body = {}
+    if req.method == 'POST':
+        raw = await req.body()
+        if len(raw) > 20000:
+            return JSONResponse(status_code=413, content={'success': False, 'error': 'Dữ liệu quá lớn.'})
+        try:
+            body = json.loads(raw)
+            if not isinstance(body, dict):
+                raise ValueError()
+        except (ValueError, TypeError):
+            return JSONResponse(status_code=400, content={'success': False, 'error': 'Dữ liệu không hợp lệ.'})
+    if not _is_cloud_runtime():
+        def forward():
+            try:
+                response = requests.request(req.method, RENDER_SYNC_BASE + '/api/youtube-monitor/' + action,
+                    headers={'X-Sync-Token': _get_sync_token(), 'X-YouTube-Admin': user['username']},
+                    json=body if req.method == 'POST' else None, timeout=65)
+                return JSONResponse(status_code=response.status_code, content=response.json())
+            except (requests.RequestException, ValueError):
+                return JSONResponse(status_code=503, content={'success': False,
+                    'error': 'Chưa kết nối được bộ theo dõi trên Render. Thử lại sau; PC không chạy thay để tránh báo trùng.'})
+        return await run_in_threadpool(forward)
+    if not _YOUTUBE_MONITOR:
+        return JSONResponse(status_code=503, content={'success': False, 'error': 'Bộ theo dõi cloud chưa sẵn sàng.'})
+    def execute():
+        try:
+            if action == 'state':
+                result = _YOUTUBE_MONITOR.view()
+            elif action.startswith('test-'):
+                result = _YOUTUBE_MONITOR.test(action[5:])
+            else:
+                result = _YOUTUBE_MONITOR.action(action, body)
+            return JSONResponse(content=result, headers={'Cache-Control': 'no-store'})
+        except (youtube_monitor.MonitorError, ValueError, TypeError) as exc:
+            message = str(exc) if isinstance(exc, youtube_monitor.MonitorError) else 'Giá trị cấu hình không hợp lệ.'
+            return JSONResponse(status_code=400, content={'success': False, 'error': message})
+    return await run_in_threadpool(execute)
 
 @app.get("/favicon.ico", include_in_schema=False)
 def serve_favicon():

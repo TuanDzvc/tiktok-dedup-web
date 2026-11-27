@@ -28,3 +28,4 @@ independent_reader/.private/
 independent_reader/node_modules/
 independent_reader/output/
 .playwright-cli/
+youtube_monitor*.json

@@ -25,4 +25,5 @@ channel_groups.json.bak2
 account_country_cache.json
 origin_meta_cache.json
 .playwright-cli/
+youtube_monitor*.json
 *.bak*

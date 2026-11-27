@@ -3265,7 +3265,7 @@
         function shouldShowAdminNavBalance() {
             return canCurrentUserSeeBilling() && (
                 activeMainWorkspaceTab === 'account_check' ||
-                (['checker', 'history', 'channel_groups'].includes(activeMainWorkspaceTab) && String(currentVipUser.username || '').toLowerCase() === 'tuandzvcc')
+                (['checker', 'history', 'channel_groups', 'youtube_monitor'].includes(activeMainWorkspaceTab) && String(currentVipUser.username || '').toLowerCase() === 'tuandzvcc')
             );
         }
 
@@ -6579,6 +6579,8 @@
                 targetTab = 'history';
             } else if (tabName === 'channel_groups') {
                 targetTab = 'channel_groups';
+            } else if (tabName === 'youtube_monitor' && currentVipUser?.role === 'admin') {
+                targetTab = 'youtube_monitor';
             }
             activeMainWorkspaceTab = targetTab;
 
@@ -6595,6 +6597,7 @@
             if (accountWs) accountWs.classList.toggle('hidden', targetTab !== 'account_check');
             if (historySec) historySec.classList.toggle('hidden', targetTab !== 'history');
             if (cgWs) cgWs.classList.toggle('hidden', targetTab !== 'channel_groups');
+            document.getElementById('youtubeMonitorWorkspace')?.classList.toggle('hidden', targetTab !== 'youtube_monitor');
 
             const activeCls = 'px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition whitespace-nowrap';
             const inactiveCls = 'px-5 py-2.5 rounded-xl bg-transparent hover:bg-slate-800/90 text-slate-300 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition whitespace-nowrap';
@@ -6611,6 +6614,12 @@
                 tabCg.className = (targetTab === 'channel_groups') ? activeCls : inactiveCls;
                 tabCg.classList.remove('hidden');
             }
+            const youtubeTab = document.getElementById('tabMainYouTubeMonitor');
+            if (youtubeTab) {
+                youtubeTab.className = targetTab === 'youtube_monitor' ? activeCls : inactiveCls;
+                youtubeTab.classList.toggle('hidden', currentVipUser?.role !== 'admin');
+            }
+            if (targetTab === 'youtube_monitor' && typeof loadYoutubeMonitor === 'function') loadYoutubeMonitor();
 
             if (typeof syncAccountWalletUI === 'function') syncAccountWalletUI();
             if (typeof syncCgSupportWidgetVisibility === 'function') syncCgSupportWidgetVisibility();
@@ -10852,5 +10861,6 @@
         <i class="fa-solid fa-arrow-up group-hover:-translate-y-0.5 transition duration-200"></i>
     </button>
     <script src="/static/channel_groups_board.js?v=20261126_27"></script>
+    <script src="/static/youtube_monitor.js?v=20261127_1"></script>
 </body>
 </html>
