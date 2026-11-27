@@ -125,6 +125,12 @@ class ClientWorkerTests(unittest.TestCase):
         self.assertIn('TF_MAIL_ASSETS=https://tiktok-dedup-web.onrender.com',bat)
         self.assertIn("$env:TF_MAIL_ASSETS+'/static/'",bat)
 
+    def test_launcher_detaches_hidden_setup_without_console_pause(self):
+        bat=launcher('https://checktiktok.site',self.wid,self.key,Path(__file__).parent)
+        self.assertIn('start "" powershell.exe -WindowStyle Hidden',bat)
+        self.assertNotIn('pause',bat.lower())
+        self.assertIn('setup-error.log',bat)
+
     def test_api_worker_key_and_owner_boundary(self):
         import server
         from fastapi.testclient import TestClient
