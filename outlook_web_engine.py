@@ -986,7 +986,6 @@ def run_outlook_oauth_in_ht_browser(
     transaction = AuthorizationPKCE(email_clean)
     deadline = time.monotonic() + timeout
     password_attempted = False
-    bootstrap_password_recovery = False
     code_mode = False
     recovery_used = False
     last_recovery_refresh = 0.0
@@ -1242,23 +1241,6 @@ def run_outlook_oauth_in_ht_browser(
                     # Password first: never request or confirm recovery mail
                     # before submitting this account's password.
                     if not password_attempted:
-                        # Open the initial code screen, then switch to password
-                        # without reading or submitting this passwordless code.
-                        initial_resend = _pick(page, ("didn.t get a code",))
-                        if screen == "code" and initial_resend:
-                            stage("bỏ qua mã lần đầu; bấm Didn't get a code? để nhập mật khẩu...")
-                            click(initial_resend)
-                            continue
-                        initial_send = _pick(page, ("^send code$", "^gửi mã$"))
-                        initial_boxes = _visible_code_or_text_inputs(page)
-                        if screen == "confirm_email" and initial_send and len(initial_boxes) == 1 and not bootstrap_password_recovery:
-                            if not matches_recovery_destination(body, recovery):
-                                raise RuntimeError("Mail KP xác nhận ban đầu không khớp cấu hình.")
-                            stage("nhập mail KP lần đầu; chưa đọc mã ở lượt này...")
-                            fill(initial_boxes[0], recovery)
-                            click(initial_send)
-                            bootstrap_password_recovery = True
-                            continue
                         password_option = _pick(page, ("use your password", "use password instead", "sign in with a password", "sử dụng mật khẩu", "nhập mật khẩu"))
                         password_box_first = page.locator("input[type=password]:visible").first
                         password_next = _pick(page, ("^next$", "^sign in$", "^continue$", "^tiếp theo$", "^đăng nhập$"))

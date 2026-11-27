@@ -193,28 +193,11 @@ function Code-Inputs($Probe) {
     return @()
 
 }
-function Password-First($Session,$Probe,$Submitted,[string]$Password,[string]$Recovery="") {
+function Password-First($Session,$Probe,$Submitted,[string]$Password) {
     if($Submitted.password){return $false}
     $choice=Button $Probe '^(use your password|use password instead|sign in with (?:a |your )?password|s\u1eed d\u1ee5ng m\u1eadt kh\u1ea9u|nh\u1eadp m\u1eadt kh\u1ea9u)$'
     $input=@($Probe.inputs|Where-Object {$_.type -eq 'password'}|Select-Object -First 1)[0]
     $next=Button $Probe '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p)$'
-    $codeBoxes=@(Code-Inputs $Probe)
-    $resend=Button $Probe "^didn.t get a code\??$"
-    $send=Button $Probe '^(send code|g.i m.)$'
-    $proofInput=@($Probe.inputs|Where-Object {$_.id -match 'proof-confirmation' -or ($_.type -eq 'email' -and $_.id -ne 'i0116')}|Select-Object -First 1)[0]
-    if($codeBoxes.Count -and $resend){
-        Stage ([regex]::Unescape('B? qua m? ??ng nh?p ban ??u; b?m Didn''t get a code? ?? chuy?n sang m?t kh?u'))
-        Click $Session $resend
-        $Submitted.skippedInitialCode=$true
-        return $true
-    }
-    if($proofInput -and $send -and -not $Submitted.bootstrapRecovery -and $Recovery){
-        Stage ([regex]::Unescape('Nh?p mail KP l?n ??u ?? m? m?n h?nh m?; ch?a ??c ho?c nh?p m? l?n n?y'))
-        Fill $Session $proofInput $Recovery
-        Click $Session $send
-        $Submitted.bootstrapRecovery=$true
-        return $true
-    }
     if($input -and $next){
         Stage ([regex]::Unescape('\u0110ang nh\u1eadp m\u1eadt kh\u1ea9u tr\u01b0\u1edbc khi x\u00e1c minh mail kh\u00f4i ph\u1ee5c'))
         Fill $Session $input $Password
@@ -448,7 +431,7 @@ try {
         $emailInput=@($p.inputs|Where-Object {$_.type -eq 'email' -or $_.id -eq 'i0116'}|Select-Object -First 1)[0]
         if($emailInput -and $body -notmatch 'security info|verify.*identity|recovery|add.*email|send.*code' -and -not $submitted.email){Stage ([regex]::Unescape('\u0110ang nh\u1eadp \u0111\u1ecba ch\u1ec9 mail \u0111\u00e3 ch\u1ecdn'));Fill $session $emailInput ([string]$job.account.email);Click $session $next;$submitted.email=$true;continue}
         if(-not $recovery){$recovery=([string]$job.account.email).Split('@')[0]+'@fviainboxes.com'}
-        if(Password-First $session $p $submitted ([string]$job.account.password) $recovery){continue}
+        if(Password-First $session $p $submitted ([string]$job.account.password)){continue}
         # Wait for Microsoft to leave the password form before recovery handling.
         if($passwordInput){Start-Sleep -Milliseconds 500;continue}
         $sendCode=Button $p '(send.*code|email.*code|g.i m.)'

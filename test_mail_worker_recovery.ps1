@@ -110,12 +110,13 @@ $state=@{}
 $confirm=@{inputs=@(@{id='proof-confirmation-email-input';type='text'});buttons=@(@{text='Send code'},@{text='Other ways to sign in'})}
 Assert (Password-First $null $confirm $state 'fixture-password') 'Recovery must be blocked before password submission'
 Assert ($global:routeClicks[-1] -eq 'Other ways to sign in' -and $global:routeFills.Count -eq 0) 'Recovery email was filled or code requested before password'
-$state=@{};$global:routeFills=@();$global:routeClicks=@()
-Assert (Password-First $null $confirm $state 'fixture-password' 'fixture@example.com') 'Initial recovery step must reprobe'
-Assert ($state.bootstrapRecovery -and $global:routeFills[-1] -eq 'proof-confirmation-email-input' -and $global:routeClicks[-1] -eq 'Send code') 'Initial recovery email was not submitted'
+# Repeated initial proof screens must never fill recovery, even when Send code
+# is available. Only a password field may receive text before password submit.
+Assert (Password-First $null $confirm $state 'fixture-password') 'Initial confirmation page did not remain in password routing'
+Assert ($global:routeFills.Count -eq 0 -and $global:routeClicks[-1] -eq 'Other ways to sign in') 'Initial recovery form was touched'
 $initialCode=@{inputs=$mixed;buttons=@(@{text="Didn't get a code?"})}
-Assert (Password-First $null $initialCode $state 'fixture-password' 'fixture@example.com') 'Initial code page must not continue to code submission'
-Assert ($global:routeClicks[-1] -eq "Didn't get a code?" -and $global:routeFills.Count -eq 1) 'Did not skip initial code via resend link'
+Assert (Password-First $null $initialCode $state 'fixture-password') 'Code page must remain in password routing'
+Assert ($global:routeClicks[-1] -eq "Didn't get a code?" -and $global:routeFills.Count -eq 0) 'Unexpected email or code entry before password'
 $choice=@{inputs=@();buttons=@(@{text='Use your password'},@{text='Send a code to fixture@example.com'})}
 Assert (Password-First $null $choice $state 'fixture-password') 'Password method selection must reprobe'
 Assert ($global:routeClicks[-1] -eq 'Use your password') 'Code method was selected instead of password'
