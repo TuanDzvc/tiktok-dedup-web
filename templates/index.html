@@ -116,9 +116,10 @@
     </style>
 </head>
 <body class="bg-dark-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-white bg-mesh">
-    <div id="readerFallbackNotice" class="hidden mx-4 mt-3 rounded-xl border border-amber-500/50 bg-amber-950/80 px-4 py-3 text-xs text-amber-100" role="status">
-        <span id="readerFallbackNoticeText"></span>
-        <button onclick="openVipAdminModal()" class="ml-2 font-bold underline">Quản lý phiên TikTok</button>
+    <div id="readerFallbackNotice" class="hidden mx-4 mt-3 rounded-xl border border-amber-500/50 bg-amber-950/80 px-3 py-2 text-xs text-amber-100 flex items-center gap-3" role="status">
+        <div class="flex-1 min-w-0"><span id="readerFallbackNoticeText"></span>
+        <button type="button" onclick="openVipAdminModal()" class="ml-2 font-bold underline">Quản lý phiên TikTok</button></div>
+        <button type="button" onclick="dismissReaderFailureNotice()" class="w-6 h-6 flex-shrink-0 rounded-lg hover:bg-amber-800/60 text-lg leading-none" aria-label="Đóng thông báo reader">×</button>
     </div>
 
     <!-- Top Banner -->
@@ -2430,7 +2431,10 @@
                         </div>
                         <p class="text-[11px] text-slate-400">Tự kiểm tra MuMu mỗi khoảng 30 giây. Bạn đăng nhập lại và hoàn tất xác minh trong MuMu; web chỉ thay phiên sau khi đọc thử thành công. MuMu tắt vẫn dùng phiên đã lưu nếu phiên đó còn hoạt động. Khi PC tắt, Render dùng API dự phòng.</p>
                         <p id="readerActionMessage" class="text-xs text-cyan-200" role="status"></p>
-                        <div id="readerRecentEvents" class="text-[11px] text-slate-400 space-y-1"></div>
+                        <details id="readerEventsDetails" class="text-[11px] text-slate-400">
+                            <summary class="cursor-pointer select-none font-bold text-slate-300">Nhật ký nguồn đọc · 10 lượt gần nhất</summary>
+                            <div id="readerRecentEvents" class="mt-2 max-h-32 overflow-y-auto overscroll-contain custom-scrollbar pr-2 space-y-1 break-words"></div>
+                        </details>
                     </section>
 
 
@@ -2996,15 +3000,57 @@
         const DEDUP_CHECK_UNIT_PRICE_VND = 26;
 
         let readerStatusBusy = false;
-        let readerLastFallbackAt = 0;
+        let readerNoticeInitialized = false;
+        let readerNoticeWasHealthy = false;
+        let readerNoticeFallbackCount = 0;
+        function readerFailureAcknowledged() {
+            try { return sessionStorage.getItem('tikflow_reader_failure_ack') === '1'; } catch (_) { return false; }
+        }
+        function rememberReaderFailureAcknowledged(value) {
+            try {
+                if (value) sessionStorage.setItem('tikflow_reader_failure_ack', '1');
+                else sessionStorage.removeItem('tikflow_reader_failure_ack');
+            } catch (_) {}
+        }
+        let readerFailureNoticeShown = readerFailureAcknowledged();
+        function dismissReaderFailureNotice() {
+            document.getElementById('readerFallbackNotice')?.classList.add('hidden');
+            readerFailureNoticeShown = true;
+            rememberReaderFailureAcknowledged(true);
+        }
+        function updateReaderFailureNotice(data, fromCheck = false) {
+            const notice = document.getElementById('readerFallbackNotice');
+            if (!notice) return;
+            const healthy = data.active_provider === 'independent';
+            const count = Number(data.fallback_count || 0);
+            const newFailure = !healthy && !readerFailureNoticeShown && (fromCheck ||
+                (readerNoticeInitialized && (readerNoticeWasHealthy || count > readerNoticeFallbackCount)));
+            if (healthy) {
+                notice.classList.add('hidden');
+                readerFailureNoticeShown = false;
+                rememberReaderFailureAcknowledged(false);
+            } else if (newFailure) {
+                document.getElementById('readerFallbackNoticeText').textContent = data.active_provider === 'api_fallback'
+                    ? '⚠️ Reader chưa dùng được; lượt check đang dùng API dự phòng. Kiểm tra phiên TikTok.'
+                    : '⚠️ Reader TikTok chưa dùng được. Kiểm tra phiên TikTok.';
+                notice.classList.remove('hidden');
+                readerFailureNoticeShown = true;
+                rememberReaderFailureAcknowledged(true);
+            }
+            // The first status after F5 is only a baseline, never an old alert.
+            readerNoticeInitialized = true;
+            readerNoticeWasHealthy = healthy;
+            readerNoticeFallbackCount = count;
+        }
         const readerDate = timestamp => timestamp ? new Date(Number(timestamp) * 1000).toLocaleString('vi-VN') : 'Chưa có';
-        async function loadReaderStatus() {
+        async function loadReaderStatus(fromCheck = false) {
             if (!currentVipUser || currentVipUser.role !== 'admin' || readerStatusBusy) return;
             readerStatusBusy = true;
             try {
                 const response = await fetch('/api/vip/admin/reader-status', { headers: { 'Authorization': 'Bearer ' + getVipToken() } });
                 if (!response.ok) return;
                 const data = await response.json(), engine = data.engine || {};
+                if (currentVipUser?.role !== 'admin') return;
                 const healthy = data.active_provider === 'independent';
                 const fallback = data.active_provider === 'api_fallback';
                 document.getElementById('readerStatusBadge').textContent = healthy ? '🟢 Reader riêng đang hoạt động' : fallback ? '🟠 API dự phòng' : '🔴 Tạm ngừng đọc';
@@ -3017,12 +3063,7 @@
                         ? 'MuMu đang tắt — không sao: phiên đã lưu vẫn đọc tốt. Chỉ cần mở MuMu khi phiên hết hạn (badge chuyển cam/đỏ).'
                         : engine.refresh_message;
                 }
-                const notice = document.getElementById('readerFallbackNotice');
-                const lastUsedFallback = data.last_source === 'api_fallback';
-                notice.classList.toggle('hidden', healthy && !lastUsedFallback);
-                document.getElementById('readerFallbackNoticeText').textContent = healthy && lastUsedFallback ? '⚠️ Lượt check gần nhất đã dùng API dự phòng. Reader hiện báo khỏe; lượt tiếp theo sẽ thử reader trước.' : fallback ? '⚠️ Check trùng đang dùng API dự phòng. Kiểm tra phiên TikTok hoặc đăng nhập lại trong MuMu.' : '⚠️ Reader TikTok chưa sẵn sàng; API dự phòng đang tắt.';
-                if (readerLastFallbackAt && Number(data.last_fallback_at) > readerLastFallbackAt) showToast('⚠️ Đã có lượt Check trùng dùng API dự phòng.');
-                readerLastFallbackAt = Number(data.last_fallback_at || 0);
+                updateReaderFailureNotice(data, fromCheck === true);
                 const events = document.getElementById('readerRecentEvents');
                 events.replaceChildren();
                 const sourceLabels = { independent: '🟢 Reader riêng', api_fallback: '🟠 API dự phòng', unavailable: '🔴 Không đọc được', target_unavailable: '⚪ Lỗi kênh — không phải lỗi reader' };
@@ -3039,12 +3080,6 @@
                     reader_disabled: 'Reader đang tắt'
                 };
                 const evList = (data.events || []).slice(-10).reverse();
-                if (evList.length) {
-                    const head = document.createElement('div');
-                    head.className = 'text-slate-300 font-bold';
-                    head.textContent = 'Nhật ký: lượt API, lỗi kênh và chuyển nguồn đọc. Lỗi kênh không làm reader lỗi/hết phiên.';
-                    events.appendChild(head);
-                }
                 for (const event of evList) {
                     const line = document.createElement('div');
                     line.className = event.source === 'target_unavailable' ? 'text-slate-300' : event.source === 'api_fallback' ? 'text-amber-200/90' : (event.source === 'independent' ? 'text-emerald-300/90' : 'text-rose-300/90');
@@ -3102,7 +3137,11 @@
         window.addEventListener('focus', updateVipExpiryDisplay);
 
         function renderVipNav() {
-            if (!currentVipUser || currentVipUser.role !== 'admin') document.getElementById('readerFallbackNotice')?.classList.add('hidden');
+            if (!currentVipUser || currentVipUser.role !== 'admin') {
+                document.getElementById('readerFallbackNotice')?.classList.add('hidden');
+                readerNoticeInitialized = false;
+                readerFailureNoticeShown = readerFailureAcknowledged();
+            }
             else setTimeout(loadReaderStatus, 0);
             const nav = document.getElementById('vipNavContainer');
             if (!nav) return;
@@ -5813,8 +5852,7 @@
         function renderResults(data) {
             rememberDedupProvider(data);
             if (currentVipUser?.role === 'admin' && data.reader_provider) {
-                if (data.reader_provider.fallback) showToast('⚠️ Lượt này dùng API dự phòng. Xem Quản lý tài khoản → Phiên TikTok.');
-                loadReaderStatus();
+                loadReaderStatus(true);
             }
             if (data.admin_billing) {
                 updateAdminBillingUI(data.admin_billing, true);

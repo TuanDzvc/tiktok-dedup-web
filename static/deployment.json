@@ -1,5 +1,5 @@
 {
-  "release": "2026-11-27.16",
+  "release": "2026-11-27.17",
   "group_assets": "20261126_27",
   "features": [
     "channel_groups",
@@ -17,6 +17,7 @@
     "admin_youtube_cloud_monitor",
     "progressive_account_check_results",
     "compact_account_cards_with_inline_status",
-    "shared_country_evidence_and_geo_filter_reason"
+    "shared_country_evidence_and_geo_filter_reason",
+    "bounded_reader_log_and_dismissible_failure_notice"
   ]
 }
