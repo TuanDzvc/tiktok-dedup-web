@@ -309,14 +309,17 @@
         const workerSelect = byId('omWorkerSelect');
         if (workerSelect) {
             const previous = selectedWorkerId || workerSelect.value;
-            const workers = (snap.workers || []).filter(worker => !worker.revoked);
-            workerSelect.innerHTML = '<option value="">Chọn phiên worker</option>' + workers.map(worker => `<option value="${esc(worker.id)}">${esc(worker.name)} · #${esc(worker.id.slice(0,6))} · ${worker.online ? '🟢 Online' : '⚪ Offline'}</option>`).join('');
+            const workers = (snap.workers || []).map((worker, order) => ({...worker, order})).filter(worker => !worker.revoked)
+                .sort((a,b) => Number(b.created_at || 0) - Number(a.created_at || 0) || b.order - a.order);
+            const latestOnlineByName = new Map();
+            for (const worker of workers) if (worker.online && !latestOnlineByName.has(worker.name)) latestOnlineByName.set(worker.name, worker.id);
+            workerSelect.innerHTML = '<option value="">Chọn phiên worker</option>' + workers.map(worker => `<option value="${esc(worker.id)}">${esc(worker.name)} · #${esc(worker.id.slice(0,6))} · ${worker.online ? (latestOnlineByName.get(worker.name) === worker.id ? '🟢 Online — Mới nhất' : '🟢 Online — Phiên cũ') : '⚪ Offline'}</option>`).join('');
             workerSelect.title = 'Mỗi dòng là một phiên BAT. Mở nhiều BAT có thể tạo nhiều phiên cùng tên máy. Chọn phiên cũ rồi bấm Ngắt worker để đóng phiên đó.';
             if (workers.some(worker => worker.id === previous)) workerSelect.value = previous;
-            else if (!previous && workers.filter(worker => worker.online).length === 1) workerSelect.value = workers.find(worker => worker.online).id;
+            else if (!previous && workers.some(worker => worker.online)) workerSelect.value = workers.find(worker => worker.online).id;
             rememberWorker(workerSelect.value);
             byId('omWorkerStatus').textContent = workers.some(worker => worker.id === workerSelect.value && worker.online)
-                ? 'Trình duyệt sẽ mở trên máy khách đã chọn.'
+                ? `Trình duyệt mở trên ${workers.find(worker => worker.id === workerSelect.value).name} · #${workerSelect.value.slice(0,6)}. Phiên mới nhất được đánh dấu trong danh sách.`
                 : 'Chưa kết nối máy chạy. Tải và mở .bat trong máy khách/máy ảo.';
         }
         const running = Boolean(snap.job?.running);

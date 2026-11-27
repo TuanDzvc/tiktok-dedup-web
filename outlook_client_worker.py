@@ -50,7 +50,8 @@ class ClientMailWorker:
     def public_workers(self):
         return [{'id':key,'name':row.get('name') or key[:8],
                  'online':not row.get('revoked') and self.clock()-row.get('last_seen',0)<30,
-                 'revoked':bool(row.get('revoked')), 'last_seen':row.get('last_seen',0)}
+                 'revoked':bool(row.get('revoked')), 'last_seen':row.get('last_seen',0),
+                 'created_at':row.get('created_at',0)}
                 for key,row in self.state.get('client_workers',{}).items()]
 
     def pair(self):
