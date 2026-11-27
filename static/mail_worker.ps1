@@ -168,14 +168,73 @@ function Start-ClientBrowser([string]$Executable,[string[]]$BrowserArguments) {
         return Start-Process -FilePath $edge -ArgumentList $BrowserArguments -WindowStyle Normal -PassThru
     }
 }
-function Recovery-Records($Session,[string]$Part) {
-    $records=@()
+function Code-Inputs($Probe) {
+    $digits=@($Probe.inputs|Where-Object {$_.max -eq 1 -and $_.type -in @('text','tel','number','')})
+    if($digits.Count -eq 6){return $digits}
+    return @($Probe.inputs|Where-Object {$_.name -match 'otc|code' -or $_.id -match 'otc|code' -or $_.label -match 'verification code|security code' -or $_.max -eq 6}|Select-Object -First 1)
+}
+function Is-RecoveryMessage($Record) {
+    return [string]$Record.from -match 'account-security-noreply' -and [string]$Record.subject -match 'single[- ]use code|security code|verify your|verification code|mã bảo mật|xác minh'
+}
+function Extract-RecoveryCode($Payload) {
+    $text=if($Payload -is [string]){$Payload}else{$Payload|ConvertTo-Json -Depth 20 -Compress}
+    $text=[Net.WebUtility]::HtmlDecode(($text -replace '<[^>]+>',' '))
+    $match=[regex]::Match($text,'(?i)(?:your\s+single[- ]use\s+code\s+is|security\s+code(?:\s+is)?|verification\s+code(?:\s+is)?|mã\s+bảo\s+mật)\s*:?\s*(\d{6})(?!\d)')
+    if($match.Success){return $match.Groups[1].Value}
+    $text=$text -replace '"(?:id|createdAt|timestamp)"\s*:\s*(?:"[^"\\]*"|\d+)',''
+    $codes=@([regex]::Matches($text,'(?<!\d)\d{6}(?!\d)')|ForEach-Object {$_.Value}|Select-Object -Unique)
+    if($codes.Count -eq 1){return $codes[0]}
+    return ''
+}
+function Submit-RecoveryCode($Session,$Probe,[string]$Code) {
+    if($Code -notmatch '^\d{6}$'){return $false}
+    $boxes=@(Code-Inputs $Probe)
+    if($boxes.Count -eq 6){for($di=0;$di -lt 6;$di++){Fill $Session $boxes[$di] ([string]$Code[$di])}}
+    elseif($boxes.Count -eq 1){Fill $Session $boxes[0] $Code}
+    else{return $false}
+    Click $Session (Button $Probe '^(next|verify|continue|submit|ti.p t.c|ti.p theo|x.c minh)$')
+    return $true
+}
+function Recovery-Item($Session,[string]$Subject) {
+    $encoded=$Subject|ConvertTo-Json -Compress
+    return Evaluate $Session ("JSON.stringify((()=>{const subject="+$encoded+";const e=[...document.querySelectorAll('[role=listitem],li,button,p,span,div')].find(e=>e.textContent.trim()===subject&&e.getBoundingClientRect().width>0&&e.getBoundingClientRect().height>0);if(!e)return null;const r=(e.closest('[role=listitem],li')||e).getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})())")
+}
+$script:recoveryCache=@{}
+function Update-RecoveryCache($Session) {
+    $key=[string]$Session.GetHashCode()
+    if(-not $script:recoveryCache.ContainsKey($key)){$script:recoveryCache[$key]=@{pending=@{};records=@();messages=@{}}}
+    $cache=$script:recoveryCache[$key]
     foreach($event in @($Session.DrainEventsJson()|ConvertFrom-Json)){
-        if($event.method -eq 'Network.responseReceived' -and $event.params.response.url -match '/messages\?' -and $event.params.response.url -like ('*'+$Part+'*')){
-            try {$r=Cdp $Session 'Network.getResponseBody' @{requestId=$event.params.requestId};$body=$r['body']|ConvertFrom-Json;$records=@($body.result)}catch{}
+        $rid=[string]$event.params.requestId
+        if($event.method -eq 'Network.responseReceived' -and $event.params.response.url -match '/messages?\?'){
+            $cache.pending[$rid]=@{url=[string]$event.params.response.url;finished=$false;at=[DateTime]::UtcNow}
+        }elseif($event.method -eq 'Network.loadingFinished' -and $cache.pending.ContainsKey($rid)){$cache.pending[$rid].finished=$true}
+        elseif($event.method -eq 'Network.loadingFailed'){$cache.pending.Remove($rid)}
+    }
+    foreach($rid in @($cache.pending.Keys)){
+        $pending=$cache.pending[$rid]
+        if(([DateTime]::UtcNow-$pending.at).TotalSeconds -gt 25){$cache.pending.Remove($rid);continue}
+        if(-not $pending.finished){continue}
+        try{
+            $response=Cdp $Session 'Network.getResponseBody' @{requestId=$rid}
+            $text=[string]$response['body']
+            if($response['base64Encoded']){$text=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($text))}
+            $data=$text|ConvertFrom-Json
+            if($pending.url -match '/messages\?'){$cache.records=@($data.result);$cache.recordsUrl=$pending.url}
+            else{
+                $messageId=[Web.HttpUtility]::ParseQueryString(([Uri]$pending.url).Query)['id']
+                if($messageId){$cache.messages[$messageId]=$data}
+            }
+            $cache.pending.Remove($rid)
+        }catch{ # Keep completed requests and retry; responseReceived can precede body availability.
         }
     }
-    return $records
+    return $cache
+}
+function Recovery-Records($Session,[string]$Part) {
+    $cache=Update-RecoveryCache $Session
+    if($cache.recordsUrl -like ('*'+[Uri]::EscapeDataString($Part)+'*')){return $cache.records}
+    return @()
 }
 $browser=$null;$proxy=$null;$session=$null;$recoverySession=$null
 $profileRoot=Join-Path $workerRoot ('profile-'+$job.id)
@@ -271,7 +330,8 @@ try {
         $passwordInput=@($p.inputs|Where-Object {$_.type -eq 'password'}|Select-Object -First 1)[0]
         $next=Button $p '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p|yes|accept|ch.p nh.n)$'
         if($passwordInput -and -not $submitted.password){Stage 'Filling the selected account password';Fill $session $passwordInput ([string]$job.account.password);Click $session $next;$submitted.password=$true;continue}
-        $codeInput=@($p.inputs|Where-Object {$_.name -match 'otc|code' -or $_.id -match 'otc|code' -or $_.max -eq 6}|Select-Object -First 1)[0]
+        $codeBoxes=@(Code-Inputs $p)
+        $codeInput=@($codeBoxes|Select-Object -First 1)[0]
         $emailInput=@($p.inputs|Where-Object {$_.type -eq 'email' -or $_.id -eq 'i0116'}|Select-Object -First 1)[0]
         if($emailInput -and $body -notmatch 'security info|verify.*identity|recovery|add.*email|send.*code' -and -not $submitted.email){Stage 'Filling the selected account email';Fill $session $emailInput ([string]$job.account.email);Click $session $next;$submitted.email=$true;continue}
         $sendCode=Button $p '(send.*code|email.*code|g.i m.)'
@@ -302,24 +362,26 @@ try {
         if($codeInput -and $recoverySession -and -not $submitted.code -and ([DateTime]::UtcNow-$lastRecovery).TotalSeconds -ge 4){
             $rp=Probe $recoverySession;Click $recoverySession (Button $rp 'Get Email|Refresh');Start-Sleep -Milliseconds 600
             $records=@(Recovery-Records $recoverySession $recovery.Split('@')[0])
-            foreach($record in $records){
-                if($baseline.ContainsKey([string]$record.id) -or [double]$record.createdAt -lt ([DateTimeOffset]$codeRequested).ToUnixTimeSeconds()-5 -or ([string]$record.subject -notmatch 'Microsoft|security code')){continue}
-                $joined=$record|ConvertTo-Json -Depth 12 -Compress
-                $match=[regex]::Match($joined,'\b\d{6}\b')
-                if(-not $match.Success){
+            foreach($record in @($records|Sort-Object {[double]$_.createdAt} -Descending)){
+                if($baseline.ContainsKey([string]$record.id) -or [double]$record.createdAt -lt ([DateTimeOffset]$codeRequested).ToUnixTimeSeconds()-5 -or -not (Is-RecoveryMessage $record)){continue}
+                Stage 'Found a new Microsoft security email; reading its code'
+                $cache=Update-RecoveryCache $recoverySession
+                $messageId=[string]$record.id
+                if(-not $cache.messages.ContainsKey($messageId)){
                     $button=Button $rp ([regex]::Escape([string]$record.subject))
-                    Click $recoverySession $button;Start-Sleep -Milliseconds 600
-                    foreach($e in @($recoverySession.DrainEventsJson()|ConvertFrom-Json)){
-                        if($e.method -eq 'Network.responseReceived' -and $e.params.response.url -match '/message\?' -and $e.params.response.url -like ('*'+$record.id+'*')){
-                            try{$message=Cdp $recoverySession 'Network.getResponseBody' @{requestId=$e.params.requestId};$match=[regex]::Match([string]$message['body'],'\b\d{6}\b')}catch{}
-                        }
-                    }
+                    if(-not $button){$button=Recovery-Item $recoverySession ([string]$record.subject)}
+                    Click $recoverySession $button
+                    $messageDeadline=[DateTime]::UtcNow.AddSeconds(6)
+                    do{
+                        Start-Sleep -Milliseconds 250;Heartbeat
+                        $cache=Update-RecoveryCache $recoverySession
+                    }while(-not $cache.messages.ContainsKey($messageId) -and [DateTime]::UtcNow -lt $messageDeadline)
                 }
-                if($match.Success){
-                    $digits=@($p.inputs|Where-Object {$_.max -eq 1})
-                    if($digits.Count -eq 6){for($di=0;$di -lt 6;$di++){Fill $session $digits[$di] ([string]$match.Value[$di])}}
-                    else{Fill $session $codeInput $match.Value}
-                    Click $session $next;$submitted.code=$true;Stage 'Submitted the fresh recovery code';break
+                $code=if($cache.messages.ContainsKey($messageId)){Extract-RecoveryCode $cache.messages[$messageId]}else{''}
+                if($code -and (Submit-RecoveryCode $session $p $code)){
+                    $submitted.code=$true;Stage 'Submitted the fresh recovery code'
+                    $null=Cdp $session 'Page.bringToFront'
+                    break
                 }
             }
             $lastRecovery=[DateTime]::UtcNow;continue
