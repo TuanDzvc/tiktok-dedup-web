@@ -43,6 +43,13 @@ $selected=@(Newest-RecoveryRecord $messages @{} $request)
 Assert ($selected.Count -eq 1 -and $selected[0].id -eq 'newest') 'Did not select exactly the newest security mail'
 Assert (@(Newest-RecoveryRecord $messages @{new=$true;newest=$true} $request).Count -eq 0) 'Selected old or previously seen code'
 Assert (@(Newest-RecoveryRecord @($messages[1]) @{} $request).Count -eq 0) 'Accepted a mail received before the request'
+Assert (Is-RecoveryMessage @{from='account-security-noreply@accountprotection.microsoft.com';subject='Personal Microsoft account security code'}) 'Post-password security-code subject rejected'
+$security=@{id='security';createdAt=1800000004;from='account-security-noreply@accountprotection.microsoft.com';subject='Personal Microsoft account security code'}
+$securityPick=@(Newest-RecoveryRecord (@($messages)+@($security)) @{} $request $true)
+Assert ($securityPick.Count -eq 1 -and $securityPick[0].id -eq 'security') 'Selected newer passwordless code instead of post-password security code'
+Assert ((Extract-RecoveryCode '<style>.x{color:#123456}</style><p>Security code: 012345</p>') -ceq '012345') 'Security code was confused with HTML styling'
+Assert (@(Code-Inputs @{body='Enter your code';inputs=@(@{id='verificationInput';type='text';max=-1;name='';label=''})}).Count -eq 1) 'Unlabelled security input was not recognized'
+Assert (@(Code-Inputs @{body='Verify your email';inputs=@(@{id='proof-confirmation-email-input';type='text';max=-1;name='';label=''})}).Count -eq 0) 'Recovery email field was mistaken for OTP'
 $script:recoveryCache=@{}
 $global:fixtureEvents=@(
     @{method='Page.frameNavigated';params=@{}},
@@ -103,6 +110,12 @@ $state=@{}
 $confirm=@{inputs=@(@{id='proof-confirmation-email-input';type='text'});buttons=@(@{text='Send code'},@{text='Other ways to sign in'})}
 Assert (Password-First $null $confirm $state 'fixture-password') 'Recovery must be blocked before password submission'
 Assert ($global:routeClicks[-1] -eq 'Other ways to sign in' -and $global:routeFills.Count -eq 0) 'Recovery email was filled or code requested before password'
+$state=@{};$global:routeFills=@();$global:routeClicks=@()
+Assert (Password-First $null $confirm $state 'fixture-password' 'fixture@example.com') 'Initial recovery step must reprobe'
+Assert ($state.bootstrapRecovery -and $global:routeFills[-1] -eq 'proof-confirmation-email-input' -and $global:routeClicks[-1] -eq 'Send code') 'Initial recovery email was not submitted'
+$initialCode=@{inputs=$mixed;buttons=@(@{text="Didn't get a code?"})}
+Assert (Password-First $null $initialCode $state 'fixture-password' 'fixture@example.com') 'Initial code page must not continue to code submission'
+Assert ($global:routeClicks[-1] -eq "Didn't get a code?" -and $global:routeFills.Count -eq 1) 'Did not skip initial code via resend link'
 $choice=@{inputs=@();buttons=@(@{text='Use your password'},@{text='Send a code to fixture@example.com'})}
 Assert (Password-First $null $choice $state 'fixture-password') 'Password method selection must reprobe'
 Assert ($global:routeClicks[-1] -eq 'Use your password') 'Code method was selected instead of password'

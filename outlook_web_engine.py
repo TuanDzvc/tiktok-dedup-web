@@ -752,7 +752,7 @@ def new_recovery_message(records: list[dict[str, Any]], baseline_ids: set[str], 
         record
         for record in records
         if str(record.get("id")) not in baseline_ids
-        and float(record.get("createdAt", 0)) >= int(requested_at) - 5
+        and float(record.get("createdAt", 0)) >= int(requested_at)
         and "account-security-noreply" in str(record.get("from", "")).casefold()
         and any(
             label in unicodedata.normalize("NFC", str(record.get("subject", ""))).casefold()
@@ -986,6 +986,7 @@ def run_outlook_oauth_in_ht_browser(
     transaction = AuthorizationPKCE(email_clean)
     deadline = time.monotonic() + timeout
     password_attempted = False
+    bootstrap_password_recovery = False
     code_mode = False
     recovery_used = False
     last_recovery_refresh = 0.0
@@ -1241,6 +1242,23 @@ def run_outlook_oauth_in_ht_browser(
                     # Password first: never request or confirm recovery mail
                     # before submitting this account's password.
                     if not password_attempted:
+                        # Open the initial code screen, then switch to password
+                        # without reading or submitting this passwordless code.
+                        initial_resend = _pick(page, ("didn.t get a code",))
+                        if screen == "code" and initial_resend:
+                            stage("bỏ qua mã lần đầu; bấm Didn't get a code? để nhập mật khẩu...")
+                            click(initial_resend)
+                            continue
+                        initial_send = _pick(page, ("^send code$", "^gửi mã$"))
+                        initial_boxes = _visible_code_or_text_inputs(page)
+                        if screen == "confirm_email" and initial_send and len(initial_boxes) == 1 and not bootstrap_password_recovery:
+                            if not matches_recovery_destination(body, recovery):
+                                raise RuntimeError("Mail KP xác nhận ban đầu không khớp cấu hình.")
+                            stage("nhập mail KP lần đầu; chưa đọc mã ở lượt này...")
+                            fill(initial_boxes[0], recovery)
+                            click(initial_send)
+                            bootstrap_password_recovery = True
+                            continue
                         password_option = _pick(page, ("use your password", "use password instead", "sign in with a password", "sử dụng mật khẩu", "nhập mật khẩu"))
                         password_box_first = page.locator("input[type=password]:visible").first
                         password_next = _pick(page, ("^next$", "^sign in$", "^continue$", "^tiếp theo$", "^đăng nhập$"))
@@ -1429,7 +1447,8 @@ def run_outlook_oauth_in_ht_browser(
                         if time.monotonic() - last_recovery_refresh >= 4.0:
                             refresh_recovery_mailbox()
                             last_recovery_refresh = time.monotonic()
-                        newest = new_recovery_message(recovery_records, recovery_baseline_ids, recovery_requested_at)
+                        eligible_records = [item for item in recovery_records if not password_attempted or "single-use code" not in str(item.get("subject", "")).casefold()]
+                        newest = new_recovery_message(eligible_records, recovery_baseline_ids, recovery_requested_at)
                         if newest:
                             try:
                                 item = temp_page.get_by_role("listitem").filter(has_text=str(newest.get("subject", ""))).first

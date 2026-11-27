@@ -141,7 +141,7 @@ function Evaluate($Session,[string]$Expression) {
 }
 function Probe($Session) {
     return Evaluate $Session @'
-JSON.stringify((()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const point=e=>{const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}};return{url:location.href,body:(document.body?.innerText||'').slice(0,24000),inputs:[...document.querySelectorAll('input')].filter(e=>visible(e)&&!['hidden','submit','button','checkbox'].includes(e.type)).map(e=>({...point(e),type:e.type,id:e.id,name:e.name,label:e.getAttribute('aria-label')||e.placeholder||'',max:e.maxLength})),buttons:[...document.querySelectorAll('button,input[type=submit],input[type=button],a,[role=button],[role=listitem],li')].filter(visible).map(e=>({...point(e),text:(e.innerText||e.value||e.getAttribute('aria-label')||'').trim(),id:e.id}))}})())
+JSON.stringify((()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const point=e=>{const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}};return{url:location.href,body:(document.body?.innerText||'').slice(0,24000),inputs:[...document.querySelectorAll('input')].filter(e=>visible(e)&&!['hidden','submit','button','checkbox'].includes(e.type)).map(e=>({...point(e),type:e.type,id:e.id,name:e.name,label:e.getAttribute('aria-label')||e.placeholder||'',auto:e.autocomplete,inputMode:e.inputMode,max:e.maxLength})),buttons:[...document.querySelectorAll('button,input[type=submit],input[type=button],a,[role=button],[role=listitem],li')].filter(visible).map(e=>({...point(e),text:(e.innerText||e.value||e.getAttribute('aria-label')||'').trim(),id:e.id}))}})())
 '@
 }
 function Click($Session,$Element) {if($Element){$null=$Session.ClickPointAsync([double]$Element.x,[double]$Element.y).GetAwaiter().GetResult();Start-Sleep -Milliseconds 250}}
@@ -186,13 +186,35 @@ function Code-Inputs($Probe) {
     if($namedDigits.Count -eq 6){return $namedDigits}
     $digits=@($Probe.inputs|Where-Object {$_.max -eq 1 -and $_.type -in @('text','tel','number','')})
     if($digits.Count -eq 6){return $digits}
-    return @($Probe.inputs|Where-Object {$_.name -match 'otc|code' -or $_.id -match 'otc|code' -or $_.label -match 'verification code|security code' -or $_.max -eq 6}|Select-Object -First 1)
+    $identified=@($Probe.inputs|Where-Object {$_.name -match 'otc|code' -or $_.id -match 'otc|code' -or $_.auto -eq 'one-time-code' -or $_.label -match 'verification code|security code|^code$' -or $_.max -eq 6}|Select-Object -First 1)
+    if($identified.Count){return $identified}
+    $textInputs=@($Probe.inputs|Where-Object {$_.type -in @('text','tel','number','') -and $_.id -notmatch 'proof-confirmation|i0116'})
+    if($textInputs.Count -eq 1 -and [string]$Probe.body -match 'enter (?:your |the )?(?:security )?code|security code|code we (?:just )?sent'){return $textInputs}
+    return @()
+
 }
-function Password-First($Session,$Probe,$Submitted,[string]$Password) {
+function Password-First($Session,$Probe,$Submitted,[string]$Password,[string]$Recovery="") {
     if($Submitted.password){return $false}
     $choice=Button $Probe '^(use your password|use password instead|sign in with (?:a |your )?password|s\u1eed d\u1ee5ng m\u1eadt kh\u1ea9u|nh\u1eadp m\u1eadt kh\u1ea9u)$'
     $input=@($Probe.inputs|Where-Object {$_.type -eq 'password'}|Select-Object -First 1)[0]
     $next=Button $Probe '^(next|sign in|continue|ti.p t.c|ti.p theo|dang nh.p)$'
+    $codeBoxes=@(Code-Inputs $Probe)
+    $resend=Button $Probe "^didn.t get a code\??$"
+    $send=Button $Probe '^(send code|g.i m.)$'
+    $proofInput=@($Probe.inputs|Where-Object {$_.id -match 'proof-confirmation' -or ($_.type -eq 'email' -and $_.id -ne 'i0116')}|Select-Object -First 1)[0]
+    if($codeBoxes.Count -and $resend){
+        Stage ([regex]::Unescape('B? qua m? ??ng nh?p ban ??u; b?m Didn''t get a code? ?? chuy?n sang m?t kh?u'))
+        Click $Session $resend
+        $Submitted.skippedInitialCode=$true
+        return $true
+    }
+    if($proofInput -and $send -and -not $Submitted.bootstrapRecovery -and $Recovery){
+        Stage ([regex]::Unescape('Nh?p mail KP l?n ??u ?? m? m?n h?nh m?; ch?a ??c ho?c nh?p m? l?n n?y'))
+        Fill $Session $proofInput $Recovery
+        Click $Session $send
+        $Submitted.bootstrapRecovery=$true
+        return $true
+    }
     if($input -and $next){
         Stage ([regex]::Unescape('\u0110ang nh\u1eadp m\u1eadt kh\u1ea9u tr\u01b0\u1edbc khi x\u00e1c minh mail kh\u00f4i ph\u1ee5c'))
         Fill $Session $input $Password
@@ -221,12 +243,12 @@ function Recovery-DestinationMatches([string]$Label,[string]$Address) {
     }
     return $false
 }
-function Newest-RecoveryRecord($Records,$Baseline,[DateTime]$Requested) {
+function Newest-RecoveryRecord($Records,$Baseline,[DateTime]$Requested,[bool]$SecurityOnly=$false) {
     $since=([DateTimeOffset]$Requested).ToUnixTimeSeconds()
     # createdAt has second precision. Snapshot IDs before clicking Send excludes
     # older mail even if it shares the same second with the request.
     return @($Records|Where-Object {
-        (Is-RecoveryMessage $_) -and -not $Baseline.ContainsKey([string]$_.id) -and [double]$_.createdAt -ge $since
+        (Is-RecoveryMessage $_) -and (-not $SecurityOnly -or [string]$_.subject -notmatch 'single[- ]use code') -and -not $Baseline.ContainsKey([string]$_.id) -and [double]$_.createdAt -ge $since
     }|Sort-Object {[double]$_.createdAt} -Descending|Select-Object -First 1)
 }
 function Recovery-Time([DateTime]$Utc) {
@@ -234,6 +256,7 @@ function Recovery-Time([DateTime]$Utc) {
 }
 function Extract-RecoveryCode($Payload) {
     $text=if($Payload -is [string]){$Payload}else{$Payload|ConvertTo-Json -Depth 20 -Compress}
+    $text=$text -replace '(?is)<(style|script)\b[^>]*>.*?</\1>',' '
     $text=[Net.WebUtility]::HtmlDecode(($text -replace '<[^>]+>',' '))
     $match=[regex]::Match($text,'(?i)(?:your\s+single[- ]use\s+code\s+is|security\s+code(?:\s+is)?|verification\s+code(?:\s+is)?|m\u00e3\s+b\u1ea3o\s+m\u1eadt)\s*:?\s*(\d{6})(?!\d)')
     if($match.Success){return $match.Groups[1].Value}
@@ -424,7 +447,8 @@ try {
         $codeInput=@($codeBoxes|Select-Object -First 1)[0]
         $emailInput=@($p.inputs|Where-Object {$_.type -eq 'email' -or $_.id -eq 'i0116'}|Select-Object -First 1)[0]
         if($emailInput -and $body -notmatch 'security info|verify.*identity|recovery|add.*email|send.*code' -and -not $submitted.email){Stage ([regex]::Unescape('\u0110ang nh\u1eadp \u0111\u1ecba ch\u1ec9 mail \u0111\u00e3 ch\u1ecdn'));Fill $session $emailInput ([string]$job.account.email);Click $session $next;$submitted.email=$true;continue}
-        if(Password-First $session $p $submitted ([string]$job.account.password)){continue}
+        if(-not $recovery){$recovery=([string]$job.account.email).Split('@')[0]+'@fviainboxes.com'}
+        if(Password-First $session $p $submitted ([string]$job.account.password) $recovery){continue}
         # Wait for Microsoft to leave the password form before recovery handling.
         if($passwordInput){Start-Sleep -Milliseconds 500;continue}
         $sendCode=Button $p '(send.*code|email.*code|g.i m.)'
@@ -450,6 +474,8 @@ try {
         if($recoverySession -and $sendCode -and -not $recoverySteps.ContainsKey($recoveryStep)){
             if(-not (Recovery-DestinationMatches ([string]$p.body) $recovery)){Stage ([regex]::Unescape('\u0110\u1ecba ch\u1ec9 nh\u1eadn m\u00e3 kh\u00f4ng kh\u1edbp mail kh\u00f4i ph\u1ee5c; c\u1ea7n ki\u1ec3m tra th\u1ee7 c\u00f4ng'));Start-Sleep -Milliseconds 700;continue}
             if([string]$sendCode.text -match '^(send a code to|g\u1eedi m\u00e3 \u0111\u1ebfn)'){
+                foreach($record in @(Recovery-Records $recoverySession $recovery.Split('@')[0])){$baseline[[string]$record.id]=$true}
+                $codeRequested=[DateTime]::UtcNow;$submitted.code=$false
                 $recoverySteps[$recoveryStep]=$true
                 Stage ([regex]::Unescape('\u0110ang ch\u1ecdn nh\u1eadn m\u00e3 qua mail kh\u00f4i ph\u1ee5c \u0111\u00e3 c\u1ea5u h\u00ecnh'))
                 Click $session $sendCode;continue
@@ -457,16 +483,21 @@ try {
             $textInput=@($p.inputs|Where-Object {$_.type -in @('text','email')}|Select-Object -First 1)[0]
             if($textInput -and -not $codeInput){Fill $session $textInput $recovery}
             foreach($record in @(Recovery-Records $recoverySession $recovery.Split('@')[0])){$baseline[[string]$record.id]=$true}
-            $codeRequested=[DateTime]::UtcNow
+            $codeRequested=[DateTime]::UtcNow;$submitted.code=$false
             Stage (([regex]::Unescape('\u0110ang y\u00eau c\u1ea7u m\u00e3 Microsoft l\u00fac '))+(Recovery-Time $codeRequested))
             Click $session $sendCode;$recoverySteps[$recoveryStep]=$true;Stage ([regex]::Unescape('\u0110ang ch\u1edd m\u00e3 Microsoft m\u1edbi g\u1eedi t\u1edbi mail kh\u00f4i ph\u1ee5c'));continue
         }
         if($codeInput -and $recoverySession -and -not $submitted.code -and ([DateTime]::UtcNow-$lastRecovery).TotalSeconds -ge 4){
             $rp=Probe $recoverySession;Click $recoverySession (Button $rp 'Get Email|Refresh');Start-Sleep -Milliseconds 600
             $records=@(Recovery-Records $recoverySession $recovery.Split('@')[0])
-            foreach($record in @(Newest-RecoveryRecord $records $baseline $codeRequested)){
+            $candidates=@(Newest-RecoveryRecord $records $baseline $codeRequested ([bool]$submitted.password))
+            if(-not $candidates.Count){
+                Stage ([regex]::Unescape('\u0110ang ch\u1edd th\u01b0 m\u00e3 b\u1ea3o m\u1eadt m\u1edbi sau m\u1eadt kh\u1ea9u; b\u1ecf qua m\u00e3 \u0111\u0103ng nh\u1eadp m\u1ed9t l\u1ea7n c\u0169')+'; '+[string]$records.Count+([regex]::Unescape(' th\u01b0 \u0111\u00e3 \u0111\u1ecdc t\u1eeb h\u1ed9p th\u01b0 KP')))
+            }
+            foreach($record in $candidates){
                 $received=[DateTimeOffset]::FromUnixTimeSeconds([long]$record.createdAt).UtcDateTime
                 Stage (([regex]::Unescape('\u0110ang \u0111\u1ecdc th\u01b0 Microsoft m\u1edbi nh\u1ea5t \u0111\u1ebfn l\u00fac '))+(Recovery-Time $received)+([regex]::Unescape('; y\u00eau c\u1ea7u m\u00e3 l\u00fac '))+(Recovery-Time $codeRequested))
+                Stage (([regex]::Unescape('\u0110ang \u0111\u1ecdc ti\u00eau \u0111\u1ec1 th\u01b0: '))+[string]$record.subject)
                 $code=''
                 try{
                     $message=Recovery-Api $recoverySession '/message' @{id=[string]$record.id;username=$recovery.Split('@')[0];domain='fviainboxes.com'}
