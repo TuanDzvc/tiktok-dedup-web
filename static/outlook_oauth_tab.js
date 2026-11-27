@@ -80,7 +80,7 @@
                                     <input id="omSpinTimeout" type="number" min="60" max="600" step="30" value="240" class="w-16 rounded border border-slate-600 bg-[#1e2129] px-2 py-1 text-center font-mono font-bold text-white outline-none focus:border-blue-500">
                                 </label>
                             </div>
-                            <p class="text-[11px] text-slate-300">Tr?nh duy?t lu?n hi?n tr?n m?y kh?ch ?? ch?n. CMD ch?y ?n.</p>
+                            <p class="text-[11px] text-slate-300">Trình duyệt luôn hiện trên máy khách đã chọn. CMD chạy ẩn.</p>
                             <textarea id="omProxyInput" rows="6" spellcheck="false" autocomplete="off"
                                 class="w-full rounded-lg border border-slate-700 bg-[#0e1014] px-3 py-2 font-mono text-xs text-slate-200 outline-none focus:border-blue-500 resize-y"
                                 placeholder="103.11.22.33:8080:user:pass&#10;45.67.89.10:3128&#10;(Để trống nếu chạy mạng trực tiếp)"></textarea>
@@ -216,7 +216,7 @@
     function requireOnlineWorker() {
         const selected = byId('omWorkerSelect');
         if ((omState.workers || []).some(w => w.id === selected?.value && w.online && !w.revoked)) return true;
-        toast(selected?.value ? 'M?y ?? ch?n ?ang Offline. M? BAT tr?n m?y ?? v? ch? Online.' : 'Ch?n m?y ch?y trong danh s?ch ph?a tr?n r?i b?m B?t ??u.');
+        toast(selected?.value ? 'Máy đã chọn đang Offline. Mở BAT trên máy đó và chờ Online.' : 'Chọn máy chạy trong danh sách phía trên rồi bấm Bắt Đầu.');
         selected?.focus();
         return false;
     }
@@ -310,7 +310,8 @@
         if (workerSelect) {
             const previous = selectedWorkerId || workerSelect.value;
             const workers = (snap.workers || []).filter(worker => !worker.revoked);
-            workerSelect.innerHTML = '<option value="">Chọn máy chạy</option>' + workers.map(worker => `<option value="${esc(worker.id)}">${esc(worker.name)} · ${worker.online ? '🟢 Online' : '⚪ Offline'}</option>`).join('');
+            workerSelect.innerHTML = '<option value="">Chọn phiên worker</option>' + workers.map(worker => `<option value="${esc(worker.id)}">${esc(worker.name)} · #${esc(worker.id.slice(0,6))} · ${worker.online ? '🟢 Online' : '⚪ Offline'}</option>`).join('');
+            workerSelect.title = 'Mỗi dòng là một phiên BAT. Mở nhiều BAT có thể tạo nhiều phiên cùng tên máy. Chọn phiên cũ rồi bấm Ngắt worker để đóng phiên đó.';
             if (workers.some(worker => worker.id === previous)) workerSelect.value = previous;
             else if (!previous && workers.filter(worker => worker.online).length === 1) workerSelect.value = workers.find(worker => worker.online).id;
             rememberWorker(workerSelect.value);
@@ -684,7 +685,7 @@
 
     byId('omBtnStart')?.addEventListener('click', async () => {
         const checkedIds = visibleRows().filter((r) => r.checked).map((r) => r.row_id);
-        if (!checkedIds.length) { toast('T?ch ch?n ?t nh?t m?t mail trong b?ng ?? ch?y.'); return; }
+        if (!checkedIds.length) { toast('Tích chọn ít nhất một mail trong bảng để chạy.'); return; }
         if (!requireOnlineWorker()) return;
         try {
             const snap = await omApi('start', { mode: 'ids', row_ids: checkedIds, settings: currentSettingsPayload() });

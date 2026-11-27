@@ -3,6 +3,11 @@ MESSAGES = {'Downloading pinned Chromium runtime on this client (first run only)
 
 def localize_mail_message(text):
     text = str(text or "")
+    legacy_broken = {
+        "B? qua m? ??ng nh?p ban ??u; b?m Didn't get a code? ?? chuy?n sang m?t kh?u": "Bỏ qua mã đăng nhập ban đầu; bấm Didn't get a code? để chuyển sang mật khẩu",
+        "Nh?p mail KP l?n ??u ?? m? m?n h?nh m?; ch?a ??c ho?c nh?p m? l?n n?y": "Nhập mail KP lần đầu để mở màn hình mã; chưa đọc hoặc nhập mã lần này",
+    }
+    text = legacy_broken.get(text, text)
     for source, target in MESSAGES.items():
         text = text.replace(source, target)
     return text
