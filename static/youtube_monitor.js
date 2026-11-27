@@ -12,7 +12,7 @@
             inset: 50% auto auto 50%;
             margin: 0;
             transform: translate(-50%, -50%);
-            width: min(1120px, calc(100vw - 32px));
+            width: min(var(--yt-settings-width, 960px), calc(100vw - 32px));
             max-width: none;
         }
         #ytSettingsDialog::backdrop {
@@ -85,9 +85,31 @@
     window.closeYoutubeMonitorSettings = () => {
         if (byId('ytSettingsDialog').open) byId('ytSettingsDialog').close();
     };
+    function fitSettingsWidthToNotice() {
+        const dialog = byId('ytSettingsDialog');
+        if (!dialog.open) return;
+        const notice = byId('ytRenderNotice');
+        const text = document.createRange();
+        text.selectNodeContents(notice);
+        const horizontalSpace = element => {
+            const style = getComputedStyle(element);
+            return ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth']
+                .reduce((sum, key) => sum + (parseFloat(style[key]) || 0), 0);
+        };
+        let width = Math.ceil(text.getBoundingClientRect().width + horizontalSpace(notice)
+            + horizontalSpace(byId('ytSettings')) + horizontalSpace(dialog));
+        dialog.style.setProperty('--yt-settings-width', width + 'px');
+        const scroller = dialog.firstElementChild;
+        width += scroller.offsetWidth - scroller.clientWidth;
+        dialog.style.setProperty('--yt-settings-width', width + 'px');
+    }
     byId('ytOpenSettings').onclick = () => {
-        if (currentVipUser?.role === 'admin') byId('ytSettingsDialog').showModal();
+        if (currentVipUser?.role !== 'admin') return;
+        byId('ytSettingsDialog').showModal();
+        fitSettingsWidthToNotice();
+        document.fonts.ready.then(fitSettingsWidthToNotice);
     };
+    window.addEventListener('resize', fitSettingsWidthToNotice);
     byId('ytCloseSettings').onclick = closeYoutubeMonitorSettings;
     byId('ytSettingsDialog').onclick = event => {
         if (event.target === byId('ytSettingsDialog')) closeYoutubeMonitorSettings();
