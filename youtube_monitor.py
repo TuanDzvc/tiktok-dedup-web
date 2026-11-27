@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 import requests
 
+DEFAULT_INTERVAL_SECONDS = 3
 
 class MonitorError(Exception):
     pass
@@ -215,7 +216,7 @@ class YouTubeMonitor:
             data = copy.deepcopy(self.data)
         settings = data['settings']
         safe = {k: settings.get(k, default) for k, default in
-                [('enabled', False), ('interval_seconds', 60), ('telegram_chat_id', '')]}
+                [('enabled', False), ('interval_seconds', DEFAULT_INTERVAL_SECONDS), ('telegram_chat_id', '')]}
         safe.update(api_key_count=len(settings.get('api_keys') or []),
                     has_telegram_token=bool(settings.get('telegram_token')),
                     has_discord_webhook=bool(settings.get('discord_webhook')))
@@ -235,8 +236,8 @@ class YouTubeMonitor:
             settings = data['settings']
             if action == 'settings':
                 settings['enabled'] = bool(body.get('enabled'))
-                previous_interval = settings.get('interval_seconds', 60)
-                settings['interval_seconds'] = max(3, min(86400, int(body.get('interval_seconds') or 60)))
+                previous_interval = settings.get('interval_seconds', DEFAULT_INTERVAL_SECONDS)
+                settings['interval_seconds'] = max(3, min(86400, int(body.get('interval_seconds') or DEFAULT_INTERVAL_SECONDS)))
                 if settings['interval_seconds'] != previous_interval:
                     for row in data['channels'].values():
                         row['next_check'] = 0
@@ -368,7 +369,7 @@ class YouTubeMonitor:
                     if video['id'] not in seen:
                         seen.append(video['id'])
                 current.update(seen=seen[-1000:], last_checked=now,
-                    next_check=now + settings.get('interval_seconds', 60), source=source, error='', warning=warning)
+                    next_check=now + settings.get('interval_seconds', DEFAULT_INTERVAL_SECONDS), source=source, error='', warning=warning)
                 current.pop('force_check', None)
                 # Retain all undelivered events, plus recent delivered history.
                 events = data.get('events', [])

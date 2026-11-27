@@ -137,14 +137,22 @@ class MonitorTests(unittest.TestCase):
         self.deliver.assert_called_once()
 
     def test_three_second_interval_is_saved_and_reschedules_channels(self):
+        self.monitor.action('settings', {'enabled': True, 'interval_seconds': 60, 'telegram_chat_id': '123'})
         self.monitor.tick()
         self.assertGreater(self.monitor.data['channels'][CID]['next_check'], 0)
         result = self.monitor.action('settings', {'enabled': True, 'interval_seconds': 3, 'telegram_chat_id': '123'})
         self.assertEqual(result['settings']['interval_seconds'], 3)
+
         self.assertEqual(self.store.data['settings']['interval_seconds'], 3)
         self.assertEqual(self.monitor.data['channels'][CID]['next_check'], 0)
         result = self.monitor.action('settings', {'enabled': True, 'interval_seconds': 1, 'telegram_chat_id': '123'})
         self.assertEqual(result['settings']['interval_seconds'], 3)
+
+    def test_new_and_unspecified_settings_default_to_three_seconds(self):
+        empty = YouTubeMonitor(MemoryStore())
+        self.assertEqual(empty.view()['settings']['interval_seconds'], 3)
+        empty.action('settings', {'enabled': False})
+        self.assertEqual(empty.store.data['settings']['interval_seconds'], 3)
 
 
 class SourceTests(unittest.TestCase):
