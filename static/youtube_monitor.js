@@ -4,7 +4,24 @@
     const byId = id => document.getElementById(id);
     let loaded = false, busy = false, state = null;
     const inputClass = 'w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:border-cyan-400';
-    const buttonClass = 'rounded-xl border border-cyan-600/50 bg-cyan-950 px-3 py-2 text-xs font-bold text-cyan-200 disabled:opacity-40';
+    const buttonClass = 'rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-3 py-2 text-xs font-bold text-white hover:brightness-110 transition disabled:opacity-40';
+    const dialogStyle = document.createElement('style');
+    dialogStyle.textContent = `
+        #ytSettingsDialog {
+            position: fixed;
+            inset: 50% auto auto 50%;
+            margin: 0;
+            transform: translate(-50%, -50%);
+            width: min(1120px, calc(100vw - 32px));
+            max-width: none;
+        }
+        #ytSettingsDialog::backdrop {
+            background: rgba(0, 0, 0, .55);
+            backdrop-filter: blur(7px);
+            -webkit-backdrop-filter: blur(7px);
+        }
+    `;
+    document.head.appendChild(dialogStyle);
     const tab = document.createElement('button');
     tab.id = 'tabMainYouTubeMonitor';
     tab.className = 'hidden';
@@ -33,7 +50,7 @@
         <form id="ytSettings" class="bg-slate-900/70 p-4 space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-3"><h4 class="font-bold text-cyan-200">Cấu hình thông báo</h4>
             <label class="text-sm text-emerald-300 flex items-center gap-2"><input id="ytEnabled" type="checkbox"> Bật theo dõi trên Render</label></div>
-            <div class="rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 text-xs leading-relaxed text-amber-200">Render Free có thể ngủ khi thiếu truy cập. Muốn theo dõi liên tục 24/7, dùng gói Render luôn chạy. Lần quét đầu chỉ tạo mốc; không gửi lại video cũ.</div>
+            <div id="ytRenderNotice" class="rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 text-[11px] leading-relaxed text-amber-200 whitespace-nowrap overflow-x-auto custom-scrollbar">Render Free có thể ngủ khi thiếu truy cập. Muốn theo dõi liên tục 24/7, dùng gói Render luôn chạy. Lần quét đầu chỉ tạo mốc; không gửi lại video cũ.</div>
             <div class="grid md:grid-cols-2 gap-4">
                 <label class="text-xs text-slate-300 space-y-2"><span>YouTube API key — mỗi dòng một key (có thể để trống để dùng RSS/web)</span>
                     <textarea id="ytKeys" rows="3" autocomplete="off" spellcheck="false" class="${inputClass}" placeholder="Để trống để giữ key đã lưu"></textarea>

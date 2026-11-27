@@ -1,5 +1,5 @@
 {
-  "release": "2026-11-27.19",
+  "release": "2026-11-27.20",
   "group_assets": "20261126_27",
   "features": [
     "channel_groups",
@@ -20,6 +20,7 @@
     "shared_country_evidence_and_geo_filter_reason",
     "bounded_reader_log_and_dismissible_failure_notice",
     "evidence_based_recommendation_labels",
-    "youtube_settings_dialog"
+    "youtube_settings_dialog",
+    "centered_youtube_settings_with_blurred_backdrop"
   ]
 }
