@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 import requests
-from account_country_evidence import country_evidence
+from account_country_evidence import country_evidence, public_profile_country, borrowed_profile_country
 from pathlib import Path
 
 # Cố gắng import các hàm trích xuất chuyên sâu & bảo mật từ tool (khi chạy local)
@@ -2484,23 +2484,9 @@ def fetch_channel_info_and_posts(
                         else:
                             check_user_info["last_nickname_change"] = "Chưa đổi lần nào"
 
-                        # Trích xuất quốc gia kênh (CHỈ lấy từ chính user / biz context của kênh, KHÔNG lấy từ app_context của viewer mượn)
+                        # Chỉ lấy trường của đúng tài khoản đích; biz-context là vùng phục vụ, không phải quốc gia tài khoản.
                         if not detected_account_country:
-                            c_u = (u.get("region") or u.get("country") or "").strip().upper()
-                            if c_u and c_u not in ("NONE", "AUTO", "EU") and not c_u.endswith("_TTP"):
-                                detected_account_country = c_u
-                            else:
-                                biz_ctx = scope.get("webapp.biz-context", {})
-                                d_kind = str(biz_ctx.get("domains", {}).get("kind") or "").lower()
-                                v_reg = str(biz_ctx.get("vregion") or "").upper()
-                                v_geo = str(biz_ctx.get("vgeo") or "").upper()
-                                av_url = str(channel_info.get("avatar") or "")
-                                if d_kind == "us" or "US" in v_reg or "US" in v_geo or "tiktokcdn-us.com" in av_url or "useast" in av_url:
-                                    detected_account_country = "US"
-                                elif "GB" in v_reg or "UK" in v_reg:
-                                    detected_account_country = "UK"
-                                elif "VN" in v_reg or "VN" in v_geo:
-                                    detected_account_country = "VN"
+                            detected_account_country = public_profile_country(html, username)
                     except Exception:
                         pass
 
@@ -3562,6 +3548,11 @@ def fetch_channel_info_and_posts(
     if shared_country:
         channel_info['country_source'] = country_source
         _set_cached_account_country(username, str(check_user_info.get('uid') or ''), shared_country)
+    # Internal API routing may default to US; that is never a display country.
+    channel_info['region'] = shared_country or ''
+    channel_info['region_display'] = format_full_country_display(shared_country) if shared_country else 'Không rõ'
+    channel_info['country_source'] = country_source if shared_country else ''
+    check_user_info['country'] = channel_info['region_display']
 
     ch_vids = int(channel_info.get("videoCount") or 0)
     video_notice = ""
@@ -3843,12 +3834,18 @@ def _fetch_account_country_free_borrowed(
     *,
     has_videos: bool = True,
     is_private: bool = False,
+    uid: str = '',
 ) -> str:
     """Lấy mã quốc gia 0đ bằng cookie mượn (Creator API video mới nhất -> locationCreated trên trang video)."""
-    if is_private or not has_videos or not sec_uid or not unique_id:
+    if not unique_id:
         return ""
     pool = get_borrowed_cookies_pool(exclude_username=unique_id)
     if not pool:
+        return ""
+    country = borrowed_profile_country(unique_id, uid, pool, http=requests, default_ua=DEFAULT_UA)
+    if country:
+        return country
+    if is_private or not has_videos or not sec_uid:
         return ""
     for ck, ua, _ in pool[:2]:
         try:
@@ -4007,6 +4004,7 @@ def check_single_account_profile_tikhub(raw_input: str, api_key: str = "") -> Di
                 sec_uid,
                 has_videos=(videos > 0),
                 is_private=is_private,
+                uid=uid,
             )
         if country_code:
             _set_cached_account_country(unique_id, uid, country_code)

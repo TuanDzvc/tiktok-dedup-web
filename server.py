@@ -785,7 +785,8 @@ def _record_check_history_for_user(
         "nickname": str(ch_obj.get("nickname") or target_handle),
         "avatar": str(ch_obj.get("avatar") or ""),
         "createDate": str(ch_obj.get("createDate") or ui_obj.get("create_date") or "—"),
-        "region": str(ch_obj.get("region") or "US"),
+        "region": str(ch_obj.get("region") or ""),
+        "country_source": str(ch_obj.get("country_source") or ""),
         "region_display": str(ch_obj.get("region_display") or ui_obj.get("country") or ""),
         "followers": int(ch_obj.get("followers") or 0),
         "followers_fmt": str(ch_obj.get("followers_fmt") or "0"),
@@ -838,7 +839,8 @@ def _record_check_history_for_user(
             "username": target_handle,
             "nickname": str(merged_ch.get("nickname") or target_handle),
             "avatar": str(merged_ch.get("avatar") or ""),
-            "region": str(merged_ch.get("region") or "US"),
+            "region": str(merged_ch.get("region") or ""),
+            "country_source": str(merged_ch.get("country_source") or ""),
             "region_display": str(merged_ch.get("region_display") or ""),
             "followers": int(merged_ch.get("followers") or 0),
             "followers_fmt": str(merged_ch.get("followers_fmt") or "0"),
@@ -4892,6 +4894,8 @@ def api_get_check_history(req: Request):
         ) if can_acc_hist else []
     # Fill missing countries from evidence already read by the channel checker.
     # This is a read-only enrichment: no paid recheck, quota change or new date.
+    from account_country_evidence import honest_history_country
+    items = [honest_history_country(item, core_dedup._get_cached_account_country(item.get('username'), (item.get('user_info') or {}).get('uid'))) for item in items]
     account_items = [dict(item) for item in account_items]
     for item in account_items:
         if int(item.get('account_labels_version') or 0) < core_dedup.ACCOUNT_LABELS_VERSION:

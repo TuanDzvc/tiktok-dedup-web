@@ -5189,8 +5189,9 @@
         });
 
         function formatCountryCode(code) {
-            const c = String(code || 'US').toUpperCase().trim().replace('_TTP', '').replace('-TTP', '');
-            return c === 'GB' ? 'UK' : (c || 'US');
+            const c = String(code || '').toUpperCase().trim().replace('_TTP', '').replace('-TTP', '');
+            if (!/^[A-Z]{2}$/.test(c) || ['UN','XX','ZZ','XO'].includes(c)) return '';
+            return c === 'GB' ? 'UK' : c;
         }
 
         const COUNTRY_VI_MAP = {
@@ -5214,7 +5215,8 @@
         } catch (e) {}
 
         function formatCountryFull(code, serverDisplay) {
-            const regCode = formatCountryCode(code || 'US');
+            const regCode = formatCountryCode(code);
+            if (!regCode) return 'Không rõ';
             const cleanDisp = String(serverDisplay || '')
                 .replace(/[\uD83C][\uDDE6-\uDDFF]{2}/g, '')
                 .replace(/\(GB\)/g, '(UK)')
@@ -5896,7 +5898,7 @@
             document.getElementById('chAvatar').src = getProxiedImage(ch.avatar, ch.nickname || rawUniqueId);
             document.getElementById('chProfileLink').href = rawUniqueId ? `https://www.tiktok.com/@${rawUniqueId}` : '#';
             document.getElementById('chCreateDate').innerText = ch.createDate || '—';
-            const regCode = formatCountryCode(ch.region || 'US');
+            const regCode = formatCountryCode(ch.region);
             const fullCountry = formatCountryFull(regCode, ui.country || ch.region_display);
             document.getElementById('chCountryText').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${escapeHtml(fullCountry)}</span></span>`;
             document.getElementById('chRegionBadge').innerHTML = `<span class="inline-flex items-center gap-1.5">${getCountryFlag(regCode)} <span>${escapeHtml(fullCountry)}</span></span>`;
@@ -7785,7 +7787,7 @@
                     nickname: item.nickname || item.username,
                     avatar: item.avatar || '',
                     createDate: item.create_date || '—',
-                    region: item.region || 'US',
+                    region: item.region || '',
                     region_display: item.region_display || '',
                     followers: item.followers || 0,
                     followers_fmt: item.followers_fmt || '0',
@@ -7795,7 +7797,7 @@
                     username: '@' + item.username,
                     screen_name: item.nickname || item.username,
                     create_date: item.create_date || '—',
-                    country: item.region_display || 'Hoa Kỳ (US)',
+                    country: item.region_display || 'Không rõ',
                 },
                 list: JSON.parse(JSON.stringify(item.videos || [])),
                 hasMore: false,
@@ -7953,7 +7955,7 @@
                 const dupCnt = Number(st.dup || 0);
                 const fypCnt = Number(st.fyp || 0);
                 const cleanCnt = Number(st.clean || 0);
-                const regCode = formatCountryCode(item.region || 'US');
+                const regCode = formatCountryCode(item.region);
                 const avSrc = getProxiedImage(item.avatar || '', item.nickname || safeKey, '');
                 const expTip = formatHistoryExpiryTip(item.checked_at);
 
