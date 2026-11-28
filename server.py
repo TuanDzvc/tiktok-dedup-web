@@ -35,6 +35,7 @@ import hashlib
 import time
 import datetime
 import json
+from sync_transport import ConditionalJSONSnapshot, content_hash, wire_response, decode_body, pull_peer, push_peer
 import base64
 import secrets
 import threading
@@ -394,6 +395,7 @@ PEER_SYNC_INTERVAL_SEC = _env_number("PEER_SYNC_INTERVAL_SEC", 300, 60)
 CHECK_HISTORY_SYNC_DELAY_SEC = _env_number("CHECK_HISTORY_SYNC_DELAY_SEC", 20, 1)
 _PEER_SYNC_TIMER_DUE = 0.0
 _SB_LAST_SNAPSHOT_HASH = ""
+_SB_CONDITIONAL_SNAPSHOT = ConditionalJSONSnapshot()
 _PEER_SYNC_STATUS: Dict[str, Any] = {
     "last_ok_at": 0,
     "last_error": "",
@@ -1908,15 +1910,12 @@ def _supabase_pull_snapshot_sync(sb_cfg: Dict[str, Any]) -> Optional[Dict[str, A
     if not sb_cfg.get("configured"):
         return None
     try:
-        r = requests.get(
-            f"{sb_cfg['url']}/storage/v1/object/{SUPABASE_SYNC_BUCKET}/{SUPABASE_SYNC_OBJECT}?t={int(time.time() * 1000)}",
-            headers={**_supabase_headers(sb_cfg), "Cache-Control": "no-cache", "Pragma": "no-cache"},
-            timeout=25,
-        )
-        if r.status_code == 200:
-            data = r.json()
-            return data if isinstance(data, dict) else None
-        return None
+        data = _SB_CONDITIONAL_SNAPSHOT.read(
+            requests,
+            f"{sb_cfg['url']}/storage/v1/object/{SUPABASE_SYNC_BUCKET}/{SUPABASE_SYNC_OBJECT}",
+            {**_supabase_headers(sb_cfg), 'Cache-Control':'no-cache'})
+        _PEER_SYNC_STATUS['supabase_pull_mode'] = _SB_CONDITIONAL_SNAPSHOT.last_status
+        return data
     except Exception as exc:
         logger.warning(f"[SupabaseSync] Lỗi đọc snapshot: {exc}")
         return None
@@ -1946,14 +1945,10 @@ def _supabase_push_snapshot_sync(snap: Dict[str, Any], sb_cfg: Dict[str, Any]) -
 
 def _snapshot_content_hash(snap: Any) -> str:
     """Hash of snapshot content, ignoring exported_at, to skip identical uploads."""
-    if not isinstance(snap, dict):
-        return ""
     try:
-        body = {k: v for k, v in snap.items() if k != "exported_at"}
-        raw = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-    except Exception:
-        return ""
+        return content_hash(snap)
+    except (ValueError, TypeError):
+        return ''
 
 
 def _sync_two_way_with_peer_sync(push_after_pull: bool = True) -> Dict[str, Any]:
@@ -2006,31 +2001,26 @@ def _sync_two_way_with_peer_sync(push_after_pull: bool = True) -> Dict[str, Any]
             except Exception as e_sb:
                 _PEER_SYNC_STATUS["supabase_error"] = str(e_sb)
 
-        # 2. Đồng bộ trực tiếp PC ⇄ Render (bổ trợ thời gian thực)
+        # Probe the peer before transferring any private snapshot. If an old peer
+        # cannot negotiate this protocol, use the shared durable store while healthy.
         peer_base = PRIMARY_SYNC_BASE if is_cloud else RENDER_SYNC_BASE
         peer_ok = False
         peer_changed = False
-        pulled_remote: Optional[Dict[str, Any]] = None
-        pull_err = ""
+        pulled_remote = None
+        pull_err = ''
         if peer_base:
-            url = f"{peer_base}/api/internal/sync-state"
-            hdrs = {
-                "X-Sync-Token": _get_sync_token(),
-                "X-Sync-Origin": "render" if is_cloud else "pc",
-            }
-            try:
-                r_get = requests.get(url, headers=hdrs, timeout=20)
-                if r_get.status_code == 200:
-                    j_get = r_get.json()
-                    if j_get.get("self_echo"):
-                        pull_err = ""
-                    elif j_get.get("success") and isinstance(j_get.get("snapshot"), dict):
-                        pulled_remote = j_get["snapshot"]
-                else:
-                    pull_err = f"GET HTTP {r_get.status_code}"
-            except Exception as e_get:
-                pull_err = f"GET {e_get}"
-
+            url = f'{peer_base}/api/internal/sync-state'
+            hdrs = {'X-Sync-Token':_get_sync_token(),
+                    'X-Sync-Origin':'render' if is_cloud else 'pc', 'X-Sync-Protocol':'2'}
+            with _VIP_LOCK:
+                local_before = _export_sync_snapshot_unlocked()
+            peer = pull_peer(requests, url, hdrs, local_before, sb_ok)
+            peer_ok = bool(peer.get('ok'))
+            pull_err = peer.get('error') or ''
+            _PEER_SYNC_STATUS['peer_transfer_mode'] = peer.get('skipped') or ('conditional_gzip' if peer.get('modern') else 'legacy_recovery')
+            if peer.get('unchanged'):
+                _PEER_SYNC_STATUS['peer_pull_skipped_at'] = int(time.time())
+            pulled_remote = peer.get('snapshot')
             if pulled_remote is not None:
                 with _VIP_LOCK:
                     _merge_sync_state_unlocked(pulled_remote)
@@ -2041,25 +2031,23 @@ def _sync_two_way_with_peer_sync(push_after_pull: bool = True) -> Dict[str, Any]
                     if not after_hash or after_hash != _SB_LAST_SNAPSHOT_HASH:
                         if _supabase_push_snapshot_sync(snap_after_peer, sb_cfg):
                             _SB_LAST_SNAPSHOT_HASH = after_hash
-
-            if push_after_pull and (not is_cloud or pulled_remote is not None):
+            if push_after_pull and peer_ok and not peer.get('self_echo'):
+                with _VIP_LOCK:
+                    outbound = _export_sync_snapshot_unlocked()
                 try:
-                    with _VIP_LOCK:
-                        snap = _export_sync_snapshot_unlocked()
-                    r_post = requests.post(url, headers=hdrs, json={"snapshot": snap}, timeout=25)
-                    if r_post.status_code == 200:
-                        j_post = r_post.json()
-                        if not j_post.get("self_echo"):
-                            peer_ok = True
-                            peer_changed = bool(j_post.get("changed"))
-                            _PEER_SYNC_STATUS["last_ok_at"] = int(time.time())
-                            _PEER_SYNC_STATUS["last_error"] = ""
-                            _PEER_SYNC_STATUS["last_direction"] = "supabase+render" if sb_ok else ("render->pc" if is_cloud else "pc<->render")
-                            _PEER_SYNC_STATUS["user_count"] = len(snap.get("users") or {})
-                    else:
-                        pull_err = f"POST HTTP {r_post.status_code}"
-                except Exception as e_post:
-                    pull_err = str(e_post)
+                    sent = push_peer(requests, url, hdrs, outbound, peer)
+                    peer_ok = bool(sent.get('ok'))
+                    peer_changed = bool(sent.get('changed'))
+                    pull_err = sent.get('error') or pull_err
+                    if sent.get('skipped'):
+                        _PEER_SYNC_STATUS['peer_push_skipped_at'] = int(time.time())
+                except Exception as exc:
+                    peer_ok = False
+                    pull_err = type(exc).__name__
+            if peer_ok:
+                _PEER_SYNC_STATUS.update(last_ok_at=int(time.time()), last_error='',
+                    last_direction='supabase+peer' if sb_ok else 'peer',
+                    user_count=len(local_before.get('users') or {}))
 
         if sb_ok or peer_ok or (not pull_err and pulled_remote is not None):
             if sb_ok and not peer_ok:
@@ -3519,7 +3507,7 @@ async def api_vip_admin_render_env(req: Request):
     })
 
 
-@app.get("/api/internal/sync-state")
+@app.api_route("/api/internal/sync-state", methods=["GET", "HEAD"])
 async def api_internal_get_sync_state(req: Request):
     x_tok = (req.headers.get("x-sync-token") or "").strip()
     expected = _get_sync_token()
@@ -3527,10 +3515,13 @@ async def api_internal_get_sync_state(req: Request):
         return JSONResponse(status_code=403, content={"success": False, "error": "forbidden"})
     x_origin = (req.headers.get("x-sync-origin") or "").strip().lower()
     if _is_cloud_runtime() and x_origin == "render":
+        if req.method == 'HEAD':
+            return Response(headers={'X-Sync-Protocol':'2', 'X-Sync-Self-Echo':'1', 'Cache-Control':'no-store'})
         return JSONResponse(content={"success": True, "self_echo": True})
     with _VIP_LOCK:
         snap = _export_sync_snapshot_unlocked()
-    return JSONResponse(content={"success": True, "role": "cloud" if _is_cloud_runtime() else "pc", "snapshot": snap})
+    status, body, headers = wire_response(snap, 'cloud' if _is_cloud_runtime() else 'pc', req.headers, req.method)
+    return Response(body, status_code=status, headers=headers, media_type='application/json')
 
 
 @app.post("/api/internal/sync-state")
@@ -3543,9 +3534,9 @@ async def api_internal_post_sync_state(req: Request):
     if _is_cloud_runtime() and x_origin == "render":
         return JSONResponse(content={"success": True, "self_echo": True})
     try:
-        body = await req.json()
-    except Exception:
-        return JSONResponse(status_code=400, content={"success": False, "error": "invalid_json"})
+        body = decode_body(await req.body(), req.headers.get('content-encoding', ''))
+    except (ValueError, TypeError, OSError, EOFError):
+        return JSONResponse(status_code=400, content={"success": False, "error": "invalid_sync_body"})
     snap = body.get("snapshot") if isinstance(body, dict) and isinstance(body.get("snapshot"), dict) else body
     with _VIP_LOCK:
         res = _merge_sync_state_unlocked(snap if isinstance(snap, dict) else {})

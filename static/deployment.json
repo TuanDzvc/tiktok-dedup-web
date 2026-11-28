@@ -1,5 +1,5 @@
 {
-  "release": "2026-11-28.7",
+  "release": "2026-11-29.sync1",
   "group_assets": "20261127_1",
   "features": [
     "channel_groups",
@@ -22,6 +22,7 @@
     "evidence_based_recommendation_labels",
     "youtube_settings_dialog",
     "centered_youtube_settings_with_blurred_backdrop",
-    "client_windows_mail_worker"
+    "client_windows_mail_worker",
+    "conditional_compressed_snapshot_sync"
   ]
 }
